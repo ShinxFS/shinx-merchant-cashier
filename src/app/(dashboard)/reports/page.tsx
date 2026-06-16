@@ -172,7 +172,7 @@ export default function ReportsPage() {
       <div className="bg-white rounded-xl border border-gray-200 p-5">
         <h2 className="font-semibold text-gray-800 mb-4">Grafik Pendapatan</h2>
         <ResponsiveContainer width="100%" height={220}>
-          <BarChart data={chartData} barSize={isMultiDay ? 8 : 32}>
+          <BarChart data={chartData} barSize={isMultiDay ? 23 : 30}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
             <XAxis
               dataKey="label"
