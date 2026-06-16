@@ -9,11 +9,12 @@ import {
 } from 'recharts'
 import { TrendingUp, ShoppingCart, Package } from 'lucide-react'
 
-type ViewType = 'weekly' | 'monthly30' | 'monthly6'
+type ViewType = 'weekly' | 'monthly15' | 'monthly30' | 'monthly6'
 
 export default function ReportsPage() {
   const supabase = createClient()
   const [weeklyData, setWeeklyData] = useState<any[]>([])
+  const [monthly15Data, setMonthly15Data] = useState<any[]>([])
   const [monthly30Data, setMonthly30Data] = useState<any[]>([])
   const [monthly6Data, setMonthly6Data] = useState<any[]>([])
   const [topProducts, setTopProducts] = useState<any[]>([])
@@ -25,53 +26,29 @@ export default function ReportsPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      // 7 hari terakhir
-      const days7 = Array.from({ length: 7 }, (_, i) => {
-        const d = new Date()
-        d.setDate(d.getDate() - (6 - i))
-        return d
-      })
+      const fetchDays = async (numDays: number) => {
+        const days = Array.from({ length: numDays }, (_, i) => {
+          const d = new Date()
+          d.setDate(d.getDate() - (numDays - 1 - i))
+          return d
+        })
+        return Promise.all(days.map(async (day) => {
+          const start = new Date(day); start.setHours(0, 0, 0, 0)
+          const end = new Date(day); end.setHours(23, 59, 59, 999)
+          const { data } = await supabase
+            .from('transactions')
+            .select('total')
+            .eq('user_id', user.id)
+            .gte('created_at', start.toISOString())
+            .lte('created_at', end.toISOString())
+          return {
+            label: day.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
+            revenue: data?.reduce((s, t) => s + t.total, 0) ?? 0,
+            transactions: data?.length ?? 0,
+          }
+        }))
+      }
 
-      const weeklyResult = await Promise.all(days7.map(async (day) => {
-        const start = new Date(day); start.setHours(0, 0, 0, 0)
-        const end = new Date(day); end.setHours(23, 59, 59, 999)
-        const { data } = await supabase
-          .from('transactions')
-          .select('total')
-          .eq('user_id', user.id)
-          .gte('created_at', start.toISOString())
-          .lte('created_at', end.toISOString())
-        return {
-          label: day.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric' }),
-          revenue: data?.reduce((s, t) => s + t.total, 0) ?? 0,
-          transactions: data?.length ?? 0,
-        }
-      }))
-
-      // 30 hari terakhir
-      const days30 = Array.from({ length: 30 }, (_, i) => {
-        const d = new Date()
-        d.setDate(d.getDate() - (29 - i))
-        return d
-      })
-
-      const monthly30Result = await Promise.all(days30.map(async (day) => {
-        const start = new Date(day); start.setHours(0, 0, 0, 0)
-        const end = new Date(day); end.setHours(23, 59, 59, 999)
-        const { data } = await supabase
-          .from('transactions')
-          .select('total')
-          .eq('user_id', user.id)
-          .gte('created_at', start.toISOString())
-          .lte('created_at', end.toISOString())
-        return {
-          label: day.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
-          revenue: data?.reduce((s, t) => s + t.total, 0) ?? 0,
-          transactions: data?.length ?? 0,
-        }
-      }))
-
-      // 6 bulan terakhir
       const months = Array.from({ length: 6 }, (_, i) => {
         const d = new Date()
         d.setMonth(d.getMonth() - (5 - i))
@@ -94,7 +71,6 @@ export default function ReportsPage() {
         }
       }))
 
-      // Top produk
       const { data: items } = await supabase
         .from('transaction_items')
         .select('product_name, quantity, subtotal')
@@ -111,8 +87,15 @@ export default function ReportsPage() {
         .sort((a, b) => b.qty - a.qty)
         .slice(0, 5)
 
-      setWeeklyData(weeklyResult)
-      setMonthly30Data(monthly30Result)
+      const [w, d15, d30] = await Promise.all([
+        fetchDays(7),
+        fetchDays(15),
+        fetchDays(30),
+      ])
+
+      setWeeklyData(w)
+      setMonthly15Data(d15)
+      setMonthly30Data(d30)
       setMonthly6Data(monthly6Result)
       setTopProducts(top)
       setLoading(false)
@@ -122,6 +105,7 @@ export default function ReportsPage() {
 
   const chartData =
     view === 'weekly' ? weeklyData :
+    view === 'monthly15' ? monthly15Data :
     view === 'monthly30' ? monthly30Data :
     monthly6Data
 
@@ -129,10 +113,13 @@ export default function ReportsPage() {
   const totalTransactions = chartData.reduce((s, d) => s + d.transactions, 0)
 
   const tabs: { key: ViewType; label: string }[] = [
-    { key: 'weekly', label: '7 Hari Terakhir' },
-    { key: 'monthly30', label: '30 Hari Terakhir' },
-    { key: 'monthly6', label: '6 Bulan Terakhir' },
+    { key: 'weekly', label: '7 Hari' },
+    { key: 'monthly15', label: '15 Hari' },
+    { key: 'monthly30', label: '30 Hari' },
+    { key: 'monthly6', label: '6 Bulan' },
   ]
+
+  const isMultiDay = view === 'monthly15' || view === 'monthly30'
 
   if (loading) {
     return (
@@ -147,7 +134,7 @@ export default function ReportsPage() {
       <h1 className="text-xl font-bold text-gray-900">Laporan Penjualan</h1>
 
       {/* Toggle */}
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-wrap">
         {tabs.map(({ key, label }) => (
           <button
             key={key}
@@ -185,14 +172,17 @@ export default function ReportsPage() {
       <div className="bg-white rounded-xl border border-gray-200 p-5">
         <h2 className="font-semibold text-gray-800 mb-4">Grafik Pendapatan</h2>
         <ResponsiveContainer width="100%" height={220}>
-          <BarChart data={chartData} barSize={view === 'monthly30' ? 8 : 32}>
+          <BarChart data={chartData} barSize={isMultiDay ? 8 : 32}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
             <XAxis
               dataKey="label"
-              tick={{ fontSize: view === 'monthly30' ? 9 : 11, fill: '#9ca3af' }}
-              interval={view === 'monthly30' ? 4 : 0}
+              tick={{ fontSize: isMultiDay ? 9 : 11, fill: '#9ca3af' }}
+              interval={view === 'monthly30' ? 4 : view === 'monthly15' ? 2 : 0}
             />
-            <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={(v: any) => `${Number(v) / 1000}k`} />
+            <YAxis
+              tick={{ fontSize: 11, fill: '#9ca3af' }}
+              tickFormatter={(v: any) => `${Number(v) / 1000}k`}
+            />
             <Tooltip
               formatter={(v: any) => [formatRupiah(Number(v)), 'Pendapatan']}
               contentStyle={{
@@ -214,8 +204,8 @@ export default function ReportsPage() {
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
             <XAxis
               dataKey="label"
-              tick={{ fontSize: view === 'monthly30' ? 9 : 11, fill: '#9ca3af' }}
-              interval={view === 'monthly30' ? 4 : 0}
+              tick={{ fontSize: isMultiDay ? 9 : 11, fill: '#9ca3af' }}
+              interval={view === 'monthly30' ? 4 : view === 'monthly15' ? 2 : 0}
             />
             <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} allowDecimals={false} />
             <Tooltip
@@ -226,7 +216,13 @@ export default function ReportsPage() {
                 fontSize: '12px',
               }}
             />
-            <Line type="monotone" dataKey="transactions" stroke="#22c55e" strokeWidth={2} dot={{ r: view === 'monthly30' ? 2 : 4, fill: '#22c55e' }} />
+            <Line
+              type="monotone"
+              dataKey="transactions"
+              stroke="#22c55e"
+              strokeWidth={2}
+              dot={{ r: isMultiDay ? 2 : 4, fill: '#22c55e' }}
+            />
           </LineChart>
         </ResponsiveContainer>
       </div>
