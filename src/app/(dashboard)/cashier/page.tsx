@@ -66,23 +66,24 @@ export default function CashierPage() {
   }, [search, products])
 
   const addToCart = (product: Product) => {
-    setCart(prev => {
-      const exist = prev.find(i => i.id === product.id)
-      if (exist) {
-        if (exist.quantity >= product.stock) return prev
-        return prev.map(i =>
-          i.id === product.id ? { ...i, quantity: i.quantity + 1 } : i
-        )
-      }
-      return [...prev, {
-        id: product.id,
-        name: product.name,
-        price: product.price,
-        quantity: 1,
-        stock: product.stock,
-      }]
-    })
-  }
+  setCart(prev => {
+    const exist = prev.find(i => i.id === product.id)
+    if (exist) {
+      if (exist.quantity >= product.stock) return prev
+      return prev.map(i =>
+        i.id === product.id ? { ...i, quantity: i.quantity + 1 } : i
+      )
+    }
+    return [...prev, {
+      id: product.id,
+      name: product.name,
+      price: product.price,
+      quantity: 1,
+      stock: product.stock,
+      image_url: product.image_url,  // ← tambahkan ini
+    }]
+  })
+}
 
   const increase = (id: string) => setCart(prev =>
     prev.map(i => i.id === id && i.quantity < i.stock ? { ...i, quantity: i.quantity + 1 } : i)
