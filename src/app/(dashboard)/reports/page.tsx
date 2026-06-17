@@ -85,7 +85,7 @@ export default function ReportsPage() {
       const top = Object.entries(productMap)
         .map(([name, val]) => ({ name, ...val }))
         .sort((a, b) => b.qty - a.qty)
-        .slice(0, 5)
+        .slice(0, 8)
 
       const [w, d15, d30] = await Promise.all([
         fetchDays(7),
