@@ -35,15 +35,15 @@ export default function CartItem({
 
       {/* Nama & Harga */}
       <div className="flex-1 min-w-0">
-        <p className="text-xs font-medium text-gray-800 leading-tight line-clamp-2">{item.name}</p>
-        <p className="text-xs text-indigo-600 font-semibold mt-0.5">
+        <p className="text-[12px] font-medium text-gray-800 leading-tight line-clamp-3">{item.name}</p>
+        <p className="text-[12px] text-indigo-600 font-semibold mt-0.5">
           {formatRupiah(item.price)}
         </p>
       </div>
 
       {/* Qty Control & Total */}
       <div className="flex flex-col items-end gap-1.5">
-        <p className="text-xs font-bold text-gray-800">
+        <p className="text-[13px] font-bold text-gray-800">
           {formatRupiah(item.price * item.quantity)}
         </p>
         <div className="flex items-center gap-1.5">
@@ -53,7 +53,7 @@ export default function CartItem({
           >
             <Minus size={10} />
           </button>
-          <span className="text-xs font-semibold w-5 text-center text-gray-800">
+          <span className="text-[13px] font-semibold w-5 text-center text-gray-800">
             {item.quantity}
           </span>
           <button
@@ -67,7 +67,7 @@ export default function CartItem({
             onClick={() => onRemove(item.id)}
             className="w-6 h-6 rounded-full flex items-center justify-center text-gray-300 hover:text-red-400 transition-colors ml-1"
           >
-            <Trash2 size={13} />
+            <Trash2 size={14} />
           </button>
         </div>
       </div>
