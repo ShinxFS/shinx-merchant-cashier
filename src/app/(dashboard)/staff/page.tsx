@@ -208,7 +208,7 @@ export default function StaffPage() {
                           <ShoppingCart size={13} className="text-blue-500" />
                           <p className="text-xs text-gray-500">Transaksi</p>
                         </div>
-                        <p className="text-lg font-bold text-gray-800">{stats.totalTransactions}</p>
+                        <p className="text-sm font-bold text-gray-800">{stats.totalTransactions}</p>
                       </div>
                       <div className="bg-white rounded-xl border border-gray-200 p-3 text-center">
                         <div className="flex items-center justify-center gap-1 mb-1">

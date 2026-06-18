@@ -225,7 +225,7 @@ export default function ReportsPage() {
               formatRupiah(Number(v)),
               name === 'revenue' ? 'Pendapatan' : name === 'expenses' ? 'Pengeluaran' : 'Laba'
               ]}
-              contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '12px' }}
+              contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '13px' }}
             />
             <Legend formatter={(v) => v === 'revenue' ? 'Pendapatan' : v === 'expenses' ? 'Pengeluaran' : 'Laba'} />
             <Bar dataKey="revenue" fill="#6366f1" radius={[4, 4, 0, 0]} />
