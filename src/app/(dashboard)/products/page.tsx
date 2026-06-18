@@ -198,7 +198,7 @@ export default function ProductsPage() {
           {/* Tombol Export bisa diakses oleh Owner maupun Staff */}
           <button 
             onClick={exportToCSV}
-            className="flex items-center gap-2 bg-white border border-gray-200 text-gray-700 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
+            className="flex items-center gap-2 bg-white border border-gray-200 text-gray-800 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
           >
             <Download size={16} />
             Export CSV
@@ -217,7 +217,7 @@ export default function ProductsPage() {
               <button 
                 onClick={() => fileInputRef.current?.click()}
              // bg-indigo-50 diganti menjadi bg-white border border-gray-200
-                className="flex items-center gap-2 bg-white border border-gray-200 text-gray-600 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
+                className="flex items-center gap-2 bg-white border border-gray-200 text-gray-800 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
 >
                <Upload size={16} />
                 Import CSV
