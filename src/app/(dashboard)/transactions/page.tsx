@@ -3,8 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatRupiah } from '@/lib/utils'
-import { useRole } from '@/lib/useRole' // Import useRole berhasil ditambahkan
-import { Receipt, Search, ChevronDown, ChevronUp, TrendingUp } from 'lucide-react'
+import { Receipt, Search, ChevronDown, ChevronUp, TrendingUp, Trash2 } from 'lucide-react'
 
 interface TransactionItem {
   id: string
@@ -33,26 +32,49 @@ interface Transaction {
 
 export default function TransactionsPage() {
   const supabase = createClient()
-  const { isOwner } = useRole() // Menambahkan hook role setelah deklarasi awal
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [isOwner, setIsOwner] = useState(false)
 
-  useEffect(() => {
-    const load = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      const { data } = await supabase
-        .from('transactions')
-        .select('*, transaction_items(*)')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-      setTransactions(data ?? [])
-      setLoading(false)
+  const load = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+
+    const isStaff = profile?.role === 'staff'
+    setIsOwner(!isStaff)
+
+    let query = supabase
+      .from('transactions')
+      .select('*, transaction_items(*)')
+      .order('created_at', { ascending: false })
+
+    if (isStaff) {
+      query = query.eq('created_by', user.id)
+    } else {
+      query = query.eq('user_id', user.id)
     }
-    load()
-  }, [])
+
+    const { data } = await query
+    setTransactions(data ?? [])
+    setLoading(false)
+  }
+
+  useEffect(() => { load() }, [])
+
+  const handleDelete = async (id: string, invoiceNumber: string) => {
+    if (!confirm(`Hapus invoice ${invoiceNumber}? Aksi ini tidak bisa dibatalkan.`)) return
+    await supabase.from('transaction_items').delete().eq('transaction_id', id)
+    await supabase.from('transactions').delete().eq('id', id)
+    setTransactions(prev => prev.filter(t => t.id !== id))
+  }
 
   const filtered = transactions.filter(t =>
     t.invoice_number.toLowerCase().includes(search.toLowerCase())
@@ -78,7 +100,6 @@ export default function TransactionsPage() {
     .filter(t => new Date(t.created_at).toDateString() === today)
     .reduce((s, t) => s + t.total, 0)
 
-  // Hitung laba kotor & bersih per transaksi
   const calcProfit = (tx: Transaction) => {
     const items = tx.transaction_items ?? []
     const totalModal = items.reduce((s, i) => s + (i.cost_price ?? 0) * i.quantity, 0)
@@ -87,7 +108,6 @@ export default function TransactionsPage() {
     return { totalModal, labaKotor, labaBersih }
   }
 
-  // Total laba hari ini
   const todayTx = transactions.filter(t => new Date(t.created_at).toDateString() === today)
   const todayLabaBersih = todayTx.reduce((s, t) => s + calcProfit(t).labaBersih, 0)
 
@@ -101,14 +121,12 @@ export default function TransactionsPage() {
         <div className="text-right">
           <p className="text-xs text-gray-400">Pendapatan Hari Ini</p>
           <p className="text-lg font-bold text-indigo-600">{formatRupiah(todayTotal)}</p>
-          {/* Sembunyikan Laba Hari Ini di Header untuk Karyawan */}
           {isOwner && (
             <p className="text-xs text-green-500 mt-0.5">Laba bersih: {formatRupiah(todayLabaBersih)}</p>
           )}
         </div>
       </div>
 
-      {/* Search */}
       <div className="relative mb-4">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
         <input
@@ -136,40 +154,49 @@ export default function TransactionsPage() {
               <div key={tx.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
 
                 {/* Row utama */}
-                <button
-                  onClick={() => toggleExpand(tx.id)}
-                  className="w-full px-5 py-4 flex items-center gap-4 hover:bg-gray-50 transition-colors text-left"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-gray-800">{tx.invoice_number}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">{formatDate(tx.created_at)}</p>
-                  </div>
-                  <div className="hidden sm:block text-xs text-gray-500">
-                    {paymentLabel[tx.payment_method] ?? tx.payment_method}
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-bold text-gray-900">{formatRupiah(tx.total)}</p>
-                    {/* Sembunyikan Laba di Row Utama untuk Karyawan */}
-                    {isOwner && (
-                      <p className="text-xs text-green-500 mt-0.5">+{formatRupiah(labaBersih)}</p>
-                    )}
-                  </div>
-                  <div className="text-gray-400 ml-1">
-                    {expanded === tx.id ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                  </div>
-                </button>
+                <div className="px-5 py-4 flex items-center gap-4">
+                  <button
+                    onClick={() => toggleExpand(tx.id)}
+                    className="flex-1 flex items-center gap-4 text-left"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-800">{tx.invoice_number}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">{formatDate(tx.created_at)}</p>
+                    </div>
+                    <div className="hidden sm:block text-xs text-gray-500">
+                      {paymentLabel[tx.payment_method] ?? tx.payment_method}
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-bold text-gray-900">{formatRupiah(tx.total)}</p>
+                      {isOwner && (
+                        <p className="text-xs text-green-500 mt-0.5">+{formatRupiah(labaBersih)}</p>
+                      )}
+                    </div>
+                    <div className="text-gray-400">
+                      {expanded === tx.id ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    </div>
+                  </button>
+
+                  {/* Tombol hapus — hanya owner */}
+                  {isOwner && (
+                    <button
+                      onClick={() => handleDelete(tx.id, tx.invoice_number)}
+                      className="text-gray-300 hover:text-red-400 transition-colors ml-1 flex-shrink-0"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  )}
+                </div>
 
                 {/* Detail */}
                 {expanded === tx.id && (
                   <div className="border-t border-gray-100 bg-gray-50 px-5 py-4">
-
-                    {/* Item list */}
                     <table className="w-full text-sm mb-4">
                       <thead>
                         <tr className="text-xs text-gray-400 uppercase">
                           <th className="text-left pb-2 font-medium">Produk</th>
                           <th className="text-center pb-2 font-medium">Qty</th>
-                          <th className="text-right pb-2 font-medium">Modal</th>
+                          {isOwner && <th className="text-right pb-2 font-medium">Modal</th>}
                           <th className="text-right pb-2 font-medium">Harga</th>
                           <th className="text-right pb-2 font-medium">Subtotal</th>
                         </tr>
@@ -179,21 +206,18 @@ export default function TransactionsPage() {
                           <tr key={item.id}>
                             <td className="py-2 text-gray-700">{item.product_name}</td>
                             <td className="py-2 text-center text-gray-500">{item.quantity}x</td>
-                            <td className="py-2 text-right text-gray-400 text-xs">
-                              {formatRupiah(item.cost_price ?? 0)}
-                            </td>
-                            <td className="py-2 text-right text-gray-500">
-                              {formatRupiah(item.unit_price)}
-                            </td>
-                            <td className="py-2 text-right font-medium text-gray-800">
-                              {formatRupiah(item.subtotal)}
-                            </td>
+                            {isOwner && (
+                              <td className="py-2 text-right text-gray-400 text-xs">
+                                {formatRupiah(item.cost_price ?? 0)}
+                              </td>
+                            )}
+                            <td className="py-2 text-right text-gray-500">{formatRupiah(item.unit_price)}</td>
+                            <td className="py-2 text-right font-medium text-gray-800">{formatRupiah(item.subtotal)}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
 
-                    {/* Ringkasan bayar */}
                     <div className="border-t border-gray-200 pt-3 space-y-1.5">
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-500">Subtotal</span>
@@ -232,7 +256,7 @@ export default function TransactionsPage() {
                         <span className="text-gray-700">{paymentLabel[tx.payment_method] ?? tx.payment_method}</span>
                       </div>
 
-                      {/* Wrap Bagian Analisis Laba untuk Owner Saja */}
+                      {/* Laba — hanya owner */}
                       {isOwner && (
                         <div className="border-t border-gray-200 pt-3 mt-2 space-y-1.5">
                           <div className="flex items-center gap-1.5 mb-2">

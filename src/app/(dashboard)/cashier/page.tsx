@@ -31,6 +31,7 @@ export default function CashierPage() {
   const [successMsg, setSuccessMsg] = useState('')
   const [receiptData, setReceiptData] = useState<any>(null)
   const [cartVisible, setCartVisible] = useState(true)
+  const [effectiveUserId, setEffectiveUserId] = useState<string>('')
   const [businessProfile, setBusinessProfile] = useState({
     business_name: 'Toko',
     address: '',
@@ -42,19 +43,32 @@ export default function CashierPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
+      // Cek role — kalau karyawan, pakai owner_id
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role, owner_id')
+        .eq('id', user.id)
+        .single()
+
+      const isStaff = profile?.role === 'staff'
+      const targetUserId = isStaff ? (profile?.owner_id ?? user.id) : user.id
+      setEffectiveUserId(targetUserId)
+
+      // Load produk milik owner
       const { data } = await supabase
         .from('products')
         .select('*, categories(name, color)')
-        .eq('user_id', user.id)
+        .eq('user_id', targetUserId)
         .eq('is_active', true)
         .order('name')
       setProducts(data ?? [])
       setFiltered(data ?? [])
 
+      // Load profil owner
       const { data: prof } = await supabase
         .from('profiles')
         .select('business_name, address, phone')
-        .eq('id', user.id)
+        .eq('id', targetUserId)
         .single()
       if (prof) setBusinessProfile(prof)
     }
@@ -112,10 +126,12 @@ export default function CashierPage() {
     const change = method === 'cash' ? amountPaid - total : 0
     const invoice = generateInvoice()
 
+    // Simpan transaksi dengan effectiveUserId (owner punya karyawan)
     const { data: tx, error } = await supabase
       .from('transactions')
       .insert({
-        user_id: user.id,
+        user_id: effectiveUserId,
+        created_by: user.id,
         invoice_number: invoice,
         subtotal,
         discount,
@@ -240,7 +256,7 @@ export default function CashierPage() {
       {/* Tombol Toggle Keranjang */}
       <button
         onClick={() => setCartVisible(v => !v)}
-        className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white border border-gray-200 rounded-l-xl px-1.5 py-3 shadow-md hover:bg-gray-50 transition-colors"
+        className="absolute top-1/2 -translate-y-1/2 z-10 bg-white border border-gray-200 rounded-l-xl px-1.5 py-3 shadow-md hover:bg-gray-50 transition-colors"
         style={{ right: cartVisible ? '320px' : '0px' }}
       >
         {cartVisible ? (
@@ -282,7 +298,7 @@ export default function CashierPage() {
 
           <div className="flex-1 overflow-y-auto px-4">
             {cart.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-gray-800">
+              <div className="flex flex-col items-center justify-center h-full text-gray-300">
                 <ShoppingCart size={40} />
                 <p className="text-sm mt-2">Keranjang kosong</p>
                 <p className="text-xs mt-1">Klik produk untuk menambahkan</p>
