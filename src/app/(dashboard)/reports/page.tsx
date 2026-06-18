@@ -5,9 +5,9 @@ import { createClient } from '@/lib/supabase/client'
 import { formatRupiah } from '@/lib/utils'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, LineChart, Line
+  Tooltip, ResponsiveContainer, LineChart, Line, Legend
 } from 'recharts'
-import { TrendingUp, ShoppingCart, Package } from 'lucide-react'
+import { TrendingUp, ShoppingCart, Package, TrendingDown, Wallet } from 'lucide-react'
 
 type ViewType = 'weekly' | 'monthly15' | 'monthly30' | 'monthly6'
 
@@ -20,6 +20,7 @@ export default function ReportsPage() {
   const [topProducts, setTopProducts] = useState<any[]>([])
   const [view, setView] = useState<ViewType>('weekly')
   const [loading, setLoading] = useState(true)
+  const [summary, setSummary] = useState({ revenue: 0, expenses: 0, profit: 0 })
 
   useEffect(() => {
     const load = async () => {
@@ -35,16 +36,26 @@ export default function ReportsPage() {
         return Promise.all(days.map(async (day) => {
           const start = new Date(day); start.setHours(0, 0, 0, 0)
           const end = new Date(day); end.setHours(23, 59, 59, 999)
-          const { data } = await supabase
-            .from('transactions')
-            .select('total')
-            .eq('user_id', user.id)
-            .gte('created_at', start.toISOString())
-            .lte('created_at', end.toISOString())
+          const dateStr = day.toISOString().split('T')[0]
+
+          const [{ data: txData }, { data: expData }] = await Promise.all([
+            supabase.from('transactions').select('total')
+              .eq('user_id', user.id)
+              .gte('created_at', start.toISOString())
+              .lte('created_at', end.toISOString()),
+            supabase.from('expenses').select('amount')
+              .eq('user_id', user.id)
+              .eq('date', dateStr),
+          ])
+
+          const revenue = txData?.reduce((s, t) => s + t.total, 0) ?? 0
+          const expenses = expData?.reduce((s, e) => s + e.amount, 0) ?? 0
           return {
             label: day.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
-            revenue: data?.reduce((s, t) => s + t.total, 0) ?? 0,
-            transactions: data?.length ?? 0,
+            revenue,
+            expenses,
+            profit: revenue - expenses,
+            transactions: txData?.length ?? 0,
           }
         }))
       }
@@ -58,16 +69,28 @@ export default function ReportsPage() {
       const monthly6Result = await Promise.all(months.map(async (month) => {
         const start = new Date(month.getFullYear(), month.getMonth(), 1)
         const end = new Date(month.getFullYear(), month.getMonth() + 1, 0, 23, 59, 59)
-        const { data } = await supabase
-          .from('transactions')
-          .select('total')
-          .eq('user_id', user.id)
-          .gte('created_at', start.toISOString())
-          .lte('created_at', end.toISOString())
+        const startDate = start.toISOString().split('T')[0]
+        const endDate = end.toISOString().split('T')[0]
+
+        const [{ data: txData }, { data: expData }] = await Promise.all([
+          supabase.from('transactions').select('total')
+            .eq('user_id', user.id)
+            .gte('created_at', start.toISOString())
+            .lte('created_at', end.toISOString()),
+          supabase.from('expenses').select('amount')
+            .eq('user_id', user.id)
+            .gte('date', startDate)
+            .lte('date', endDate),
+        ])
+
+        const revenue = txData?.reduce((s, t) => s + t.total, 0) ?? 0
+        const expenses = expData?.reduce((s, e) => s + e.amount, 0) ?? 0
         return {
           label: month.toLocaleDateString('id-ID', { month: 'short', year: '2-digit' }),
-          revenue: data?.reduce((s, t) => s + t.total, 0) ?? 0,
-          transactions: data?.length ?? 0,
+          revenue,
+          expenses,
+          profit: revenue - expenses,
+          transactions: txData?.length ?? 0,
         }
       }))
 
@@ -85,14 +108,20 @@ export default function ReportsPage() {
       const top = Object.entries(productMap)
         .map(([name, val]) => ({ name, ...val }))
         .sort((a, b) => b.qty - a.qty)
-        .slice(0, 8)
+        .slice(0, 10)
 
-      const [w, d15, d30] = await Promise.all([
-        fetchDays(7),
-        fetchDays(15),
-        fetchDays(30),
-      ])
+      // Summary bulan ini
+      const startMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+      const { data: monthTx } = await supabase.from('transactions').select('total')
+        .eq('user_id', user.id).gte('created_at', startMonth.toISOString())
+      const { data: monthExp } = await supabase.from('expenses').select('amount')
+        .eq('user_id', user.id).gte('date', startMonth.toISOString().split('T')[0])
 
+      const totalRevenue = monthTx?.reduce((s, t) => s + t.total, 0) ?? 0
+      const totalExpenses = monthExp?.reduce((s, e) => s + e.amount, 0) ?? 0
+      setSummary({ revenue: totalRevenue, expenses: totalExpenses, profit: totalRevenue - totalExpenses })
+
+      const [w, d15, d30] = await Promise.all([fetchDays(7), fetchDays(15), fetchDays(30)])
       setWeeklyData(w)
       setMonthly15Data(d15)
       setMonthly30Data(d30)
@@ -110,6 +139,8 @@ export default function ReportsPage() {
     monthly6Data
 
   const totalRevenue = chartData.reduce((s, d) => s + d.revenue, 0)
+  const totalExpenses = chartData.reduce((s, d) => s + d.expenses, 0)
+  const totalProfit = chartData.reduce((s, d) => s + d.profit, 0)
   const totalTransactions = chartData.reduce((s, d) => s + d.transactions, 0)
 
   const tabs: { key: ViewType; label: string }[] = [
@@ -150,49 +181,77 @@ export default function ReportsPage() {
         ))}
       </div>
 
-      {/* Stat */}
-      <div className="grid grid-cols-2 gap-4">
+      {/* Stat bulan ini */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <div className="flex items-center gap-2 mb-1">
             <TrendingUp size={16} className="text-indigo-500" />
-            <p className="text-xs text-gray-500">Total Pendapatan</p>
+            <p className="text-xs text-gray-500">Pendapatan</p>
           </div>
-          <p className="text-xl font-bold text-gray-900">{formatRupiah(totalRevenue)}</p>
+          <p className="text-lg font-bold text-gray-900">{formatRupiah(totalRevenue)}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <div className="flex items-center gap-2 mb-1">
-            <ShoppingCart size={16} className="text-blue-500" />
-            <p className="text-xs text-gray-500">Total Transaksi</p>
+            <TrendingDown size={16} className="text-red-500" />
+            <p className="text-xs text-gray-500">Pengeluaran</p>
           </div>
-          <p className="text-xl font-bold text-gray-900">{totalTransactions}</p>
+          <p className="text-lg font-bold text-red-500">{formatRupiah(totalExpenses)}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-4 col-span-2 sm:col-span-1">
+          <div className="flex items-center gap-2 mb-1">
+            <Wallet size={16} className="text-green-500" />
+            <p className="text-xs text-gray-500">Laba Bersih</p>
+          </div>
+          <p className={`text-lg font-bold ${totalProfit >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+            {formatRupiah(totalProfit)}
+          </p>
         </div>
       </div>
 
-      {/* Grafik Pendapatan */}
+      {/* Grafik Pendapatan / Pengeluaran */}
       <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <h2 className="font-semibold text-gray-800 mb-4">Grafik Pendapatan</h2>
-        <ResponsiveContainer width="100%" height={220}>
-          <BarChart data={chartData} barSize={isMultiDay ? 23 : 30}>
+        <h2 className="font-semibold text-gray-800 mb-4">Pendapatan / Pengeluaran</h2>
+        <ResponsiveContainer width="100%" height={240}>
+          <BarChart data={chartData} barSize={isMultiDay ? 17 : 24}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
             <XAxis
               dataKey="label"
               tick={{ fontSize: isMultiDay ? 9 : 11, fill: '#9ca3af' }}
               interval={view === 'monthly30' ? 4 : view === 'monthly15' ? 2 : 0}
             />
-            <YAxis
-              tick={{ fontSize: 11, fill: '#9ca3af' }}
-              tickFormatter={(v: any) => `${Number(v) / 1000}k`}
-            />
+            <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={(v: any) => `${Number(v) / 1000}k`} />
             <Tooltip
-              formatter={(v: any) => [formatRupiah(Number(v)), 'Pendapatan']}
-              contentStyle={{
-                borderRadius: '8px',
-                border: '1px solid #e5e7eb',
-                fontSize: '12px',
-              }}
+              formatter={(v: any, name: any) => [
+              formatRupiah(Number(v)),
+              name === 'revenue' ? 'Pendapatan' : name === 'expenses' ? 'Pengeluaran' : 'Laba'
+              ]}
+              contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '12px' }}
             />
+            <Legend formatter={(v) => v === 'revenue' ? 'Pendapatan' : v === 'expenses' ? 'Pengeluaran' : 'Laba'} />
             <Bar dataKey="revenue" fill="#6366f1" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="expenses" fill="#ef4444" radius={[4, 4, 0, 0]} />
           </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Grafik Laba Bersih */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <h2 className="font-semibold text-gray-800 mb-4">Grafik Laba Bersih</h2>
+        <ResponsiveContainer width="100%" height={200}>
+          <LineChart data={chartData}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+            <XAxis
+              dataKey="label"
+              tick={{ fontSize: isMultiDay ? 9 : 11, fill: '#9ca3af' }}
+              interval={view === 'monthly30' ? 4 : view === 'monthly15' ? 2 : 0}
+            />
+            <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={(v: any) => `${Number(v) / 1000}k`} />
+            <Tooltip
+              formatter={(v: any) => [formatRupiah(Number(v)), 'Laba Bersih']}
+              contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '12px' }}
+            />
+            <Line type="monotone" dataKey="profit" stroke="#22c55e" strokeWidth={2} dot={{ r: isMultiDay ? 2 : 4, fill: '#22c55e' }} />
+          </LineChart>
         </ResponsiveContainer>
       </div>
 
@@ -210,19 +269,9 @@ export default function ReportsPage() {
             <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} allowDecimals={false} />
             <Tooltip
               formatter={(v: any) => [v, 'Transaksi']}
-              contentStyle={{
-                borderRadius: '8px',
-                border: '1px solid #e5e7eb',
-                fontSize: '12px',
-              }}
+              contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '12px' }}
             />
-            <Line
-              type="monotone"
-              dataKey="transactions"
-              stroke="#22c55e"
-              strokeWidth={2}
-              dot={{ r: isMultiDay ? 2 : 4, fill: '#22c55e' }}
-            />
+            <Line type="monotone" dataKey="transactions" stroke="#3b82f6" strokeWidth={2} dot={{ r: isMultiDay ? 2 : 4, fill: '#3b82f6' }} />
           </LineChart>
         </ResponsiveContainer>
       </div>

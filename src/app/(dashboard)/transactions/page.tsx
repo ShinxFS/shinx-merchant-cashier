@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatRupiah } from '@/lib/utils'
+import { useRole } from '@/lib/useRole' // Import useRole berhasil ditambahkan
 import { Receipt, Search, ChevronDown, ChevronUp, TrendingUp } from 'lucide-react'
 
 interface TransactionItem {
@@ -32,6 +33,7 @@ interface Transaction {
 
 export default function TransactionsPage() {
   const supabase = createClient()
+  const { isOwner } = useRole() // Menambahkan hook role setelah deklarasi awal
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
@@ -99,7 +101,10 @@ export default function TransactionsPage() {
         <div className="text-right">
           <p className="text-xs text-gray-400">Pendapatan Hari Ini</p>
           <p className="text-lg font-bold text-indigo-600">{formatRupiah(todayTotal)}</p>
-          <p className="text-xs text-green-500 mt-0.5">Laba bersih: {formatRupiah(todayLabaBersih)}</p>
+          {/* Sembunyikan Laba Hari Ini di Header untuk Karyawan */}
+          {isOwner && (
+            <p className="text-xs text-green-500 mt-0.5">Laba bersih: {formatRupiah(todayLabaBersih)}</p>
+          )}
         </div>
       </div>
 
@@ -144,7 +149,10 @@ export default function TransactionsPage() {
                   </div>
                   <div className="text-right">
                     <p className="text-sm font-bold text-gray-900">{formatRupiah(tx.total)}</p>
-                    <p className="text-xs text-green-500 mt-0.5">+{formatRupiah(labaBersih)}</p>
+                    {/* Sembunyikan Laba di Row Utama untuk Karyawan */}
+                    {isOwner && (
+                      <p className="text-xs text-green-500 mt-0.5">+{formatRupiah(labaBersih)}</p>
+                    )}
                   </div>
                   <div className="text-gray-400 ml-1">
                     {expanded === tx.id ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
@@ -224,25 +232,27 @@ export default function TransactionsPage() {
                         <span className="text-gray-700">{paymentLabel[tx.payment_method] ?? tx.payment_method}</span>
                       </div>
 
-                      {/* Laba */}
-                      <div className="border-t border-gray-200 pt-3 mt-2 space-y-1.5">
-                        <div className="flex items-center gap-1.5 mb-2">
-                          <TrendingUp size={14} className="text-green-500" />
-                          <span className="text-xs font-semibold text-gray-500 uppercase">Analisis Laba</span>
+                      {/* Wrap Bagian Analisis Laba untuk Owner Saja */}
+                      {isOwner && (
+                        <div className="border-t border-gray-200 pt-3 mt-2 space-y-1.5">
+                          <div className="flex items-center gap-1.5 mb-2">
+                            <TrendingUp size={14} className="text-green-500" />
+                            <span className="text-xs font-semibold text-gray-500 uppercase">Analisis Laba</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-500">Laba Kotor</span>
+                            <span className={`font-medium ${labaKotor >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                              {formatRupiah(labaKotor)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-500">Laba Bersih <span className="text-xs text-gray-400">(setelah diskon/pajak)</span></span>
+                            <span className={`font-bold ${labaBersih >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                              {formatRupiah(labaBersih)}
+                            </span>
+                          </div>
                         </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-500">Laba Kotor</span>
-                          <span className={`font-medium ${labaKotor >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                            {formatRupiah(labaKotor)}
-                          </span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-500">Laba Bersih <span className="text-xs text-gray-400">(setelah diskon/pajak)</span></span>
-                          <span className={`font-bold ${labaBersih >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                            {formatRupiah(labaBersih)}
-                          </span>
-                        </div>
-                      </div>
+                      )}
                     </div>
                   </div>
                 )}

@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatRupiah } from '@/lib/utils'
-import { Plus, Pencil, Trash2, Package, Search } from 'lucide-react'
+import { useRole } from '@/lib/useRole'
+import { Plus, Pencil, Trash2, Package, Search, Download, Upload } from 'lucide-react'
 import ProductFormModal from '@/components/products/ProductFormModal'
 
 interface Category {
@@ -28,6 +29,9 @@ interface Product {
 
 export default function ProductsPage() {
   const supabase = createClient()
+  const { isOwner } = useRole()
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [search, setSearch] = useState('')
@@ -81,22 +85,154 @@ export default function ProductsPage() {
     load()
   }
 
+  // ==========================================
+  // LOGIKA EXPORT TO CSV (DENGAN GAMBAR)
+  // ==========================================
+  const exportToCSV = () => {
+    if (products.length === 0) return alert("Belum ada data produk untuk di-export.")
+
+    // Struktur header menyertakan gambar_url di akhir kolom
+    const headers = ['nama_produk', 'sku_barcode', 'harga_modal', 'harga_jual', 'stok', 'satuan', 'gambar_url']
+    const csvRows = [headers.join(',')]
+
+    products.forEach(p => {
+      const safeName = p.name.replace(/,/g, ' ')
+      const safeSku = (p.sku || '').replace(/,/g, ' ')
+      const safeUnit = (p.unit || 'pcs').replace(/,/g, ' ')
+      const safeImageUrl = (p.image_url || '').replace(/,/g, ' ')
+      
+      const row = [
+        safeName,
+        safeSku,
+        p.cost_price || 0,
+        p.price || 0,
+        p.stock || 0,
+        safeUnit,
+        safeImageUrl
+      ]
+      csvRows.push(row.join(','))
+    })
+
+    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.setAttribute("href", url)
+    link.setAttribute("download", "shinx_template_produk_lengkap.csv")
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
+  // ==========================================
+  // LOGIKA IMPORT FROM CSV (DENGAN GAMBAR)
+  // ==========================================
+  const handleImportCSV = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onload = async (event) => {
+      const text = event.target?.result as string
+      const lines = text.split('\n').map(line => line.trim()).filter(line => line)
+      
+      const dataLines = lines.slice(1) // Lewati baris header
+      if (dataLines.length === 0) return alert("File CSV kosong atau format salah.")
+
+      setLoading(true)
+      
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) throw new Error("User tidak terautentikasi")
+
+        const productsToInsert = dataLines.map(line => {
+          const [name, sku, cost_price, price, stock, unit, gambar_url] = line.split(',')
+
+          return {
+            user_id: user.id,
+            name: name?.trim(),
+            sku: sku?.trim() || null,
+            cost_price: parseFloat(cost_price) || 0,
+            price: parseFloat(price) || 0,
+            stock: parseInt(stock) || 0,
+            unit: unit?.trim() || 'pcs',
+            image_url: gambar_url?.trim() || null, // Memetakan link gambar secara otomatis
+            is_active: true,
+            category_id: null 
+          }
+        }).filter(p => p.name) 
+
+        if (productsToInsert.length === 0) throw new Error("Tidak ada data produk valid untuk dimasukkan.")
+
+        const { error } = await supabase
+          .from('products')
+          .insert(productsToInsert)
+
+        if (error) throw error
+
+        alert(`Berhasil mengimpor ${productsToInsert.length} produk beserta gambarnya!`)
+        load()
+
+      } catch (err: any) {
+        alert("Gagal mengimpor produk: " + err.message)
+      } finally {
+        setLoading(false)
+        if (fileInputRef.current) fileInputRef.current.value = '' 
+      }
+    }
+    reader.readAsText(file)
+  }
+
   return (
     <div className="p-6 max-w-5xl mx-auto">
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Produk</h1>
           <p className="text-sm text-gray-500 mt-0.5">{products.length} produk terdaftar</p>
         </div>
-        <button
-          onClick={() => { setEditProduct(null); setShowModal(true) }}
-          className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-indigo-700 transition-colors"
-        >
-          <Plus size={16} />
-          Tambah Produk
-        </button>
+        
+        {/* Kontainer Tombol Aksi */}
+        <div className="flex items-center gap-2 self-end sm:self-auto">
+          {/* Tombol Export bisa diakses oleh Owner maupun Staff */}
+          <button 
+            onClick={exportToCSV}
+            className="flex items-center gap-2 bg-white border border-gray-200 text-gray-700 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
+          >
+            <Download size={16} />
+            Export CSV
+          </button>
+
+          {/* Tombol Import & Tambah Produk diproteksi hanya untuk Owner */}
+          {isOwner && (
+            <>
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                onChange={handleImportCSV} 
+                accept=".csv" 
+                className="hidden" 
+              />
+              <button 
+                onClick={() => fileInputRef.current?.click()}
+             // bg-indigo-50 diganti menjadi bg-white border border-gray-200
+                className="flex items-center gap-2 bg-white border border-gray-200 text-gray-600 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
+>
+               <Upload size={16} />
+                Import CSV
+              </button>
+
+              <button
+                onClick={() => { setEditProduct(null); setShowModal(true) }}
+                className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-indigo-700 transition-colors"
+              >
+                <Plus size={16} />
+                Tambah Produk
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Search */}
@@ -157,7 +293,9 @@ export default function ProductsPage() {
                 <th className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3 hidden sm:table-cell">Kategori</th>
                 <th className="text-right text-xs font-semibold text-gray-500 uppercase px-4 py-3">Harga</th>
                 <th className="text-right text-xs font-semibold text-gray-500 uppercase px-4 py-3 hidden md:table-cell">Stok</th>
-                <th className="text-right text-xs font-semibold text-gray-500 uppercase px-4 py-3">Aksi</th>
+                {isOwner && (
+                  <th className="text-right text-xs font-semibold text-gray-500 uppercase px-4 py-3">Aksi</th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -200,22 +338,24 @@ export default function ProductsPage() {
                       {product.stock} {product.unit}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-1">
-                      <button
-                        onClick={() => handleEdit(product)}
-                        className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                      >
-                        <Pencil size={15} />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(product.id)}
-                        className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  </td>
+                  {isOwner && (
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => handleEdit(product)}
+                          className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                        >
+                          <Pencil size={15} />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(product.id)}
+                          className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
