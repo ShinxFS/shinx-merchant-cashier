@@ -140,9 +140,9 @@ export default function StaffPage() {
         <div className="grid grid-cols-2 gap-x-4 gap-y-1">
           <p className="text-xs text-blue-600">✅ Bisa menggunakan kasir</p>
           <p className="text-xs text-blue-600">✅ Bisa melihat produk & transaksi</p>
-          <p className="text-xs text-blue-600">✅ Bisa menambah pengeluaran</p>
           <p className="text-xs text-red-500">❌ Tidak bisa ubah/hapus produk</p>
-          <p className="text-xs text-red-500">❌ Tidak bisa hapus pengeluaran</p>
+          <p className="text-xs text-red-500">❌ Tidak bisa lihat laporan</p>
+          <p className="text-xs text-red-500">❌ Tidak bisa menambah/hapus pengeluaran</p>
           <p className="text-xs text-red-500">❌ Tidak bisa lihat laba bersih</p>
           <p className="text-xs text-red-500">❌ Tidak bisa akses pengaturan</p>
           <p className="text-xs text-red-500">❌ Tidak bisa kelola karyawan</p>
@@ -175,7 +175,7 @@ export default function StaffPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-gray-800">{staff.owner_name ?? 'Karyawan'}</p>
-                    <span className="text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full font-medium">Karyawan</span>
+                    <span className="text-xs bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full font-medium">STAFF</span>
                   </div>
 
                   {stats && (

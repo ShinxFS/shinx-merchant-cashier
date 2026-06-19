@@ -70,7 +70,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
           <div>
             <p className="text-xs text-gray-400 font-medium">
-              {role === 'staff' ? 'KARYAWAN' : 'KASIR'}
+              {role === 'staff' ? 'Staff' : 'Owner'}
             </p>
             <p className="text-sm font-bold text-gray-800 leading-tight truncate max-w-[140px]">
               {businessName}
@@ -104,7 +104,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {role === 'staff' && (
           <div className="px-3 py-2 mb-2">
             <span className="text-xs bg-orange-100 text-orange-600 px-2 py-1 rounded-full font-medium">
-              👤 Akun Karyawan
+              👤 Staff Account
             </span>
           </div>
         )}
