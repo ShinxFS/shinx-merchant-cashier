@@ -53,8 +53,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { href: '/cashier', icon: ShoppingCart, label: 'Kasir', ownerOnly: false },
     { href: '/products', icon: Package, label: 'Produk', ownerOnly: false },
     { href: '/transactions', icon: Receipt, label: 'Transaksi', ownerOnly: false },
-    { href: '/expenses', icon: WalletCards, label: 'Pengeluaran', ownerOnly: false },
-    { href: '/reports', icon: BarChart2, label: 'Laporan', ownerOnly: false },
+    { href: '/expenses', icon: WalletCards, label: 'Pengeluaran', ownerOnly: true },
+    { href: '/reports', icon: BarChart2, label: 'Laporan', ownerOnly: true },
     { href: '/staff', icon: Users, label: 'Karyawan', ownerOnly: true },
     { href: '/settings', icon: Settings, label: 'Pengaturan', ownerOnly: true },
   ]
