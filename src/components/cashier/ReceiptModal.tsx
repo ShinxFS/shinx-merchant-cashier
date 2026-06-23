@@ -1,5 +1,9 @@
+'use client'
+
+import { useRef, useState } from 'react'
+import { toPng } from 'html-to-image'
 import { formatRupiah } from '@/lib/utils'
-import { X, Printer } from 'lucide-react'
+import { X, Printer, Share2 } from 'lucide-react'
 
 interface ReceiptItem {
   product_name: string
@@ -31,13 +35,16 @@ export default function ReceiptModal({
   data: ReceiptData
   onClose: () => void
 }) {
-  const handlePrint = () => window.print()
+  const previewRef = useRef<HTMLDivElement>(null)
+  const [sharing, setSharing] = useState(false)
+  const [printing, setPrinting] = useState(false)
 
   const formatDate = (str: string) =>
     new Date(str).toLocaleDateString('id-ID', {
       day: 'numeric', month: 'long', year: 'numeric',
       hour: '2-digit', minute: '2-digit',
-    })
+      timeZone: 'Asia/Jakarta',
+    }) + ' WIB'
 
   const paymentLabel: Record<string, string> = {
     cash: 'Tunai',
@@ -46,102 +53,101 @@ export default function ReceiptModal({
     qris: 'QRIS',
   }
 
+  // Ambil "foto" dari tampilan preview struk supaya hasil cetak & gambar identik dgn yg di layar
+  const captureImage = async () => {
+    const node = previewRef.current
+    if (!node) return null
+    return await toPng(node, { backgroundColor: '#ffffff', pixelRatio: 3 })
+  }
+
+  // Cetak: render preview jadi gambar, lalu cetak gambarnya lewat iframe (andal di HP & desktop)
+  const handlePrint = async () => {
+    setPrinting(true)
+    try {
+      const dataUrl = await captureImage()
+      if (!dataUrl) return
+
+      const iframe = document.createElement('iframe')
+      iframe.style.position = 'fixed'
+      iframe.style.right = '0'
+      iframe.style.bottom = '0'
+      iframe.style.width = '0'
+      iframe.style.height = '0'
+      iframe.style.border = '0'
+      document.body.appendChild(iframe)
+
+      const doc = iframe.contentWindow?.document
+      if (!doc) { iframe.remove(); return }
+
+      doc.open()
+      doc.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+        @page { size: 58mm auto; margin: 0; }
+        html, body { margin: 0; padding: 0; }
+        body { width: 58mm; }
+        img { width: 100%; display: block; }
+      </style></head><body><img src="${dataUrl}" /></body></html>`)
+      doc.close()
+
+      const win = iframe.contentWindow
+      const imgEl = doc.querySelector('img')
+      let fired = false
+      const triggerPrint = () => {
+        if (fired) return
+        fired = true
+        win?.focus()
+        win?.print()
+        setTimeout(() => iframe.remove(), 1000)
+      }
+      if (imgEl && !imgEl.complete) {
+        imgEl.onload = triggerPrint
+        setTimeout(triggerPrint, 1500) // fallback kalau onload tak terpicu
+      } else {
+        setTimeout(triggerPrint, 200)
+      }
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setPrinting(false)
+    }
+  }
+
+  // Bagikan/simpan struk sebagai gambar PNG — jalan di semua kondisi (termasuk in-app browser & HP tanpa printer)
+  const handleShare = async () => {
+    setSharing(true)
+    try {
+      const dataUrl = await captureImage()
+      if (!dataUrl) return
+      const blob = await (await fetch(dataUrl)).blob()
+      const file = new File([blob], `struk-${data.invoice_number}.png`, { type: 'image/png' })
+
+      const nav = navigator as Navigator & {
+        canShare?: (d: { files: File[] }) => boolean
+        share?: (d: { files?: File[]; title?: string; text?: string }) => Promise<void>
+      }
+
+      if (nav.canShare && nav.share && nav.canShare({ files: [file] })) {
+        await nav.share({
+          files: [file],
+          title: 'Struk Pembayaran',
+          text: `Struk ${data.invoice_number}`,
+        })
+      } else {
+        // Fallback: download gambar
+        const a = document.createElement('a')
+        a.href = dataUrl
+        a.download = `struk-${data.invoice_number}.png`
+        a.click()
+      }
+    } catch (err) {
+      // Diabaikan kalau user membatalkan dialog share
+      console.error(err)
+    } finally {
+      setSharing(false)
+    }
+  }
+
   return (
     <>
-      {/* Print styles */}
-      <style>{`
-        #receipt-print { display: none; }
-        @media print {
-          @page { size: 58mm auto; margin: 0; }
-          body * { visibility: hidden !important; }
-          #receipt-print, #receipt-print * { visibility: visible !important; }
-          #receipt-print {
-            display: block !important;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 58mm;
-          }
-          #receipt-print > div {
-            max-width: 100% !important;
-            width: 100% !important;
-            font-size: 9px !important;
-            line-height: 1.35 !important;
-            padding: 3mm 2mm !important;
-            margin: 0 !important;
-          }
-        }
-      `}</style>
-
-      {/* Print-only version */}
-      <div id="receipt-print">
-        <div style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace', fontSize: '12px', color: '#000', maxWidth: '300px', margin: '0 auto', padding: '16px', lineHeight: 1.4 }}>
-
-          {/* Header */}
-          <div style={{ textAlign: 'center' }}>
-            <p style={{ margin: 0, fontWeight: 'bold', fontSize: '15px', letterSpacing: '0.5px' }}>{data.business_name}</p>
-            {data.address && <p style={{ margin: '3px 0 0' }}>{data.address}</p>}
-            {data.phone && <p style={{ margin: '2px 0 0' }}>{data.phone}</p>}
-          </div>
-
-          <div style={{ borderTop: '1px dashed #000', margin: '8px 0' }} />
-
-          {/* Info transaksi */}
-          <p style={{ margin: 0 }}>No&nbsp;&nbsp;: {data.invoice_number}</p>
-          <p style={{ margin: '2px 0 0' }}>Tgl&nbsp;: {formatDate(data.created_at)}</p>
-
-          <div style={{ borderTop: '1px dashed #000', margin: '8px 0' }} />
-
-          {/* Daftar item */}
-          {data.items.map((item, i) => (
-            <div key={i} style={{ marginBottom: '5px' }}>
-              <p style={{ margin: 0 }}>{item.product_name}</p>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>{item.quantity} x {formatRupiah(item.unit_price)}</span>
-                <span>{formatRupiah(item.subtotal)}</span>
-              </div>
-            </div>
-          ))}
-
-          <div style={{ borderTop: '1px dashed #000', margin: '8px 0' }} />
-
-          {/* Ringkasan */}
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>Subtotal</span><span>{formatRupiah(data.subtotal)}</span>
-          </div>
-          {data.discount > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span>Diskon</span><span>-{formatRupiah(data.discount)}</span>
-            </div>
-          )}
-          {data.tax > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span>Pajak</span><span>+{formatRupiah(data.tax)}</span>
-            </div>
-          )}
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '13px', marginTop: '3px' }}>
-            <span>TOTAL</span><span>{formatRupiah(data.total)}</span>
-          </div>
-
-          <div style={{ borderTop: '1px dashed #000', margin: '8px 0' }} />
-
-          {/* Pembayaran */}
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>Bayar ({paymentLabel[data.payment_method]})</span>
-            <span>{formatRupiah(data.amount_paid)}</span>
-          </div>
-          {data.payment_method === 'cash' && (
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span>Kembali</span><span>{formatRupiah(data.change_amount)}</span>
-            </div>
-          )}
-
-          <div style={{ borderTop: '1px dashed #000', margin: '8px 0' }} />
-
-          <p style={{ textAlign: 'center', margin: '4px 0 0' }}>~ Terima kasih ~</p>
-        </div>
-      </div>
-
       {/* Modal UI */}
       <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/50">
         <div className="bg-white rounded-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto">
@@ -155,7 +161,7 @@ export default function ReceiptModal({
 
           {/* Preview Struk */}
           <div className="p-5">
-            <div className="bg-gray-50 rounded-xl p-4 font-mono text-xs space-y-1">
+            <div ref={previewRef} className="bg-gray-50 rounded-xl p-4 font-mono text-xs space-y-1">
               <p className="text-center font-bold text-sm text-gray-900 placeholder-gray-400">{data.business_name}</p>
               {data.address && <p className="text-center text-gray-500">{data.address}</p>}
               {data.phone && <p className="text-center text-gray-500">{data.phone}</p>}
@@ -205,19 +211,30 @@ export default function ReceiptModal({
             </div>
 
             {/* Tombol */}
-            <div className="flex gap-3 mt-4">
+            <div className="mt-4 space-y-2">
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={handleShare}
+                  disabled={sharing}
+                  className="py-2.5 border border-indigo-200 bg-indigo-50 text-indigo-700 rounded-xl text-sm font-medium hover:bg-indigo-100 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  <Share2 size={15} />
+                  {sharing ? 'Membuat...' : 'Bagikan'}
+                </button>
+                <button
+                  onClick={handlePrint}
+                  disabled={printing}
+                  className="py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  <Printer size={15} />
+                  {printing ? 'Menyiapkan...' : 'Cetak'}
+                </button>
+              </div>
               <button
                 onClick={onClose}
-                className="flex-1 py-2.5 border border-gray-300 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50"
+                className="w-full py-2.5 border border-gray-300 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50"
               >
                 Tutup
-              </button>
-              <button
-                onClick={handlePrint}
-                className="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 flex items-center justify-center gap-2"
-              >
-                <Printer size={15} />
-                Cetak Struk
               </button>
             </div>
           </div>
