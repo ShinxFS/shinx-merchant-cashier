@@ -43,64 +43,102 @@ export default function ReceiptModal({
     cash: 'Tunai',
     transfer: 'Transfer',
     ewallet: 'E-Wallet',
+    qris: 'QRIS',
   }
 
   return (
     <>
       {/* Print styles */}
       <style>{`
-        @media print {
-          body > * { display: none !important; }
-          #receipt-print { display: block !important; position: fixed; top: 0; left: 0; width: 100%; }
-        }
         #receipt-print { display: none; }
+        @media print {
+          @page { size: 58mm auto; margin: 0; }
+          body * { visibility: hidden !important; }
+          #receipt-print, #receipt-print * { visibility: visible !important; }
+          #receipt-print {
+            display: block !important;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 58mm;
+          }
+          #receipt-print > div {
+            max-width: 100% !important;
+            width: 100% !important;
+            font-size: 9px !important;
+            line-height: 1.35 !important;
+            padding: 3mm 2mm !important;
+            margin: 0 !important;
+          }
+        }
       `}</style>
 
       {/* Print-only version */}
       <div id="receipt-print">
-        <div style={{ fontFamily: 'monospace', fontSize: '12px', maxWidth: '300px', margin: '0 auto', padding: '16px' }}>
-          <div style={{ textAlign: 'center', marginBottom: '12px' }}>
-            <p style={{ fontWeight: 'bold', fontSize: '14px' }}>{data.business_name}</p>
-            {data.address && <p>{data.address}</p>}
-            {data.phone && <p>{data.phone}</p>}
-            <p>{'='.repeat(32)}</p>
+        <div style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace', fontSize: '12px', color: '#000', maxWidth: '300px', margin: '0 auto', padding: '16px', lineHeight: 1.4 }}>
+
+          {/* Header */}
+          <div style={{ textAlign: 'center' }}>
+            <p style={{ margin: 0, fontWeight: 'bold', fontSize: '15px', letterSpacing: '0.5px' }}>{data.business_name}</p>
+            {data.address && <p style={{ margin: '3px 0 0' }}>{data.address}</p>}
+            {data.phone && <p style={{ margin: '2px 0 0' }}>{data.phone}</p>}
           </div>
-          <p>No: {data.invoice_number}</p>
-          <p>Tgl: {formatDate(data.created_at)}</p>
-          <p>{'='.repeat(32)}</p>
+
+          <div style={{ borderTop: '1px dashed #000', margin: '8px 0' }} />
+
+          {/* Info transaksi */}
+          <p style={{ margin: 0 }}>No&nbsp;&nbsp;: {data.invoice_number}</p>
+          <p style={{ margin: '2px 0 0' }}>Tgl&nbsp;: {formatDate(data.created_at)}</p>
+
+          <div style={{ borderTop: '1px dashed #000', margin: '8px 0' }} />
+
+          {/* Daftar item */}
           {data.items.map((item, i) => (
-            <div key={i}>
-              <p>{item.product_name}</p>
-              <p style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>  {item.quantity}x {formatRupiah(item.unit_price)}</span>
+            <div key={i} style={{ marginBottom: '5px' }}>
+              <p style={{ margin: 0 }}>{item.product_name}</p>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>{item.quantity} x {formatRupiah(item.unit_price)}</span>
                 <span>{formatRupiah(item.subtotal)}</span>
-              </p>
+              </div>
             </div>
           ))}
-          <p>{'='.repeat(32)}</p>
-          <p style={{ display: 'flex', justifyContent: 'space-between' }}>
+
+          <div style={{ borderTop: '1px dashed #000', margin: '8px 0' }} />
+
+          {/* Ringkasan */}
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <span>Subtotal</span><span>{formatRupiah(data.subtotal)}</span>
-          </p>
+          </div>
           {data.discount > 0 && (
-            <p style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span>Diskon</span><span>-{formatRupiah(data.discount)}</span>
-            </p>
+            </div>
           )}
           {data.tax > 0 && (
-            <p style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span>Pajak</span><span>+{formatRupiah(data.tax)}</span>
-            </p>
+            </div>
           )}
-          <p style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '13px', marginTop: '3px' }}>
             <span>TOTAL</span><span>{formatRupiah(data.total)}</span>
-          </p>
-          <p>{'='.repeat(32)}</p>
-          <p>Bayar: {formatRupiah(data.amount_paid)} ({paymentLabel[data.payment_method]})</p>
+          </div>
+
+          <div style={{ borderTop: '1px dashed #000', margin: '8px 0' }} />
+
+          {/* Pembayaran */}
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span>Bayar ({paymentLabel[data.payment_method]})</span>
+            <span>{formatRupiah(data.amount_paid)}</span>
+          </div>
           {data.payment_method === 'cash' && (
-            <p>Kembali: {formatRupiah(data.change_amount)}</p>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>Kembali</span><span>{formatRupiah(data.change_amount)}</span>
+            </div>
           )}
-          <p>{'='.repeat(32)}</p>
-          <p style={{ textAlign: 'center', marginTop: '8px' }}>Terima kasih!</p>
+
+          <div style={{ borderTop: '1px dashed #000', margin: '8px 0' }} />
+
+          <p style={{ textAlign: 'center', margin: '4px 0 0' }}>~ Terima kasih ~</p>
         </div>
       </div>
 

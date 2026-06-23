@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Save, Plus, Trash2 } from 'lucide-react'
+import { Save, Plus, Trash2, QrCode, Upload } from 'lucide-react'
 
 interface Category {
   id: string
@@ -31,6 +31,8 @@ export default function SettingsPage() {
   const [newCatColor, setNewCatColor] = useState('#6366f1')
   const [loading, setLoading] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [qrisUrl, setQrisUrl] = useState<string | null>(null)
+  const [qrisUploading, setQrisUploading] = useState(false)
 
   useEffect(() => {
     const load = async () => {
@@ -40,12 +42,15 @@ export default function SettingsPage() {
         supabase.from('profiles').select('*').eq('id', user.id).single(),
         supabase.from('categories').select('*').eq('user_id', user.id).order('name'),
       ])
-      if (prof) setProfile({
-        business_name: prof.business_name ?? '',
-        owner_name: prof.owner_name ?? '',
-        phone: prof.phone ?? '',
-        address: prof.address ?? '',
-      })
+      if (prof) {
+        setProfile({
+          business_name: prof.business_name ?? '',
+          owner_name: prof.owner_name ?? '',
+          phone: prof.phone ?? '',
+          address: prof.address ?? '',
+        })
+        setQrisUrl(prof.qris_image_url ?? null)
+      }
       setCategories(cats ?? [])
     }
     load()
@@ -60,6 +65,38 @@ export default function SettingsPage() {
     setLoading(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 3000)
+  }
+
+  const handleUploadQris = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      alert('File harus berupa gambar.')
+      return
+    }
+    setQrisUploading(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setQrisUploading(false); return }
+
+    const ext = file.name.split('.').pop() || 'png'
+    const path = `${user.id}/qris-${Date.now()}.${ext}`
+    const { error: upErr } = await supabase.storage
+      .from('product-images')
+      .upload(path, file, { upsert: true })
+    if (upErr) { alert('Gagal mengunggah QRIS.'); setQrisUploading(false); return }
+
+    const { data: pub } = supabase.storage.from('product-images').getPublicUrl(path)
+    await supabase.from('profiles').update({ qris_image_url: pub.publicUrl }).eq('id', user.id)
+    setQrisUrl(pub.publicUrl)
+    setQrisUploading(false)
+  }
+
+  const handleRemoveQris = async () => {
+    if (!confirm('Hapus gambar QRIS?')) return
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    await supabase.from('profiles').update({ qris_image_url: null }).eq('id', user.id)
+    setQrisUrl(null)
   }
 
   const handleAddCategory = async () => {
@@ -145,6 +182,51 @@ export default function SettingsPage() {
             {loading ? 'Menyimpan...' : 'Simpan Perubahan'}
           </button>
         </form>
+      </div>
+
+      {/* QRIS Pembayaran */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <div className="flex items-center gap-2 mb-1">
+          <QrCode size={18} className="text-indigo-600" />
+          <h2 className="font-semibold text-gray-800">QRIS Pembayaran</h2>
+        </div>
+        <p className="text-sm text-gray-400 mb-4">
+          Unggah gambar QRIS toko. Akan tampil di kasir saat metode bayar QRIS dipilih.
+        </p>
+
+        {qrisUrl ? (
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={qrisUrl}
+              alt="QRIS Toko"
+              className="w-40 h-40 object-contain rounded-lg border border-gray-200 bg-white"
+            />
+            <div className="flex flex-col gap-2">
+              <label className="flex items-center gap-2 bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 cursor-pointer transition-colors w-fit">
+                <Upload size={15} />
+                {qrisUploading ? 'Mengunggah...' : 'Ganti Gambar'}
+                <input type="file" accept="image/*" onChange={handleUploadQris} disabled={qrisUploading} className="hidden" />
+              </label>
+              <button
+                onClick={handleRemoveQris}
+                className="flex items-center gap-2 text-red-500 px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-50 transition-colors w-fit"
+              >
+                <Trash2 size={15} />
+                Hapus
+              </button>
+            </div>
+          </div>
+        ) : (
+          <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-gray-300 rounded-xl py-8 cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/30 transition-colors">
+            <Upload size={22} className="text-gray-400" />
+            <span className="text-sm text-gray-500 font-medium">
+              {qrisUploading ? 'Mengunggah...' : 'Klik untuk unggah gambar QRIS'}
+            </span>
+            <span className="text-xs text-gray-400">PNG / JPG</span>
+            <input type="file" accept="image/*" onChange={handleUploadQris} disabled={qrisUploading} className="hidden" />
+          </label>
+        )}
       </div>
 
       {/* Kategori */}

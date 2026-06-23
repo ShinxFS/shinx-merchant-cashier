@@ -90,6 +90,7 @@ export default function TransactionsPage() {
     cash: '💵 Tunai',
     transfer: '🏦 Transfer',
     ewallet: '📱 E-Wallet',
+    qris: '📲 QRIS',
   }
 
   const toggleExpand = (id: string) =>

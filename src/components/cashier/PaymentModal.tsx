@@ -1,23 +1,24 @@
 import { useState } from 'react'
 import { formatRupiah } from '@/lib/utils'
-import { X, Banknote, CreditCard, Wallet, Tag, Percent } from 'lucide-react'
+import { X, Banknote, CreditCard, Tag, Percent, QrCode } from 'lucide-react'
 
 interface Props {
   subtotal: number
   onConfirm: (method: string, amountPaid: number, discount: number, tax: number) => void
   onClose: () => void
   loading: boolean
+  qrisImageUrl?: string | null
 }
 
 const paymentMethods = [
   { id: 'cash', label: 'Tunai', icon: Banknote },
   { id: 'transfer', label: 'Transfer', icon: CreditCard },
-  { id: 'ewallet', label: 'E-Wallet', icon: Wallet },
+  { id: 'qris', label: 'QRIS', icon: QrCode },
 ]
 
 const inputClass = "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
 
-export default function PaymentModal({ subtotal, onConfirm, onClose, loading }: Props) {
+export default function PaymentModal({ subtotal, onConfirm, onClose, loading, qrisImageUrl }: Props) {
   const [method, setMethod] = useState('cash')
   const [amountPaid, setAmountPaid] = useState('')
   const [discountType, setDiscountType] = useState<'nominal' | 'percent'>('nominal')
@@ -201,16 +202,54 @@ export default function PaymentModal({ subtotal, onConfirm, onClose, loading }: 
               )}
             </div>
           )}
+
+          {/* QRIS */}
+          {method === 'qris' && (
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Scan QRIS</p>
+              {qrisImageUrl ? (
+                <div className="flex flex-col items-center bg-gray-50 rounded-xl p-4">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={qrisImageUrl}
+                    alt="QRIS Pembayaran"
+                    className="w-52 h-52 object-contain rounded-lg bg-white"
+                  />
+                  <p className="text-xs text-gray-500 mt-3">Scan & bayar sejumlah</p>
+                  <p className="text-lg font-bold text-indigo-700">{formatRupiah(total)}</p>
+                  <p className="text-[11px] text-gray-400 mt-1 text-center">
+                    Pastikan nominal pada aplikasi pelanggan sesuai sebelum konfirmasi
+                  </p>
+                </div>
+              ) : (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-center">
+                  <p className="text-sm text-amber-700 font-medium">QRIS belum diatur</p>
+                  <p className="text-xs text-amber-600 mt-1">
+                    Unggah gambar QRIS di menu Pengaturan terlebih dahulu.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Tombol Bayar */}
         <div className="px-5 pb-5">
           <button
             onClick={() => onConfirm(method, method === 'cash' ? paid : total, discountAmount, taxAmount)}
-            disabled={loading || (method === 'cash' && paid < total) || total <= 0}
+            disabled={
+              loading ||
+              (method === 'cash' && paid < total) ||
+              (method === 'qris' && !qrisImageUrl) ||
+              total <= 0
+            }
             className="w-full bg-indigo-600 text-white py-3 rounded-xl font-semibold text-sm hover:bg-indigo-700 disabled:opacity-50 transition-colors"
           >
-            {loading ? 'Memproses...' : `Bayar ${formatRupiah(total)}`}
+            {loading
+              ? 'Memproses...'
+              : method === 'qris'
+                ? `Sudah Dibayar · ${formatRupiah(total)}`
+                : `Bayar ${formatRupiah(total)}`}
           </button>
         </div>
       </div>

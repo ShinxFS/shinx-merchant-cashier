@@ -32,6 +32,7 @@ export default function CashierPage() {
   const [receiptData, setReceiptData] = useState<any>(null)
   const [cartVisible, setCartVisible] = useState(true)
   const [effectiveUserId, setEffectiveUserId] = useState<string>('')
+  const [qrisImageUrl, setQrisImageUrl] = useState<string | null>(null)
   const [businessProfile, setBusinessProfile] = useState({
     business_name: 'Toko',
     address: '',
@@ -67,10 +68,17 @@ export default function CashierPage() {
       // Load profil owner
       const { data: prof } = await supabase
         .from('profiles')
-        .select('business_name, address, phone')
+        .select('business_name, address, phone, qris_image_url')
         .eq('id', targetUserId)
         .single()
-      if (prof) setBusinessProfile(prof)
+      if (prof) {
+        setBusinessProfile({
+          business_name: prof.business_name ?? 'Toko',
+          address: prof.address ?? '',
+          phone: prof.phone ?? '',
+        })
+        setQrisImageUrl(prof.qris_image_url ?? null)
+      }
     }
     load()
   }, [])
@@ -357,6 +365,7 @@ export default function CashierPage() {
           onConfirm={handlePayment}
           onClose={() => setShowPayment(false)}
           loading={paymentLoading}
+          qrisImageUrl={qrisImageUrl}
         />
       )}
 
