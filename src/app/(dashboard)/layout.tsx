@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import {
   LayoutDashboard, ShoppingCart, Package, Receipt,
-  Settings, LogOut, Menu, Store, BarChart2, WalletCards, Users,
+  Settings, LogOut, Menu, Store, BarChart2, WalletCards, Users, Calculator,
 } from 'lucide-react'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -53,6 +53,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { href: '/cashier', icon: ShoppingCart, label: 'Kasir', ownerOnly: false },
     { href: '/products', icon: Package, label: 'Produk', ownerOnly: false },
     { href: '/transactions', icon: Receipt, label: 'Transaksi', ownerOnly: false },
+    { href: '/hpp', icon: Calculator, label: 'Kalkulator HPP', ownerOnly: true },
     { href: '/expenses', icon: WalletCards, label: 'Pengeluaran', ownerOnly: true },
     { href: '/reports', icon: BarChart2, label: 'Laporan', ownerOnly: true },
     { href: '/staff', icon: Users, label: 'Karyawan', ownerOnly: true },
