@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { X, Upload } from 'lucide-react'
+import { X, Upload, ScanLine } from 'lucide-react'
+import BarcodeScanner from '@/components/cashier/BarcodeScanner'
 
 interface Category {
   id: string
@@ -95,6 +96,7 @@ export default function ProductFormModal({ product, categories, onClose }: Props
   const [imagePreview, setImagePreview] = useState(product?.image_url ?? '')
   const [loading, setLoading] = useState(false)
   const [compressing, setCompressing] = useState(false)
+  const [showScanner, setShowScanner] = useState(false)
   const [error, setError] = useState('')
   const [imageInfo, setImageInfo] = useState<{ original: string; compressed: string } | null>(null)
 
@@ -177,6 +179,13 @@ export default function ProductFormModal({ product, categories, onClose }: Props
   const inputClass = "w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
 
   return (
+    <>
+    {showScanner && (
+      <BarcodeScanner
+        onDetected={(code) => { set('sku', code); setShowScanner(false) }}
+        onClose={() => setShowScanner(false)}
+      />
+    )}
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
       <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
 
@@ -237,17 +246,28 @@ export default function ProductFormModal({ product, categories, onClose }: Props
             />
           </div>
 
-          {/* SKU */}
+          {/* SKU / Barcode */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              SKU <span className="text-gray-400">(opsional)</span>
+              SKU / Barcode <span className="text-gray-400">(opsional)</span>
             </label>
-            <input
-              value={form.sku}
-              onChange={e => set('sku', e.target.value)}
-              placeholder="Contoh: KOP-001"
-              className={inputClass}
-            />
+            <div className="flex items-center gap-2">
+              <input
+                value={form.sku}
+                onChange={e => set('sku', e.target.value)}
+                placeholder="Ketik manual atau scan"
+                className={inputClass}
+              />
+              <button
+                type="button"
+                onClick={() => setShowScanner(true)}
+                title="Scan barcode"
+                className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
+              >
+                <ScanLine size={16} />
+                <span className="hidden sm:inline">Scan</span>
+              </button>
+            </div>
           </div>
 
           {/* Harga */}
@@ -351,5 +371,6 @@ export default function ProductFormModal({ product, categories, onClose }: Props
         </form>
       </div>
     </div>
+    </>
   )
 }

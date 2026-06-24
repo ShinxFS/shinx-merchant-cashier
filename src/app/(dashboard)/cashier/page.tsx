@@ -7,12 +7,14 @@ import ProductCard from '@/components/cashier/ProductCard'
 import CartItem, { CartItemType } from '@/components/cashier/CartItem'
 import PaymentModal from '@/components/cashier/PaymentModal'
 import ReceiptModal from '@/components/cashier/ReceiptModal'
-import { Search, ShoppingCart, Trash2, ChevronRight, ChevronLeft } from 'lucide-react'
+import BarcodeScanner from '@/components/cashier/BarcodeScanner'
+import { Search, ShoppingCart, Trash2, ChevronRight, ChevronLeft, ScanLine } from 'lucide-react'
 import { formatRupiah } from '@/lib/utils'
 
 interface Product {
   id: string
   name: string
+  sku?: string | null
   price: number
   cost_price?: number
   stock: number
@@ -26,6 +28,7 @@ export default function CashierPage() {
   const [filtered, setFiltered] = useState<Product[]>([])
   const [cart, setCart] = useState<CartItemType[]>([])
   const [search, setSearch] = useState('')
+  const [showScanner, setShowScanner] = useState(false)
   const [showPayment, setShowPayment] = useState(false)
   const [paymentLoading, setPaymentLoading] = useState(false)
   const [successMsg, setSuccessMsg] = useState('')
@@ -106,6 +109,28 @@ export default function CashierPage() {
         image_url: product.image_url,
       }]
     })
+  }
+
+  const handleScan = (code: string) => {
+    setShowScanner(false)
+    const term = code.trim().toLowerCase()
+    const product = products.find(p => (p.sku ?? '').trim().toLowerCase() === term)
+
+    const flash = (msg: string) => {
+      setSuccessMsg(msg)
+      setTimeout(() => setSuccessMsg(''), 3500)
+    }
+
+    if (!product) {
+      flash(`❌ Barcode "${code}" tidak terdaftar`)
+      return
+    }
+    if (product.stock <= 0) {
+      flash(`⚠️ Stok "${product.name}" habis`)
+      return
+    }
+    addToCart(product)
+    flash(`✅ ${product.name} ditambahkan ke keranjang`)
   }
 
   const increase = (id: string) => setCart(prev =>
@@ -223,14 +248,24 @@ export default function CashierPage() {
       {/* Kiri: Produk */}
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="p-4 border-b border-gray-200 bg-white">
-          <div className="relative">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Cari produk..."
-              className="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-xl text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-50"
-            />
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Cari produk..."
+                className="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-xl text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-50"
+              />
+            </div>
+            <button
+              onClick={() => setShowScanner(true)}
+              title="Scan barcode"
+              className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 transition-colors"
+            >
+              <ScanLine size={16} />
+              <span className="hidden sm:inline">Scan</span>
+            </button>
           </div>
         </div>
 
@@ -357,6 +392,13 @@ export default function CashierPage() {
             </span>
           </button>
         </div>
+      )}
+
+      {showScanner && (
+        <BarcodeScanner
+          onDetected={handleScan}
+          onClose={() => setShowScanner(false)}
+        />
       )}
 
       {showPayment && (

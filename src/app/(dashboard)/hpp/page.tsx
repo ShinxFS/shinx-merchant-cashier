@@ -10,7 +10,7 @@ import {
 import * as XLSX from 'xlsx'
 import { saveAs } from 'file-saver'
 import {
-  Calculator, RotateCcw, Save, Trash2, FileSpreadsheet, Factory, Store, Wrench,
+  Calculator, RotateCcw, Save, Trash2, FileSpreadsheet, Factory, Store, Wrench, PackagePlus,
 } from 'lucide-react'
 
 interface SavedProduct {
@@ -210,6 +210,29 @@ export default function HppPage() {
     if (!confirm('Hapus produk tersimpan ini?')) return
     await supabase.from('hpp_products').delete().eq('id', id)
     setSaved(prev => prev.filter(p => p.id !== id))
+  }
+
+  // Jadikan hasil HPP sebagai produk jual di tabel `products`.
+  const convertToProduct = async (p: SavedProduct) => {
+    if (!confirm(`Jadikan "${p.product_name}" sebagai produk jual?\n\nHarga modal = HPP (${formatRupiah(p.hpp_per_unit)}), harga jual = rekomendasi (${formatRupiah(p.recommended_price)}). Stok awal 0 — atur di menu Produk.`)) return
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const { error } = await supabase.from('products').insert({
+      user_id: user.id,
+      name: p.product_name,
+      sku: p.product_code || null,
+      price: Math.round(p.recommended_price),
+      cost_price: Math.round(p.hpp_per_unit),
+      stock: 0,
+      unit: 'pcs',
+      category_id: null,
+      is_active: true,
+      image_url: null,
+    })
+
+    if (error) { alert('Gagal membuat produk: ' + error.message); return }
+    alert(`✅ "${p.product_name}" ditambahkan ke Produk. Stok masih 0 — atur stok & foto di menu Produk.`)
   }
 
   const exportExcel = () => {
@@ -447,13 +470,24 @@ export default function HppPage() {
                     <td className="px-4 py-3 text-right font-semibold text-indigo-600">{formatRupiah(p.hpp_per_unit)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-green-600">{formatRupiah(p.recommended_price)}</td>
                     <td className="px-4 py-3 text-center text-gray-500">{p.target_margin}%</td>
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        onClick={() => handleDelete(p.id)}
-                        className="text-gray-300 hover:text-red-400 transition-colors"
-                      >
-                        <Trash2 size={15} />
-                      </button>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => convertToProduct(p)}
+                          title="Jadikan produk jual"
+                          className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg text-indigo-600 hover:bg-indigo-50 transition-colors"
+                        >
+                          <PackagePlus size={15} />
+                          <span className="hidden sm:inline">Jadikan Produk</span>
+                        </button>
+                        <button
+                          onClick={() => handleDelete(p.id)}
+                          title="Hapus"
+                          className="text-gray-300 hover:text-red-400 transition-colors p-1"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
