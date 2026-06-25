@@ -20,7 +20,7 @@ export default function ReportsPage() {
   const [topProducts, setTopProducts] = useState<any[]>([])
   const [view, setView] = useState<ViewType>('weekly')
   const [loading, setLoading] = useState(true)
-  const [summary, setSummary] = useState({ revenue: 0, expenses: 0, profit: 0 })
+  const [summary, setSummary] = useState({ revenue: 0, expenses: 0, cogs: 0, grossProfit: 0, profit: 0 })
 
   useEffect(() => {
     const load = async () => {
@@ -39,7 +39,7 @@ export default function ReportsPage() {
           const dateStr = day.toISOString().split('T')[0]
 
           const [{ data: txData }, { data: expData }] = await Promise.all([
-            supabase.from('transactions').select('total')
+            supabase.from('transactions').select('id, total')
               .eq('user_id', user.id)
               .gte('created_at', start.toISOString())
               .lte('created_at', end.toISOString()),
@@ -48,13 +48,23 @@ export default function ReportsPage() {
               .eq('date', dateStr),
           ])
 
+          const txIds = txData?.map(t => t.id) ?? []
+          const { data: itemData } = txIds.length > 0
+            ? await supabase.from('transaction_items').select('cost_price, quantity')
+                .in('transaction_id', txIds)
+            : { data: [] }
+
           const revenue = txData?.reduce((s, t) => s + t.total, 0) ?? 0
           const expenses = expData?.reduce((s, e) => s + e.amount, 0) ?? 0
+          const cogs = itemData?.reduce((s, i) => s + ((i.cost_price ?? 0) * i.quantity), 0) ?? 0
+          const grossProfit = revenue - cogs
           return {
             label: day.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
             revenue,
+            cogs,
+            grossProfit,
             expenses,
-            profit: revenue - expenses,
+            profit: grossProfit - expenses,
             transactions: txData?.length ?? 0,
           }
         }))
@@ -73,7 +83,7 @@ export default function ReportsPage() {
         const endDate = end.toISOString().split('T')[0]
 
         const [{ data: txData }, { data: expData }] = await Promise.all([
-          supabase.from('transactions').select('total')
+          supabase.from('transactions').select('id, total')
             .eq('user_id', user.id)
             .gte('created_at', start.toISOString())
             .lte('created_at', end.toISOString()),
@@ -83,11 +93,21 @@ export default function ReportsPage() {
             .lte('date', endDate),
         ])
 
+        const txIds = txData?.map(t => t.id) ?? []
+        const { data: itemData } = txIds.length > 0
+          ? await supabase.from('transaction_items').select('cost_price, quantity')
+              .in('transaction_id', txIds)
+          : { data: [] }
+
         const revenue = txData?.reduce((s, t) => s + t.total, 0) ?? 0
         const expenses = expData?.reduce((s, e) => s + e.amount, 0) ?? 0
+        const cogs = itemData?.reduce((s, i) => s + ((i.cost_price ?? 0) * i.quantity), 0) ?? 0
+        const grossProfit = revenue - cogs
         return {
           label: month.toLocaleDateString('id-ID', { month: 'short', year: '2-digit' }),
           revenue,
+          cogs,
+          grossProfit,
           expenses,
           profit: revenue - expenses,
           transactions: txData?.length ?? 0,
@@ -112,14 +132,24 @@ export default function ReportsPage() {
 
       // Summary bulan ini
       const startMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
-      const { data: monthTx } = await supabase.from('transactions').select('total')
-        .eq('user_id', user.id).gte('created_at', startMonth.toISOString())
-      const { data: monthExp } = await supabase.from('expenses').select('amount')
-        .eq('user_id', user.id).gte('date', startMonth.toISOString().split('T')[0])
+      const [{ data: monthTx }, { data: monthExp }] = await Promise.all([
+        supabase.from('transactions').select('id, total')
+          .eq('user_id', user.id).gte('created_at', startMonth.toISOString()),
+        supabase.from('expenses').select('amount')
+          .eq('user_id', user.id).gte('date', startMonth.toISOString().split('T')[0]),
+      ])
+
+      const monthTxIds = monthTx?.map(t => t.id) ?? []
+      const { data: monthItems } = monthTxIds.length > 0
+        ? await supabase.from('transaction_items').select('cost_price, quantity')
+            .in('transaction_id', monthTxIds)
+        : { data: [] }
 
       const totalRevenue = monthTx?.reduce((s, t) => s + t.total, 0) ?? 0
       const totalExpenses = monthExp?.reduce((s, e) => s + e.amount, 0) ?? 0
-      setSummary({ revenue: totalRevenue, expenses: totalExpenses, profit: totalRevenue - totalExpenses })
+      const totalCogs = monthItems?.reduce((s, i) => s + ((i.cost_price ?? 0) * i.quantity), 0) ?? 0
+      const totalGrossProfit = totalRevenue - totalCogs
+      setSummary({ revenue: totalRevenue, cogs: totalCogs, grossProfit: totalGrossProfit, expenses: totalExpenses, profit: totalGrossProfit - totalExpenses })
 
       const [w, d15, d30] = await Promise.all([fetchDays(7), fetchDays(15), fetchDays(30)])
       setWeeklyData(w)
@@ -139,6 +169,8 @@ export default function ReportsPage() {
     monthly6Data
 
   const totalRevenue = chartData.reduce((s, d) => s + d.revenue, 0)
+  const totalCogs = chartData.reduce((s, d) => s + d.cogs, 0)
+  const totalGrossProfit = chartData.reduce((s, d) => s + d.grossProfit, 0)
   const totalExpenses = chartData.reduce((s, d) => s + d.expenses, 0)
   const totalProfit = chartData.reduce((s, d) => s + d.profit, 0)
   const totalTransactions = chartData.reduce((s, d) => s + d.transactions, 0)
@@ -182,7 +214,7 @@ export default function ReportsPage() {
       </div>
 
       {/* Stat bulan ini */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <div className="flex items-center gap-2 mb-1">
             <TrendingUp size={16} className="text-indigo-500" />
@@ -192,12 +224,28 @@ export default function ReportsPage() {
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <div className="flex items-center gap-2 mb-1">
+            <Package size={16} className="text-orange-500" />
+            <p className="text-xs text-gray-500">HPP</p>
+          </div>
+          <p className="text-lg font-bold text-gray-900">{formatRupiah(totalCogs)}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <div className="flex items-center gap-2 mb-1">
+            <TrendingUp size={16} className="text-amber-500" />
+            <p className="text-xs text-gray-500">Laba Kotor</p>
+          </div>
+          <p className={`text-lg font-bold ${totalGrossProfit >= 0 ? 'text-amber-600' : 'text-red-500'}`}>
+            {formatRupiah(totalGrossProfit)}
+          </p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <div className="flex items-center gap-2 mb-1">
             <TrendingDown size={16} className="text-red-500" />
             <p className="text-xs text-gray-500">Pengeluaran</p>
           </div>
           <p className="text-lg font-bold text-red-500">{formatRupiah(totalExpenses)}</p>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4 col-span-2 sm:col-span-1">
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
           <div className="flex items-center gap-2 mb-1">
             <Wallet size={16} className="text-green-500" />
             <p className="text-xs text-gray-500">Laba Bersih</p>
@@ -230,6 +278,33 @@ export default function ReportsPage() {
             <Legend formatter={(v) => v === 'revenue' ? 'Pendapatan' : v === 'expenses' ? 'Pengeluaran' : 'Laba'} />
             <Bar dataKey="revenue" fill="#6366f1" radius={[4, 4, 0, 0]} />
             <Bar dataKey="expenses" fill="#ef4444" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Grafik Laba Kotor (Pendapatan / HPP) */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <h2 className="font-semibold text-gray-800 mb-4">Laba Kotor (Pendapatan / HPP)</h2>
+        <ResponsiveContainer width="100%" height={240}>
+          <BarChart data={chartData} barSize={isMultiDay ? 17 : 24}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+            <XAxis
+              dataKey="label"
+              tick={{ fontSize: isMultiDay ? 9 : 11, fill: '#9ca3af' }}
+              interval={view === 'monthly30' ? 4 : view === 'monthly15' ? 2 : 0}
+            />
+            <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={(v: any) => `${Number(v) / 1000}k`} />
+            <Tooltip
+              formatter={(v: any, name: any) => [
+              formatRupiah(Number(v)),
+              name === 'revenue' ? 'Pendapatan' : name === 'cogs' ? 'HPP' : 'Laba Kotor'
+              ]}
+              contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '13px' }}
+            />
+            <Legend formatter={(v) => v === 'revenue' ? 'Pendapatan' : v === 'cogs' ? 'HPP' : 'Laba Kotor'} />
+            <Bar dataKey="revenue" fill="#6366f1" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="cogs" fill="#f97316" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="grossProfit" fill="#eab308" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
