@@ -26,6 +26,7 @@ interface Transaction {
   change_amount: number
   notes: string | null
   status: string
+  table_number: number | null
   created_at: string
   transaction_items?: TransactionItem[]
 }
@@ -161,7 +162,14 @@ export default function TransactionsPage() {
                     className="flex-1 flex items-center gap-4 text-left"
                   >
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-800">{tx.invoice_number}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-gray-800">{tx.invoice_number}</p>
+                        {tx.table_number != null && (
+                          <span className="text-[10px] font-medium bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded">
+                            Meja {tx.table_number}
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-gray-400 mt-0.5">{formatDate(tx.created_at)}</p>
                     </div>
                     <div className="hidden sm:block text-xs text-gray-500">

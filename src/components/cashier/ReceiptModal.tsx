@@ -26,6 +26,8 @@ interface ReceiptData {
   business_name: string
   address?: string
   phone?: string
+  table_number?: number | null
+  table_label?: string
 }
 
 export default function ReceiptModal({
@@ -168,6 +170,11 @@ export default function ReceiptModal({
               <p className="text-center text-gray-300">{'- '.repeat(16)}</p>
               <p className="text-gray-600">No: {data.invoice_number}</p>
               <p className="text-gray-600">Tgl: {formatDate(data.created_at)}</p>
+              {(data.table_label || data.table_number != null) && (
+                <p className="text-gray-600">
+                  Meja: {data.table_label ?? data.table_number}
+                </p>
+              )}
               <p className="text-gray-300">{'- '.repeat(16)}</p>
 
               {data.items.map((item, i) => (

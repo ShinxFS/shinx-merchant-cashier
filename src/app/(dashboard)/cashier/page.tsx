@@ -8,7 +8,7 @@ import CartItem, { CartItemType } from '@/components/cashier/CartItem'
 import PaymentModal from '@/components/cashier/PaymentModal'
 import ReceiptModal from '@/components/cashier/ReceiptModal'
 import BarcodeScanner from '@/components/cashier/BarcodeScanner'
-import { Search, ShoppingCart, Trash2, ChevronRight, ChevronLeft, ScanLine } from 'lucide-react'
+import { Search, ShoppingCart, Trash2, ChevronRight, ChevronLeft, ScanLine, Plus, X } from 'lucide-react'
 import { formatRupiah } from '@/lib/utils'
 
 interface Product {
@@ -26,7 +26,11 @@ export default function CashierPage() {
   const supabase = createClient()
   const [products, setProducts] = useState<Product[]>([])
   const [filtered, setFiltered] = useState<Product[]>([])
-  const [cart, setCart] = useState<CartItemType[]>([])
+  // Keranjang per-meja: key 'takeaway' | '1' | '2' | ... → daftar item
+  const [carts, setCarts] = useState<Record<string, CartItemType[]>>({})
+  const [tables, setTables] = useState<number[]>([1, 2, 3, 4])
+  const [activeTable, setActiveTable] = useState<string>('1')
+  const [hydrated, setHydrated] = useState(false)
   const [search, setSearch] = useState('')
   const [showScanner, setShowScanner] = useState(false)
   const [showPayment, setShowPayment] = useState(false)
@@ -91,8 +95,64 @@ export default function CashierPage() {
     setFiltered(products.filter(p => p.name.toLowerCase().includes(q)))
   }, [search, products])
 
+  // Muat keranjang per-meja yang tersimpan (biar refresh tidak menghilangkan pesanan meja)
+  useEffect(() => {
+    if (!effectiveUserId) return
+    try {
+      const raw = localStorage.getItem(`pos_carts_${effectiveUserId}`)
+      if (raw) {
+        const saved = JSON.parse(raw)
+        if (saved.carts) setCarts(saved.carts)
+        if (Array.isArray(saved.tables) && saved.tables.length) setTables(saved.tables)
+        if (saved.activeTable) setActiveTable(saved.activeTable)
+      }
+    } catch {}
+    setHydrated(true)
+  }, [effectiveUserId])
+
+  // Simpan otomatis setiap ada perubahan (setelah selesai memuat, biar tidak menimpa data)
+  useEffect(() => {
+    if (!hydrated || !effectiveUserId) return
+    try {
+      localStorage.setItem(
+        `pos_carts_${effectiveUserId}`,
+        JSON.stringify({ carts, tables, activeTable })
+      )
+    } catch {}
+  }, [carts, tables, activeTable, hydrated, effectiveUserId])
+
+  // Keranjang meja yang sedang aktif
+  const cart = carts[activeTable] ?? []
+  const activeLabel = activeTable === 'takeaway' ? 'Bawa Pulang' : `Meja ${activeTable}`
+
+  const setActiveCart = (updater: (prev: CartItemType[]) => CartItemType[]) =>
+    setCarts(prev => ({ ...prev, [activeTable]: updater(prev[activeTable] ?? []) }))
+
+  const addTable = () => {
+    const next = (tables.length ? Math.max(...tables) : 0) + 1
+    setTables(prev => [...prev, next])
+    setActiveTable(String(next))
+  }
+
+  const removeTable = (key: string) => {
+    const num = Number(key)
+    const hasItems = (carts[key]?.length ?? 0) > 0
+    if (hasItems && !confirm(`Meja ${num} masih ada pesanan. Hapus meja & buang pesanannya?`)) return
+
+    const remaining = tables.filter(t => t !== num)
+    setTables(remaining)
+    setCarts(prev => {
+      const next = { ...prev }
+      delete next[key]
+      return next
+    })
+    if (activeTable === key) {
+      setActiveTable(remaining.length ? String(remaining[0]) : 'takeaway')
+    }
+  }
+
   const addToCart = (product: Product) => {
-    setCart(prev => {
+    setActiveCart(prev => {
       const exist = prev.find(i => i.id === product.id)
       if (exist) {
         if (exist.quantity >= product.stock) return prev
@@ -133,15 +193,15 @@ export default function CashierPage() {
     flash(`✅ ${product.name} ditambahkan ke keranjang`)
   }
 
-  const increase = (id: string) => setCart(prev =>
+  const increase = (id: string) => setActiveCart(prev =>
     prev.map(i => i.id === id && i.quantity < i.stock ? { ...i, quantity: i.quantity + 1 } : i)
   )
-  const decrease = (id: string) => setCart(prev =>
+  const decrease = (id: string) => setActiveCart(prev =>
     prev.map(i => i.id === id && i.quantity > 1 ? { ...i, quantity: i.quantity - 1 } : i)
       .filter(i => i.quantity > 0)
   )
-  const remove = (id: string) => setCart(prev => prev.filter(i => i.id !== id))
-  const clearCart = () => setCart([])
+  const remove = (id: string) => setActiveCart(prev => prev.filter(i => i.id !== id))
+  const clearCart = () => setActiveCart(() => [])
 
   const subtotal = cart.reduce((s, i) => s + i.price * i.quantity, 0)
 
@@ -158,24 +218,38 @@ export default function CashierPage() {
     const total = subtotal - discount + tax
     const change = method === 'cash' ? amountPaid - total : 0
     const invoice = generateInvoice()
+    const tableNumber = activeTable === 'takeaway' ? null : Number(activeTable)
 
     // Simpan transaksi dengan effectiveUserId (owner punya karyawan)
-    const { data: tx, error } = await supabase
+    const baseTx = {
+      user_id: effectiveUserId,
+      created_by: user.id,
+      invoice_number: invoice,
+      subtotal,
+      discount,
+      tax,
+      total,
+      payment_method: method,
+      amount_paid: amountPaid,
+      change_amount: change,
+    }
+
+    let { data: tx, error } = await supabase
       .from('transactions')
-      .insert({
-        user_id: effectiveUserId,
-        created_by: user.id,
-        invoice_number: invoice,
-        subtotal,
-        discount,
-        tax,
-        total,
-        payment_method: method,
-        amount_paid: amountPaid,
-        change_amount: change,
-      })
+      .insert({ ...baseTx, table_number: tableNumber })
       .select()
       .single()
+
+    // Fallback: kalau kolom table_number belum dibuat di DB, simpan tanpa kolom itu
+    if (error && /table_number/i.test(error.message)) {
+      const retry = await supabase
+        .from('transactions')
+        .insert(baseTx)
+        .select()
+        .single()
+      tx = retry.data
+      error = retry.error
+    }
 
     if (error || !tx) {
       setPaymentLoading(false)
@@ -233,9 +307,11 @@ export default function CashierPage() {
       business_name: businessProfile.business_name,
       address: businessProfile.address,
       phone: businessProfile.phone,
+      table_number: tableNumber,
+      table_label: activeLabel,
     })
 
-    setCart([])
+    setActiveCart(() => [])
     setShowPayment(false)
     setPaymentLoading(false)
   }
@@ -322,12 +398,17 @@ export default function CashierPage() {
           <div className="px-4 py-4 border-b border-gray-100 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <ShoppingCart size={18} className="text-indigo-600" />
-              <span className="font-bold text-gray-800">Keranjang</span>
-              {cart.length > 0 && (
-                <span className="bg-indigo-600 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold">
-                  {cart.length}
-                </span>
-              )}
+              <div className="flex flex-col leading-none">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-gray-800">Keranjang</span>
+                  {cart.length > 0 && (
+                    <span className="bg-indigo-600 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold">
+                      {cart.length}
+                    </span>
+                  )}
+                </div>
+                <span className="text-[11px] text-indigo-600 font-medium mt-1">{activeLabel}</span>
+              </div>
             </div>
             {cart.length > 0 && (
               <button
@@ -337,6 +418,53 @@ export default function CashierPage() {
                 <Trash2 size={13} /> Kosongkan
               </button>
             )}
+          </div>
+
+          {/* Selector Meja */}
+          <div className="px-3 py-2 border-b border-gray-100 flex items-center gap-1.5 overflow-x-auto">
+            {[
+              { key: 'takeaway', label: 'Bawa Pulang', canDelete: false },
+              ...tables.map(t => ({ key: String(t), label: `Meja ${t}`, canDelete: true })),
+            ].map(({ key, label, canDelete }) => {
+              const isActive = activeTable === key
+              const hasItems = (carts[key]?.length ?? 0) > 0
+              return (
+                <div
+                  key={key}
+                  className={`relative flex-shrink-0 flex items-center rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
+                    isActive
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  <button
+                    onClick={() => setActiveTable(key)}
+                    className={`py-1.5 pl-3 ${isActive && canDelete ? 'pr-1' : 'pr-3'}`}
+                  >
+                    {label}
+                  </button>
+                  {isActive && canDelete && (
+                    <button
+                      onClick={() => removeTable(key)}
+                      title="Hapus meja"
+                      className="pr-2 pl-0.5 py-1.5 text-indigo-200 hover:text-white"
+                    >
+                      <X size={13} />
+                    </button>
+                  )}
+                  {hasItems && !isActive && (
+                    <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-indigo-500 rounded-full ring-2 ring-white" />
+                  )}
+                </div>
+              )
+            })}
+            <button
+              onClick={addTable}
+              title="Tambah meja"
+              className="flex-shrink-0 w-7 h-7 rounded-lg bg-gray-100 text-gray-500 hover:bg-gray-200 flex items-center justify-center"
+            >
+              <Plus size={14} />
+            </button>
           </div>
 
           <div className="flex-1 overflow-y-auto px-4">
