@@ -19,7 +19,8 @@ interface Product {
   cost_price?: number
   stock: number
   image_url: string | null
-  categories?: { name: string; color: string } | null
+  category?: { name: string; color: string } | null
+  category2?: { name: string; color: string } | null
 }
 
 export default function CashierPage() {
@@ -32,6 +33,7 @@ export default function CashierPage() {
   const [activeTable, setActiveTable] = useState<string>('1')
   const [hydrated, setHydrated] = useState(false)
   const [search, setSearch] = useState('')
+  const [activeCategory, setActiveCategory] = useState<string>('all')
   const [showScanner, setShowScanner] = useState(false)
   const [showPayment, setShowPayment] = useState(false)
   const [paymentLoading, setPaymentLoading] = useState(false)
@@ -65,7 +67,7 @@ export default function CashierPage() {
       // Load produk milik owner
       const { data } = await supabase
         .from('products')
-        .select('*, categories(name, color)')
+        .select('*, category:categories!category_id(name, color), category2:categories!category_id_2(name, color)')
         .eq('user_id', targetUserId)
         .eq('is_active', true)
         .order('name')
@@ -90,10 +92,29 @@ export default function CashierPage() {
     load()
   }, [])
 
+  // Daftar kategori unik dari semua produk (gabungan category & category2)
+  const categories = Array.from(
+    new Map(
+      products
+        .flatMap(p => [p.category, p.category2])
+        .filter((c): c is { name: string; color: string } => !!c?.name)
+        .map(c => [c.name, c])
+    ).values()
+  ).sort((a, b) => a.name.localeCompare(b.name))
+
   useEffect(() => {
     const q = search.toLowerCase()
-    setFiltered(products.filter(p => p.name.toLowerCase().includes(q)))
-  }, [search, products])
+    setFiltered(
+      products.filter(p => {
+        const matchName = p.name.toLowerCase().includes(q)
+        const matchCategory =
+          activeCategory === 'all' ||
+          p.category?.name === activeCategory ||
+          p.category2?.name === activeCategory
+        return matchName && matchCategory
+      })
+    )
+  }, [search, products, activeCategory])
 
   // Muat keranjang per-meja yang tersimpan (biar refresh tidak menghilangkan pesanan meja)
   useEffect(() => {
@@ -343,6 +364,42 @@ export default function CashierPage() {
               <span className="hidden sm:inline">Scan</span>
             </button>
           </div>
+
+          {/* Filter kategori */}
+          {categories.length > 0 && (
+            <div className="flex items-center gap-1.5 overflow-x-auto mt-3 -mb-1 pb-1">
+              <button
+                onClick={() => setActiveCategory('all')}
+                className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
+                  activeCategory === 'all'
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                Semua
+              </button>
+              {categories.map(c => {
+                const isActive = activeCategory === c.name
+                return (
+                  <button
+                    key={c.name}
+                    onClick={() => setActiveCategory(c.name)}
+                    className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
+                      isActive
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    <span
+                      className="w-2 h-2 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: c.color || '#9ca3af' }}
+                    />
+                    {c.name}
+                  </button>
+                )
+              })}
+            </div>
+          )}
         </div>
 
         {successMsg && (

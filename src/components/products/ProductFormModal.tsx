@@ -22,6 +22,7 @@ interface Product {
   image_url: string | null
   is_active: boolean
   category_id: string | null
+  category_id_2: string | null
 }
 
 interface Props {
@@ -88,6 +89,7 @@ export default function ProductFormModal({ product, categories, onClose }: Props
     stock: product?.stock ?? 0,
     unit: product?.unit ?? 'pcs',
     category_id: product?.category_id ?? '',
+    category_id_2: product?.category_id_2 ?? '',
     is_active: product?.is_active ?? true,
     image_url: product?.image_url ?? '',
   })
@@ -156,6 +158,7 @@ export default function ProductFormModal({ product, categories, onClose }: Props
       stock: Number(form.stock),
       unit: form.unit,
       category_id: form.category_id || null,
+      category_id_2: form.category_id_2 || null,
       is_active: form.is_active,
       image_url: imageUrl,
       updated_at: new Date().toISOString(),
@@ -322,19 +325,44 @@ export default function ProductFormModal({ product, categories, onClose }: Props
             </div>
           </div>
 
-          {/* Kategori */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Kategori</label>
-            <select
-              value={form.category_id}
-              onChange={e => set('category_id', e.target.value)}
-              className={inputClass}
-            >
-              <option value="">— Tanpa Kategori —</option>
-              {categories.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
+          {/* Kategori (bisa sampai 2) */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Kategori 1</label>
+              <select
+                value={form.category_id}
+                onChange={e => {
+                  const val = e.target.value
+                  set('category_id', val)
+                  // Kalau kategori 2 jadi sama dgn kategori 1, kosongkan kategori 2
+                  if (val && val === form.category_id_2) set('category_id_2', '')
+                }}
+                className={inputClass}
+              >
+                <option value="">— Tanpa Kategori —</option>
+                {categories.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Kategori 2 <span className="text-gray-400">(opsional)</span>
+              </label>
+              <select
+                value={form.category_id_2}
+                onChange={e => set('category_id_2', e.target.value)}
+                disabled={!form.category_id}
+                className={`${inputClass} disabled:bg-gray-50 disabled:text-gray-400`}
+              >
+                <option value="">— Tanpa Kategori —</option>
+                {categories
+                  .filter(c => c.id !== form.category_id)
+                  .map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+              </select>
+            </div>
           </div>
 
           {/* Status */}

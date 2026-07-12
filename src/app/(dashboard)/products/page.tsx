@@ -24,7 +24,9 @@ interface Product {
   image_url: string | null
   is_active: boolean
   category_id: string | null
-  categories?: Category | null
+  category_id_2: string | null
+  category?: Category | null
+  category2?: Category | null
 }
 
 export default function ProductsPage() {
@@ -46,7 +48,7 @@ export default function ProductsPage() {
     const [{ data: prods }, { data: cats }] = await Promise.all([
       supabase
         .from('products')
-        .select('*, categories(id, name, color)')
+        .select('*, category:categories!category_id(id, name, color), category2:categories!category_id_2(id, name, color)')
         .eq('user_id', user.id)
         .order('name'),
       supabase
@@ -158,7 +160,8 @@ export default function ProductsPage() {
             unit: unit?.trim() || 'pcs',
             image_url: gambar_url?.trim() || null, // Memetakan link gambar secara otomatis
             is_active: true,
-            category_id: null 
+            category_id: null,
+            category_id_2: null
           }
         }).filter(p => p.name) 
 
@@ -316,16 +319,23 @@ export default function ProductsPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3 hidden sm:table-cell">
-                    {product.categories ? (
-                      <span
-                        className="text-xs px-2 py-1 rounded-lg font-medium"
-                        style={{
-                          backgroundColor: product.categories.color + '20',
-                          color: product.categories.color,
-                        }}
-                      >
-                        {product.categories.name}
-                      </span>
+                    {product.category || product.category2 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {[product.category, product.category2]
+                          .filter((c): c is Category => !!c)
+                          .map(c => (
+                            <span
+                              key={c.id}
+                              className="text-xs px-2 py-1 rounded-lg font-medium"
+                              style={{
+                                backgroundColor: c.color + '20',
+                                color: c.color,
+                              }}
+                            >
+                              {c.name}
+                            </span>
+                          ))}
+                      </div>
                     ) : (
                       <span className="text-xs text-gray-300">—</span>
                     )}

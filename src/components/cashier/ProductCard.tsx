@@ -8,7 +8,8 @@ interface Product {
   cost_price?: number
   stock: number
   image_url: string | null
-  categories?: { name: string; color: string } | null
+  category?: { name: string; color: string } | null
+  category2?: { name: string; color: string } | null
 }
 
 export default function ProductCard({
@@ -42,16 +43,23 @@ export default function ProductCard({
         {product.name}
       </p>
 
-      {product.categories && (
-        <span
-          className="inline-block text-xs px-1.5 py-0.5 rounded mt-1 font-medium"
-          style={{
-            backgroundColor: product.categories.color + '20',
-            color: product.categories.color,
-          }}
-        >
-          {product.categories.name}
-        </span>
+      {(product.category || product.category2) && (
+        <div className="flex flex-wrap gap-1 mt-1">
+          {[product.category, product.category2]
+            .filter((c): c is { name: string; color: string } => !!c)
+            .map((c, i) => (
+              <span
+                key={i}
+                className="inline-block text-xs px-1.5 py-0.5 rounded font-medium"
+                style={{
+                  backgroundColor: c.color + '20',
+                  color: c.color,
+                }}
+              >
+                {c.name}
+              </span>
+            ))}
+        </div>
       )}
 
       <div className="flex items-center justify-between mt-2">
