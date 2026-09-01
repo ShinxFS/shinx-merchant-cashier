@@ -874,22 +874,6 @@ export default function CashierPage() {
                 <Plus size={14} />
               </button>
             </div>
-
-            {activeTable !== 'takeaway' && (
-              <div className="flex items-center justify-between rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 text-[11px] text-gray-600">
-                <span>Status Meja {activeTable}</span>
-                <button
-                  onClick={() => setTableAvailability(activeTable, (tableStates[activeTable] ?? 'empty') === 'occupied' ? 'empty' : 'occupied')}
-                  className={`px-2.5 py-1 rounded-full font-semibold ${
-                    (tableStates[activeTable] ?? 'empty') === 'occupied'
-                      ? 'bg-amber-100 text-amber-700'
-                      : 'bg-emerald-100 text-emerald-700'
-                  }`}
-                >
-                  {(tableStates[activeTable] ?? 'empty') === 'occupied' ? 'Aktif' : 'Kosong'}
-                </button>
-              </div>
-            )}
           </div>
 
           {tableOrders.length > 0 && (
