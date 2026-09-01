@@ -795,7 +795,7 @@ export default function CashierPage() {
 
       {/* Kanan: Cart */}
       {cartVisible && (
-        <div className="w-[20rem] sm:w-80 lg:w-80 xl:w-[20rem] flex-shrink-0 bg-white border-l border-gray-200 flex flex-col overflow-hidden">
+        <div className="w-[18rem] sm:w-72 lg:w-80 xl:w-[20rem] flex-shrink-0 bg-white border-l border-gray-200 flex flex-col overflow-hidden">
           <div className="px-4 py-4 border-b border-gray-100 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <ShoppingCart size={18} className="text-indigo-600" />
