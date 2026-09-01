@@ -795,7 +795,7 @@ export default function CashierPage() {
 
       {/* Kanan: Cart */}
       {cartVisible && (
-        <div className="w-[18rem] sm:w-72 lg:w-80 xl:w-[22rem] flex-shrink-0 bg-white border-l border-gray-200 flex flex-col overflow-hidden">
+        <div className="w-[20rem] sm:w-80 lg:w-80 xl:w-[20rem] flex-shrink-0 bg-white border-l border-gray-200 flex flex-col overflow-hidden">
           <div className="px-4 py-4 border-b border-gray-100 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <ShoppingCart size={18} className="text-indigo-600" />
@@ -823,7 +823,7 @@ export default function CashierPage() {
 
           {/* Selector Meja */}
           <div className="px-3 py-2 border-b border-gray-100 flex flex-col gap-2">
-            <div className="flex flex-wrap items-center gap-1.5">
+            <div className="flex items-center gap-1.5 overflow-x-auto">
               {[
                 { key: 'takeaway', label: 'Bawa Pulang', canDelete: false },
                 ...tables.map(t => ({ key: String(t), label: `Meja ${t}`, canDelete: true })),
@@ -834,7 +834,7 @@ export default function CashierPage() {
                 return (
                   <div
                     key={key}
-                    className={`relative flex items-center rounded-lg text-[11px] font-medium transition-colors ${
+                    className={`relative flex-shrink-0 flex items-center rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
                       isActive
                         ? 'bg-indigo-600 text-white'
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
