@@ -795,12 +795,12 @@ export default function CashierPage() {
 
       {/* Kanan: Cart */}
       {cartVisible && (
-        <div className="w-[18rem] sm:w-72 lg:w-80 xl:w-[20rem] flex-shrink-0 bg-white border-l border-gray-200 flex flex-col overflow-hidden">
+        <div className="w-[18rem] sm:w-72 lg:w-80 xl:w-[20rem] flex-shrink-0 bg-white border-1 border-gray-200 flex flex-col overflow-auto">
           <div className="px-4 py-4 border-b border-gray-100 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <ShoppingCart size={18} className="text-indigo-600" />
+            <div className="flex items-center gap-3">
+              <ShoppingCart size={20} className="text-indigo-600" />
               <div className="flex flex-col leading-none">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
                   <span className="font-bold text-gray-800">Keranjang</span>
                   {cart.length > 0 && (
                     <span className="bg-indigo-600 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold">
@@ -823,7 +823,7 @@ export default function CashierPage() {
 
           {/* Selector Meja */}
           <div className="px-3 py-2 border-b border-gray-100 flex flex-col gap-2">
-            <div className="flex items-center gap-1.5 overflow-x-auto">
+            <div className="flex items-center gap-1.5 overflow-auto">
               {[
                 { key: 'takeaway', label: 'Bawa Pulang', canDelete: false },
                 ...tables.map(t => ({ key: String(t), label: `Meja ${t}`, canDelete: true })),
