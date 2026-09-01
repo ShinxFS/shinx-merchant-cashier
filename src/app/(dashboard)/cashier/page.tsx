@@ -64,35 +64,108 @@ export default function CashierPage() {
   const [tableOrders, setTableOrders] = useState<TableOrder[]>([])
   const [tableNotification, setTableNotification] = useState<{ table: number; message: string } | null>(null)
   const [tableStates, setTableStates] = useState<Record<string, 'empty' | 'occupied'>>({})
+  const [cashierSoundUrl, setCashierSoundUrl] = useState<string | null>(null)
+  const [cashierTone, setCashierTone] = useState('classic')
   const [businessProfile, setBusinessProfile] = useState({
     business_name: 'Toko',
     address: '',
     phone: '',
   })
+  const tablesRef = useRef<number[]>(tables)
 
   const audioContextRef = useRef<AudioContext | null>(null)
+  const hasUserInteractionRef = useRef(false)
+  const lastOrderSnapshotRef = useRef<string[]>([])
 
-  const playOrderTone = () => {
+  const unlockAudio = async () => {
+    if (hasUserInteractionRef.current) return
+
     try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
-      if (!AudioCtx) return
+      const AudioCtor = window.AudioContext || (window as any).webkitAudioContext
+      if (!AudioCtor) return
 
-      const audioContext = audioContextRef.current ?? new AudioCtx()
-      audioContextRef.current = audioContext
-
-      const oscillator = audioContext.createOscillator()
-      const gain = audioContext.createGain()
-      oscillator.type = 'sine'
-      oscillator.frequency.value = 880
-      gain.gain.value = 0.04
-      oscillator.connect(gain)
-      gain.connect(audioContext.destination)
-
-      const now = audioContext.currentTime
-      oscillator.start(now)
-      oscillator.stop(now + 0.18)
+      const context = audioContextRef.current ?? new AudioCtor()
+      audioContextRef.current = context
+      if (context.state === 'suspended') {
+        await context.resume()
+      }
+      hasUserInteractionRef.current = true
     } catch {
-      // ignore unsupported browsers
+      // ignored on unsupported browsers
+    }
+  }
+
+  useEffect(() => {
+    const onUserInteraction = () => {
+      void unlockAudio()
+    }
+
+    window.addEventListener('pointerdown', onUserInteraction)
+    window.addEventListener('keydown', onUserInteraction)
+    window.addEventListener('touchstart', onUserInteraction)
+
+    return () => {
+      window.removeEventListener('pointerdown', onUserInteraction)
+      window.removeEventListener('keydown', onUserInteraction)
+      window.removeEventListener('touchstart', onUserInteraction)
+    }
+  }, [])
+
+  const playCashierTone = () => {
+    const fallbackTone = () => {
+      try {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
+        if (!AudioCtx) return
+
+        const audioContext = audioContextRef.current ?? new AudioCtx()
+        audioContextRef.current = audioContext
+
+        const oscillator = audioContext.createOscillator()
+        const gain = audioContext.createGain()
+
+        const variation = cashierTone || 'classic'
+        const now = audioContext.currentTime
+
+        if (variation === 'beep') {
+          oscillator.type = 'square'
+          oscillator.frequency.setValueAtTime(680, now)
+          oscillator.frequency.exponentialRampToValueAtTime(1100, now + 0.12)
+        } else if (variation === 'soft') {
+          oscillator.type = 'sine'
+          oscillator.frequency.setValueAtTime(440, now)
+          oscillator.frequency.exponentialRampToValueAtTime(620, now + 0.2)
+        } else if (variation === 'success') {
+          oscillator.type = 'triangle'
+          oscillator.frequency.setValueAtTime(540, now)
+          oscillator.frequency.exponentialRampToValueAtTime(860, now + 0.16)
+        } else {
+          oscillator.type = 'sine'
+          oscillator.frequency.setValueAtTime(880, now)
+        }
+
+        gain.gain.setValueAtTime(0.04, now)
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.26)
+        oscillator.connect(gain)
+        gain.connect(audioContext.destination)
+        oscillator.start(now)
+        oscillator.stop(now + 0.26)
+      } catch {
+        // ignore unsupported browsers
+      }
+    }
+
+    const preferredSource = cashierSoundUrl || '/sounds/kasir.wav'
+
+    try {
+      void unlockAudio()
+      const audio = new Audio(preferredSource)
+      audio.volume = 1
+      const playPromise = audio.play()
+      if (playPromise && typeof playPromise.catch === 'function') {
+        playPromise.catch(() => fallbackTone())
+      }
+    } catch {
+      fallbackTone()
     }
   }
 
@@ -122,7 +195,7 @@ export default function CashierPage() {
 
       const { data: prof } = await supabase
         .from('profiles')
-        .select('business_name, address, phone, qris_image_url')
+        .select('business_name, address, phone, qris_image_url, cashier_sound_url, cashier_tone')
         .eq('id', targetUserId)
         .single()
       if (prof) {
@@ -132,10 +205,16 @@ export default function CashierPage() {
           phone: prof.phone ?? '',
         })
         setQrisImageUrl(prof.qris_image_url ?? null)
+        setCashierSoundUrl(prof.cashier_sound_url ?? null)
+        setCashierTone(prof.cashier_tone ?? 'classic')
       }
     }
     load()
   }, [])
+
+  useEffect(() => {
+    tablesRef.current = tables
+  }, [tables])
 
   useEffect(() => {
     if (!effectiveUserId) return
@@ -147,26 +226,74 @@ export default function CashierPage() {
         .eq('user_id', effectiveUserId)
         .order('created_at', { ascending: false })
 
-      if (!error) {
-        const loadedOrders = (data as TableOrder[]) ?? []
-        setTableOrders(loadedOrders)
+      if (error) return
 
-        const nextState = {} as Record<string, 'empty' | 'occupied'>
-        for (const tableNumber of tables) {
-          nextState[String(tableNumber)] = 'empty'
+      const loadedOrders = (data as TableOrder[]) ?? []
+      const currentIds = loadedOrders.map(order => order.id)
+      const previousIds = lastOrderSnapshotRef.current
+
+      const newOrderIds = currentIds.filter(id => !previousIds.includes(id))
+      const justCompleted = loadedOrders.filter(order => {
+        const prev = previousIds.includes(order.id)
+        return prev && order.status === 'done'
+      })
+
+      setTableOrders(loadedOrders)
+      lastOrderSnapshotRef.current = currentIds
+
+      const nextState = {} as Record<string, 'empty' | 'occupied'>
+      for (const tableNumber of tablesRef.current) {
+        nextState[String(tableNumber)] = 'empty'
+      }
+
+      for (const order of loadedOrders) {
+        if (order.status !== 'done') {
+          nextState[String(order.table_number)] = 'occupied'
         }
+      }
 
-        for (const order of loadedOrders) {
-          if (order.status !== 'done') {
-            nextState[String(order.table_number)] = 'occupied'
-          }
+      setTableStates(nextState)
+
+      if (newOrderIds.length > 0) {
+        const newestNewOrder = loadedOrders.find(order => newOrderIds.includes(order.id))
+        if (newestNewOrder?.table_number) {
+          setTableNotification({ table: newestNewOrder.table_number, message: `Pesanan meja ${newestNewOrder.table_number} masuk!` })
+          playCashierTone()
+          setTimeout(() => setTableNotification(null), 4000)
         }
+      }
 
-        setTableStates(nextState)
+      if (justCompleted.length > 0) {
+        const newestCompleted = justCompleted[0]
+        if (newestCompleted.table_number) {
+          setTableNotification({ table: newestCompleted.table_number, message: `Meja ${newestCompleted.table_number} sudah selesai!` })
+          playCashierTone()
+          setTimeout(() => setTableNotification(null), 4000)
+        }
+      }
+    }
+
+    const refreshAndNotify = async (eventType: 'insert' | 'update' | 'delete', row?: Partial<TableOrder>) => {
+      await loadTableOrders()
+
+      if (eventType === 'insert' && row?.table_number) {
+        setTableNotification({ table: row.table_number, message: `Pesanan meja ${row.table_number} masuk!` })
+        playCashierTone()
+        setTimeout(() => setTableNotification(null), 4000)
+      }
+
+      if (eventType === 'update' && row?.table_number && row.status === 'done') {
+        setTableNotification({ table: row.table_number, message: `Meja ${row.table_number} sudah selesai!` })
+        playCashierTone()
+        setTimeout(() => setTableNotification(null), 4000)
       }
     }
 
     loadTableOrders()
+
+    const intervalId = window.setInterval(() => {
+      void loadTableOrders()
+    }, 4000)
 
     const channel = supabase.channel(`table-orders-${effectiveUserId}`)
       .on(
@@ -178,15 +305,7 @@ export default function CashierPage() {
           filter: `user_id=eq.${effectiveUserId}`,
         },
         payload => {
-          const order = payload.new as TableOrder
-          setTableOrders(prev => [order, ...prev])
-          setTableStates(prev => ({ ...prev, [String(order.table_number)]: 'occupied' }))
-          setTableNotification({
-            table: order.table_number,
-            message: `Pesanan meja ${order.table_number} masuk!`,
-          })
-          playOrderTone()
-          setTimeout(() => setTableNotification(null), 4000)
+          void refreshAndNotify('insert', payload.new as Partial<TableOrder>)
         }
       )
       .on(
@@ -198,21 +317,7 @@ export default function CashierPage() {
           filter: `user_id=eq.${effectiveUserId}`,
         },
         payload => {
-          const updated = payload.new as TableOrder
-          setTableOrders(prev => prev.map(order => order.id === updated.id ? updated : order))
-
-          if (updated.status === 'done') {
-            setTableStates(prev => ({ ...prev, [String(updated.table_number)]: 'empty' }))
-            setTableNotification({
-              table: updated.table_number,
-              message: `Meja ${updated.table_number} sudah selesai!`,
-            })
-            playOrderTone()
-            setTimeout(() => setTableNotification(null), 4000)
-            return
-          }
-
-          setTableStates(prev => ({ ...prev, [String(updated.table_number)]: 'occupied' }))
+          void refreshAndNotify('update', payload.new as Partial<TableOrder>)
         }
       )
       .on(
@@ -224,17 +329,17 @@ export default function CashierPage() {
           filter: `user_id=eq.${effectiveUserId}`,
         },
         payload => {
-          const deleted = payload.old as TableOrder
-          setTableStates(prev => {
-            const next = { ...prev }
-            next[String(deleted.table_number)] = 'empty'
-            return next
-          })
+          void loadTableOrders()
+          const deleted = payload.old as Partial<TableOrder>
+          if (deleted.table_number) {
+            setTableStates(prev => ({ ...prev, [String(deleted.table_number)]: 'empty' }))
+          }
         }
       )
       .subscribe()
 
     return () => {
+      window.clearInterval(intervalId)
       supabase.removeChannel(channel)
     }
   }, [effectiveUserId])
@@ -429,6 +534,7 @@ export default function CashierPage() {
       table: Number(activeTable),
       message: `Pesanan meja ${activeTable} masuk ke kasir!`,
     })
+    playCashierTone()
     setTimeout(() => setTableNotification(null), 4000)
     setActiveCart(() => [])
     setSuccessMsg(`✅ Pesanan meja ${activeTable} dikirim`) 

@@ -16,6 +16,13 @@ const PRESET_COLORS = [
   '#3b82f6', '#06b6d4',
 ]
 
+const toneOptions = [
+  { value: 'classic', label: 'Classic' },
+  { value: 'beep', label: 'Beep' },
+  { value: 'soft', label: 'Soft' },
+  { value: 'success', label: 'Success' },
+]
+
 const inputClass = "w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
 
 export default function SettingsPage() {
@@ -33,6 +40,11 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false)
   const [qrisUrl, setQrisUrl] = useState<string | null>(null)
   const [qrisUploading, setQrisUploading] = useState(false)
+  const [cashierSoundUrl, setCashierSoundUrl] = useState<string | null>(null)
+  const [customerSoundUrl, setCustomerSoundUrl] = useState<string | null>(null)
+  const [cashierTone, setCashierTone] = useState('classic')
+  const [customerTone, setCustomerTone] = useState('classic')
+  const [soundUploading, setSoundUploading] = useState<'cashier' | 'customer' | null>(null)
   const [tableQrLinks, setTableQrLinks] = useState<Record<number, string>>({})
   const [qrReady, setQrReady] = useState(false)
 
@@ -56,6 +68,10 @@ export default function SettingsPage() {
           address: prof.address ?? '',
         })
         setQrisUrl(prof.qris_image_url ?? null)
+        setCashierSoundUrl(prof.cashier_sound_url ?? null)
+        setCustomerSoundUrl(prof.customer_sound_url ?? null)
+        setCashierTone(prof.cashier_tone ?? 'classic')
+        setCustomerTone(prof.customer_tone ?? 'classic')
       }
       setCategories(cats ?? [])
 
@@ -112,6 +128,93 @@ export default function SettingsPage() {
     if (!user) return
     await supabase.from('profiles').update({ qris_image_url: null }).eq('id', user.id)
     setQrisUrl(null)
+  }
+
+  const handleUploadSound = async (kind: 'cashier' | 'customer', e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('audio/')) {
+      alert('File harus berupa audio. Format yang didukung: MP3, WAV, M4A.')
+      return
+    }
+
+    setSoundUploading(kind)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      setSoundUploading(null)
+      return
+    }
+
+    const ext = file.name.split('.').pop() || 'mp3'
+    const path = `${user.id}/${kind}-sound-${Date.now()}.${ext}`
+    const { error: upErr } = await supabase.storage
+      .from('product-images')
+      .upload(path, file, { upsert: true })
+
+    if (upErr) {
+      alert('Gagal mengunggah suara notifikasi.')
+      setSoundUploading(null)
+      return
+    }
+
+    const { data: pub } = supabase.storage.from('product-images').getPublicUrl(path)
+    const payload = kind === 'cashier' ? { cashier_sound_url: pub.publicUrl } : { customer_sound_url: pub.publicUrl }
+    await supabase.from('profiles').update(payload).eq('id', user.id)
+
+    if (kind === 'cashier') setCashierSoundUrl(pub.publicUrl)
+    else setCustomerSoundUrl(pub.publicUrl)
+
+    setSoundUploading(null)
+  }
+
+  const handleRemoveSound = async (kind: 'cashier' | 'customer') => {
+    if (!confirm(`Hapus suara notifikasi ${kind === 'cashier' ? 'kasir' : 'pelanggan'}?`)) return
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const payload = kind === 'cashier' ? { cashier_sound_url: null } : { customer_sound_url: null }
+    await supabase.from('profiles').update(payload).eq('id', user.id)
+
+    if (kind === 'cashier') setCashierSoundUrl(null)
+    else setCustomerSoundUrl(null)
+  }
+
+  const handleTestSound = (kind: 'cashier' | 'customer') => {
+    const url = kind === 'cashier' ? cashierSoundUrl : customerSoundUrl
+    if (url) {
+      const audio = new Audio(url)
+      audio.volume = 1
+      void audio.play().catch(() => {
+        alert('Browser memblokir suara otomatis. Klik sekali di halaman ini lalu coba lagi.')
+      })
+      return
+    }
+
+    const tone = kind === 'cashier' ? cashierTone : customerTone
+    const AudioCtor = window.AudioContext || (window as any).webkitAudioContext
+    if (!AudioCtor) return
+
+    const context = new AudioCtor()
+    const oscillator = context.createOscillator()
+    const gain = context.createGain()
+    oscillator.type = 'sine'
+    oscillator.frequency.value = tone === 'beep' ? 720 : tone === 'soft' ? 540 : tone === 'success' ? 880 : 660
+    gain.gain.value = 0.04
+    oscillator.connect(gain)
+    gain.connect(context.destination)
+    oscillator.start()
+    oscillator.stop(context.currentTime + 0.2)
+  }
+
+  const handleToneChange = async (kind: 'cashier' | 'customer', value: string) => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const payload = kind === 'cashier' ? { cashier_tone: value } : { customer_tone: value }
+    await supabase.from('profiles').update(payload).eq('id', user.id)
+
+    if (kind === 'cashier') setCashierTone(value)
+    else setCustomerTone(value)
   }
 
   const handleAddCategory = async () => {
@@ -177,9 +280,10 @@ export default function SettingsPage() {
             />
           </div>
 
-          <div>
+          <div suppressHydrationWarning>
             <label className="block text-sm font-medium text-gray-700 mb-1">Alamat</label>
             <textarea
+              suppressHydrationWarning
               value={profile.address}
               onChange={e => setProfile(p => ({ ...p, address: e.target.value }))}
               rows={3}
@@ -242,6 +346,93 @@ export default function SettingsPage() {
             <input type="file" accept="image/*" onChange={handleUploadQris} disabled={qrisUploading} className="hidden" />
           </label>
         )}
+      </div>
+
+      {/* Suara Notifikasi */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <h2 className="font-semibold text-gray-800 mb-4">Suara Notifikasi</h2>
+
+        <div className="space-y-5">
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <div>
+                <p className="text-sm font-semibold text-gray-800">Suara Kasir</p>
+                <p className="text-xs text-gray-500">Diputar saat ada pesanan baru atau meja selesai</p>
+              </div>
+              {cashierSoundUrl && (
+                <audio controls src={cashierSoundUrl} className="h-8" />
+              )}
+            </div>
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="flex items-center justify-center bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm font-medium cursor-pointer hover:bg-indigo-700">
+                  {soundUploading === 'cashier' ? 'Mengunggah...' : 'Upload suara'}
+                  <input type="file" accept="audio/*" onChange={e => handleUploadSound('cashier', e)} className="hidden" />
+                </label>
+                <button onClick={() => handleTestSound('cashier')} className="bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-300">
+                  Tes suara
+                </button>
+                {cashierSoundUrl && (
+                  <button onClick={() => handleRemoveSound('cashier')} className="text-red-500 px-3 py-2 rounded-lg text-sm font-medium hover:bg-red-50">
+                    Hapus
+                  </button>
+                )}
+              </div>
+              <div className="w-full max-w-xs">
+                <label className="block text-xs font-medium text-gray-600 mb-1">Variasi nada default</label>
+                <select
+                  value={cashierTone}
+                  onChange={e => void handleToneChange('cashier', e.target.value)}
+                  className={inputClass}
+                >
+                  {toneOptions.map(option => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <div>
+                <p className="text-sm font-semibold text-gray-800">Suara Pelanggan</p>
+                <p className="text-xs text-gray-500">Diputar saat pesanan sudah siap di meja pelanggan</p>
+              </div>
+              {customerSoundUrl && (
+                <audio controls src={customerSoundUrl} className="h-8" />
+              )}
+            </div>
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="flex items-center justify-center bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm font-medium cursor-pointer hover:bg-indigo-700">
+                  {soundUploading === 'customer' ? 'Mengunggah...' : 'Upload suara'}
+                  <input type="file" accept="audio/*" onChange={e => handleUploadSound('customer', e)} className="hidden" />
+                </label>
+                <button onClick={() => handleTestSound('customer')} className="bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-300">
+                  Tes suara
+                </button>
+                {customerSoundUrl && (
+                  <button onClick={() => handleRemoveSound('customer')} className="text-red-500 px-3 py-2 rounded-lg text-sm font-medium hover:bg-red-50">
+                    Hapus
+                  </button>
+                )}
+              </div>
+              <div className="w-full max-w-xs">
+                <label className="block text-xs font-medium text-gray-600 mb-1">Variasi nada default</label>
+                <select
+                  value={customerTone}
+                  onChange={e => void handleToneChange('customer', e.target.value)}
+                  className={inputClass}
+                >
+                  {toneOptions.map(option => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* QR Meja Pelanggan */}

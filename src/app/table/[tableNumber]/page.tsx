@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { formatRupiah } from '@/lib/utils'
@@ -37,8 +37,107 @@ export default function TableOrderPage() {
   const [showOrderDetail, setShowOrderDetail] = useState(false)
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'qris'>('cash')
   const [qrisImageUrl, setQrisImageUrl] = useState<string | null>(null)
+  const [customerSoundUrl, setCustomerSoundUrl] = useState<string | null>(null)
+  const [customerTone, setCustomerTone] = useState('classic')
   const [latestOrderItems, setLatestOrderItems] = useState<Array<{ id: string; name: string; quantity: number; price: number; subtotal: number }>>([])
   const [latestOrderTotal, setLatestOrderTotal] = useState(0)
+  const audioContextRef = useRef<AudioContext | null>(null)
+  const lastStatusRef = useRef<'pending' | 'processing' | 'ready' | 'done' | null>(null)
+  const lastOrderIdRef = useRef<string | null>(null)
+  const hasUserInteractionRef = useRef(false)
+
+  const unlockAudio = async () => {
+    if (hasUserInteractionRef.current) return
+
+    try {
+      const AudioCtor = window.AudioContext || (window as any).webkitAudioContext
+      if (!AudioCtor) return
+
+      const context = audioContextRef.current ?? new AudioCtor()
+      audioContextRef.current = context
+      if (context.state === 'suspended') {
+        await context.resume()
+      }
+      hasUserInteractionRef.current = true
+    } catch {
+      // ignored on unsupported browsers
+    }
+  }
+
+  useEffect(() => {
+    const onUserInteraction = () => {
+      void unlockAudio()
+    }
+
+    window.addEventListener('pointerdown', onUserInteraction)
+    window.addEventListener('keydown', onUserInteraction)
+    window.addEventListener('touchstart', onUserInteraction)
+
+    return () => {
+      window.removeEventListener('pointerdown', onUserInteraction)
+      window.removeEventListener('keydown', onUserInteraction)
+      window.removeEventListener('touchstart', onUserInteraction)
+    }
+  }, [])
+
+  const playReadyTone = () => {
+    const fallbackTone = () => {
+      try {
+        const AudioCtor = window.AudioContext || (window as any).webkitAudioContext
+        if (!AudioCtor) return
+
+        const context = audioContextRef.current ?? new AudioCtor()
+        audioContextRef.current = context
+
+        const oscillator = context.createOscillator()
+        const gain = context.createGain()
+        const variation = customerTone || 'classic'
+        const now = context.currentTime
+
+        if (variation === 'beep') {
+          oscillator.type = 'square'
+          oscillator.frequency.setValueAtTime(700, now)
+          oscillator.frequency.exponentialRampToValueAtTime(1200, now + 0.16)
+        } else if (variation === 'soft') {
+          oscillator.type = 'sine'
+          oscillator.frequency.setValueAtTime(420, now)
+          oscillator.frequency.exponentialRampToValueAtTime(650, now + 0.24)
+        } else if (variation === 'success') {
+          oscillator.type = 'triangle'
+          oscillator.frequency.setValueAtTime(560, now)
+          oscillator.frequency.exponentialRampToValueAtTime(900, now + 0.18)
+        } else {
+          oscillator.type = 'sine'
+          oscillator.frequency.setValueAtTime(880, now)
+          oscillator.frequency.exponentialRampToValueAtTime(1320, now + 0.18)
+        }
+
+        gain.gain.setValueAtTime(0.04, now)
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25)
+
+        oscillator.connect(gain)
+        gain.connect(context.destination)
+        oscillator.start(now)
+        oscillator.stop(now + 0.25)
+      } catch {
+        // ignore unsupported browsers
+      }
+    }
+
+    const preferredSource = customerSoundUrl || '/sounds/pelanggan.wav'
+
+    try {
+      void unlockAudio()
+      const audio = new Audio(preferredSource)
+      audio.volume = 1
+      const playPromise = audio.play()
+      if (playPromise && typeof playPromise.catch === 'function') {
+        playPromise.catch(() => fallbackTone())
+      }
+    } catch {
+      fallbackTone()
+    }
+  }
 
   useEffect(() => {
     const load = async () => {
@@ -49,7 +148,7 @@ export default function TableOrderPage() {
       }
 
       const [{ data: profile }, { data: items }] = await Promise.all([
-        supabase.from('profiles').select('business_name, qris_image_url').eq('id', ownerId).single(),
+        supabase.from('profiles').select('business_name, qris_image_url, customer_sound_url, customer_tone').eq('id', ownerId).single(),
         supabase
           .from('products')
           .select('*, category:categories!category_id(name, color), category2:categories!category_id_2(name, color)')
@@ -60,6 +159,8 @@ export default function TableOrderPage() {
 
       if (profile?.business_name) setBusinessName(profile.business_name)
       if (profile?.qris_image_url) setQrisImageUrl(profile.qris_image_url)
+      if (profile?.customer_sound_url) setCustomerSoundUrl(profile.customer_sound_url)
+      setCustomerTone(profile?.customer_tone ?? 'classic')
       setProducts(items ?? [])
       setLoading(false)
     }
@@ -129,9 +230,15 @@ export default function TableOrderPage() {
       if (latest) {
         const items = normalizeOrderItems(latest.items)
         const nextStatus = latest.status ?? 'pending'
+        const nextOrderId = latest.id ?? null
 
-        setOrderId(latest.id ?? null)
+        setOrderId(nextOrderId)
         setOrderStatus(nextStatus)
+        if (nextStatus === 'ready' && (lastStatusRef.current !== 'ready' || lastOrderIdRef.current !== nextOrderId)) {
+          playReadyTone()
+        }
+        lastStatusRef.current = nextStatus
+        lastOrderIdRef.current = nextOrderId
         setPaymentMethod(latest.payment_method ?? 'cash')
         setLatestOrderItems(items)
         setLatestOrderTotal(Number(latest.total ?? items.reduce((sum, item) => sum + item.subtotal, 0)))
@@ -139,6 +246,8 @@ export default function TableOrderPage() {
       } else {
         setOrderId(null)
         setOrderStatus(null)
+        lastStatusRef.current = null
+        lastOrderIdRef.current = null
         setLatestOrderItems([])
         setLatestOrderTotal(0)
         setShowOrderDetail(false)
@@ -146,6 +255,10 @@ export default function TableOrderPage() {
     }
 
     loadLatestOrderStatus()
+
+    const intervalId = window.setInterval(() => {
+      loadLatestOrderStatus()
+    }, 4000)
 
     const channel = supabase.channel(`table-status-${ownerId}-${tableNumber}`)
       .on(
@@ -156,20 +269,10 @@ export default function TableOrderPage() {
           table: 'table_orders',
           filter: `user_id=eq.${ownerId}`,
         },
-        payload => {
-          const updated = payload.new as { table_number?: number; status?: string; items?: unknown; total?: number; payment_method?: 'cash' | 'qris' }
+        async payload => {
+          const updated = payload.new as { table_number?: number }
           if (updated.table_number !== tableNumber) return
-
-          const nextItems = updated.items !== undefined ? normalizeOrderItems(updated.items) : latestOrderItems
-          const nextTotal = updated.total !== undefined ? Number(updated.total) : latestOrderTotal
-          const nextStatus = (updated.status as 'pending' | 'processing' | 'ready' | 'done') ?? 'pending'
-
-          setOrderId(payload.new.id as string)
-          setOrderStatus(nextStatus)
-          setPaymentMethod(updated.payment_method ?? paymentMethod)
-          setLatestOrderItems(nextItems)
-          setLatestOrderTotal(nextTotal)
-          setShowOrderDetail(nextStatus !== 'done')
+          await loadLatestOrderStatus()
         }
       )
       .on(
@@ -180,25 +283,16 @@ export default function TableOrderPage() {
           table: 'table_orders',
           filter: `user_id=eq.${ownerId}`,
         },
-        payload => {
-          const updated = payload.new as { id?: string; table_number?: number; status?: string; items?: unknown; total?: number; payment_method?: 'cash' | 'qris' }
+        async payload => {
+          const updated = payload.new as { table_number?: number }
           if (updated.table_number !== tableNumber) return
-
-          const nextItems = updated.items !== undefined ? normalizeOrderItems(updated.items) : latestOrderItems
-          const nextTotal = updated.total !== undefined ? Number(updated.total) : latestOrderTotal
-          const nextStatus = (updated.status as 'pending' | 'processing' | 'ready' | 'done') ?? 'pending'
-
-          setOrderId(updated.id ?? orderId)
-          setOrderStatus(nextStatus)
-          setPaymentMethod(updated.payment_method ?? paymentMethod)
-          setLatestOrderItems(nextItems)
-          setLatestOrderTotal(nextTotal)
-          setShowOrderDetail(nextStatus !== 'done')
+          await loadLatestOrderStatus()
         }
       )
       .subscribe()
 
     return () => {
+      window.clearInterval(intervalId)
       supabase.removeChannel(channel)
     }
   }, [ownerId, tableNumber])

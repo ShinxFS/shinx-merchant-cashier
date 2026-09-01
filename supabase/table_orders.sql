@@ -23,9 +23,22 @@ alter table public.table_orders enable row level security;
 create policy "table_orders_public_insert" on public.table_orders
   for insert with check (user_id is not null);
 
+alter table public.profiles
+  add column if not exists cashier_sound_url text,
+  add column if not exists customer_sound_url text,
+  add column if not exists cashier_tone text not null default 'classic',
+  add column if not exists customer_tone text not null default 'classic';
+
 -- Public read untuk QR meja pelanggan agar status tetap tampil setelah refresh
 create policy "table_orders_public_read" on public.table_orders
   for select using (true);
+
+-- Customer QR boleh membatalkan pesanan miliknya saat belum selesai
+create policy "table_orders_public_delete" on public.table_orders
+  for delete using (true);
+
+create policy "table_orders_public_update" on public.table_orders
+  for update using (true) with check (user_id is not null);
 
 -- Owner bisa full access
  drop policy if exists "table_orders_owner" on public.table_orders;
