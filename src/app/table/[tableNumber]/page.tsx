@@ -124,29 +124,11 @@ export default function TableOrderPage() {
       }
     }
 
-    if (customerSoundUrl) {
-      try {
-        void unlockAudio()
-        const audio = new Audio(customerSoundUrl)
-        audio.volume = 1
-        const playPromise = audio.play()
-        if (playPromise && typeof playPromise.catch === 'function') {
-          playPromise.catch(() => fallbackTone())
-        }
-      } catch {
-        fallbackTone()
-      }
-      return
-    }
-
-    if ((customerTone || 'classic') !== 'classic') {
-      fallbackTone()
-      return
-    }
+    const preferredSource = customerSoundUrl || '/sounds/pelanggan.wav'
 
     try {
       void unlockAudio()
-      const audio = new Audio('/sounds/pelanggan.wav')
+      const audio = new Audio(preferredSource)
       audio.volume = 1
       const playPromise = audio.play()
       if (playPromise && typeof playPromise.catch === 'function') {

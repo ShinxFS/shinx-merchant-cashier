@@ -154,29 +154,11 @@ export default function CashierPage() {
       }
     }
 
-    if (cashierSoundUrl) {
-      try {
-        void unlockAudio()
-        const audio = new Audio(cashierSoundUrl)
-        audio.volume = 1
-        const playPromise = audio.play()
-        if (playPromise && typeof playPromise.catch === 'function') {
-          playPromise.catch(() => fallbackTone())
-        }
-      } catch {
-        fallbackTone()
-      }
-      return
-    }
-
-    if ((cashierTone || 'classic') !== 'classic') {
-      fallbackTone()
-      return
-    }
+    const preferredSource = cashierSoundUrl || '/sounds/kasir.wav'
 
     try {
       void unlockAudio()
-      const audio = new Audio('/sounds/kasir.wav')
+      const audio = new Audio(preferredSource)
       audio.volume = 1
       const playPromise = audio.play()
       if (playPromise && typeof playPromise.catch === 'function') {
