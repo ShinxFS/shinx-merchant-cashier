@@ -795,7 +795,7 @@ export default function CashierPage() {
 
       {/* Kanan: Cart */}
       {cartVisible && (
-        <div className="w-[18rem] sm:w-72 lg:w-80 xl:w-[20rem] flex-shrink-0 bg-white border-1 border-gray-200 flex flex-col overflow-auto">
+        <div className="w-[18rem] sm:w-72 lg:w-80 xl:w-[20rem] flex-shrink-0 bg-white border-1 border-gray-200 flex flex-col overflow-hidden">
           <div className="px-4 py-4 border-b border-gray-100 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <ShoppingCart size={20} className="text-indigo-600" />
@@ -816,14 +816,14 @@ export default function CashierPage() {
                 onClick={clearCart}
                 className="text-xs text-red-400 hover:text-red-600 flex items-center gap-1"
               >
-                <Trash2 size={13} /> Kosongkan
+                <Trash2 size={13} /> Hapus Semua
               </button>
             )}
           </div>
 
           {/* Selector Meja */}
-          <div className="px-3 py-2 border-b border-gray-100 flex flex-col gap-2">
-            <div className="flex items-center gap-1.5 overflow-auto">
+          <div className="px-3 py-3 border-b border-gray-100 flex flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
               {[
                 { key: 'takeaway', label: 'Bawa Pulang', canDelete: false },
                 ...tables.map(t => ({ key: String(t), label: `Meja ${t}`, canDelete: true })),
@@ -877,7 +877,7 @@ export default function CashierPage() {
 
             {activeTable !== 'takeaway' && (
               <div className="flex items-center justify-between rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 text-[11px] text-gray-600">
-                <span>Status meja {activeTable}</span>
+                <span>Status Meja {activeTable}</span>
                 <button
                   onClick={() => setTableAvailability(activeTable, (tableStates[activeTable] ?? 'empty') === 'occupied' ? 'empty' : 'occupied')}
                   className={`px-2.5 py-1 rounded-full font-semibold ${
