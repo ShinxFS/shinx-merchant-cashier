@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { generateInvoice } from '@/lib/utils'
 import ProductCard from '@/components/cashier/ProductCard'
@@ -8,8 +8,27 @@ import CartItem, { CartItemType } from '@/components/cashier/CartItem'
 import PaymentModal from '@/components/cashier/PaymentModal'
 import ReceiptModal from '@/components/cashier/ReceiptModal'
 import BarcodeScanner from '@/components/cashier/BarcodeScanner'
-import { Search, ShoppingCart, Trash2, ChevronRight, ChevronLeft, ScanLine, Plus, X } from 'lucide-react'
+import { Search, ShoppingCart, Trash2, ChevronRight, ChevronLeft, ScanLine, Plus, X, Bell, CheckCheck } from 'lucide-react'
 import { formatRupiah } from '@/lib/utils'
+
+interface TableOrder {
+  id: string
+  user_id: string
+  table_number: number
+  customer_name: string
+  total: number
+  status: 'pending' | 'processing' | 'ready' | 'done'
+  payment_method?: 'cash' | 'qris'
+  items: Array<{
+    id: string
+    name: string
+    quantity: number
+    price: number
+    subtotal: number
+  }>
+  note?: string | null
+  created_at: string
+}
 
 interface Product {
   id: string
@@ -42,18 +61,46 @@ export default function CashierPage() {
   const [cartVisible, setCartVisible] = useState(true)
   const [effectiveUserId, setEffectiveUserId] = useState<string>('')
   const [qrisImageUrl, setQrisImageUrl] = useState<string | null>(null)
+  const [tableOrders, setTableOrders] = useState<TableOrder[]>([])
+  const [tableNotification, setTableNotification] = useState<{ table: number; message: string } | null>(null)
+  const [tableStates, setTableStates] = useState<Record<string, 'empty' | 'occupied'>>({})
   const [businessProfile, setBusinessProfile] = useState({
     business_name: 'Toko',
     address: '',
     phone: '',
   })
 
+  const audioContextRef = useRef<AudioContext | null>(null)
+
+  const playOrderTone = () => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
+      if (!AudioCtx) return
+
+      const audioContext = audioContextRef.current ?? new AudioCtx()
+      audioContextRef.current = audioContext
+
+      const oscillator = audioContext.createOscillator()
+      const gain = audioContext.createGain()
+      oscillator.type = 'sine'
+      oscillator.frequency.value = 880
+      gain.gain.value = 0.04
+      oscillator.connect(gain)
+      gain.connect(audioContext.destination)
+
+      const now = audioContext.currentTime
+      oscillator.start(now)
+      oscillator.stop(now + 0.18)
+    } catch {
+      // ignore unsupported browsers
+    }
+  }
+
   useEffect(() => {
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      // Cek role — kalau karyawan, pakai owner_id
       const { data: profile } = await supabase
         .from('profiles')
         .select('role, owner_id')
@@ -64,7 +111,6 @@ export default function CashierPage() {
       const targetUserId = isStaff ? (profile?.owner_id ?? user.id) : user.id
       setEffectiveUserId(targetUserId)
 
-      // Load produk milik owner
       const { data } = await supabase
         .from('products')
         .select('*, category:categories!category_id(name, color), category2:categories!category_id_2(name, color)')
@@ -74,7 +120,6 @@ export default function CashierPage() {
       setProducts(data ?? [])
       setFiltered(data ?? [])
 
-      // Load profil owner
       const { data: prof } = await supabase
         .from('profiles')
         .select('business_name, address, phone, qris_image_url')
@@ -91,6 +136,108 @@ export default function CashierPage() {
     }
     load()
   }, [])
+
+  useEffect(() => {
+    if (!effectiveUserId) return
+
+    const loadTableOrders = async () => {
+      const { data, error } = await supabase
+        .from('table_orders')
+        .select('*')
+        .eq('user_id', effectiveUserId)
+        .order('created_at', { ascending: false })
+
+      if (!error) {
+        const loadedOrders = (data as TableOrder[]) ?? []
+        setTableOrders(loadedOrders)
+
+        const nextState = {} as Record<string, 'empty' | 'occupied'>
+        for (const tableNumber of tables) {
+          nextState[String(tableNumber)] = 'empty'
+        }
+
+        for (const order of loadedOrders) {
+          if (order.status !== 'done') {
+            nextState[String(order.table_number)] = 'occupied'
+          }
+        }
+
+        setTableStates(nextState)
+      }
+    }
+
+    loadTableOrders()
+
+    const channel = supabase.channel(`table-orders-${effectiveUserId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'table_orders',
+          filter: `user_id=eq.${effectiveUserId}`,
+        },
+        payload => {
+          const order = payload.new as TableOrder
+          setTableOrders(prev => [order, ...prev])
+          setTableStates(prev => ({ ...prev, [String(order.table_number)]: 'occupied' }))
+          setTableNotification({
+            table: order.table_number,
+            message: `Pesanan meja ${order.table_number} masuk!`,
+          })
+          playOrderTone()
+          setTimeout(() => setTableNotification(null), 4000)
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'table_orders',
+          filter: `user_id=eq.${effectiveUserId}`,
+        },
+        payload => {
+          const updated = payload.new as TableOrder
+          setTableOrders(prev => prev.map(order => order.id === updated.id ? updated : order))
+
+          if (updated.status === 'done') {
+            setTableStates(prev => ({ ...prev, [String(updated.table_number)]: 'empty' }))
+            setTableNotification({
+              table: updated.table_number,
+              message: `Meja ${updated.table_number} sudah selesai!`,
+            })
+            playOrderTone()
+            setTimeout(() => setTableNotification(null), 4000)
+            return
+          }
+
+          setTableStates(prev => ({ ...prev, [String(updated.table_number)]: 'occupied' }))
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'table_orders',
+          filter: `user_id=eq.${effectiveUserId}`,
+        },
+        payload => {
+          const deleted = payload.old as TableOrder
+          setTableStates(prev => {
+            const next = { ...prev }
+            next[String(deleted.table_number)] = 'empty'
+            return next
+          })
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [effectiveUserId])
 
   // Daftar kategori unik dari semua produk (gabungan category & category2)
   const categories = Array.from(
@@ -127,6 +274,12 @@ export default function CashierPage() {
         if (Array.isArray(saved.tables) && saved.tables.length) setTables(saved.tables)
         if (saved.activeTable) setActiveTable(saved.activeTable)
       }
+
+      const tableStateRaw = localStorage.getItem(`pos_table_states_${effectiveUserId}`)
+      if (tableStateRaw) {
+        const parsed = JSON.parse(tableStateRaw)
+        if (parsed && typeof parsed === 'object') setTableStates(parsed)
+      }
     } catch {}
     setHydrated(true)
   }, [effectiveUserId])
@@ -139,8 +292,12 @@ export default function CashierPage() {
         `pos_carts_${effectiveUserId}`,
         JSON.stringify({ carts, tables, activeTable })
       )
+      localStorage.setItem(
+        `pos_table_states_${effectiveUserId}`,
+        JSON.stringify(tableStates)
+      )
     } catch {}
-  }, [carts, tables, activeTable, hydrated, effectiveUserId])
+  }, [carts, tables, activeTable, hydrated, effectiveUserId, tableStates])
 
   // Keranjang meja yang sedang aktif
   const cart = carts[activeTable] ?? []
@@ -153,6 +310,7 @@ export default function CashierPage() {
     const next = (tables.length ? Math.max(...tables) : 0) + 1
     setTables(prev => [...prev, next])
     setActiveTable(String(next))
+    setTableStates(prev => ({ ...prev, [String(next)]: 'empty' }))
   }
 
   const removeTable = (key: string) => {
@@ -167,9 +325,18 @@ export default function CashierPage() {
       delete next[key]
       return next
     })
+    setTableStates(prev => {
+      const next = { ...prev }
+      delete next[key]
+      return next
+    })
     if (activeTable === key) {
       setActiveTable(remaining.length ? String(remaining[0]) : 'takeaway')
     }
+  }
+
+  const setTableAvailability = (key: string, status: 'empty' | 'occupied') => {
+    setTableStates(prev => ({ ...prev, [key]: status }))
   }
 
   const addToCart = (product: Product) => {
@@ -225,6 +392,162 @@ export default function CashierPage() {
   const clearCart = () => setActiveCart(() => [])
 
   const subtotal = cart.reduce((s, i) => s + i.price * i.quantity, 0)
+
+  const submitTableOrder = async () => {
+    if (activeTable === 'takeaway' || !effectiveUserId || cart.length === 0) return
+
+    const payload = {
+      user_id: effectiveUserId,
+      table_number: Number(activeTable),
+      customer_name: `Pelanggan Meja ${activeTable}`,
+      total: subtotal,
+      status: 'pending',
+      items: cart.map(item => ({
+        id: item.id,
+        name: item.name,
+        quantity: item.quantity,
+        price: item.price,
+        subtotal: item.price * item.quantity,
+      })),
+      note: `Order dari meja ${activeTable}`,
+    }
+
+    const { data, error } = await supabase
+      .from('table_orders')
+      .insert(payload)
+      .select()
+      .single()
+
+    if (error || !data) {
+      setSuccessMsg('⚠️ Gagal mengirim pesanan meja')
+      setTimeout(() => setSuccessMsg(''), 3000)
+      return
+    }
+
+    setTableOrders(prev => [data as TableOrder, ...prev])
+    setTableNotification({
+      table: Number(activeTable),
+      message: `Pesanan meja ${activeTable} masuk ke kasir!`,
+    })
+    setTimeout(() => setTableNotification(null), 4000)
+    setActiveCart(() => [])
+    setSuccessMsg(`✅ Pesanan meja ${activeTable} dikirim`) 
+    setTimeout(() => setSuccessMsg(''), 2500)
+  }
+
+  const updateOrderStatus = async (id: string, status: TableOrder['status']) => {
+    const currentOrder = tableOrders.find(order => order.id === id)
+    if (!currentOrder) return
+
+    const { data, error } = await supabase
+      .from('table_orders')
+      .update({ status, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) return
+
+    if (data) {
+      setTableOrders(prev => prev.map(order => order.id === id ? data as TableOrder : order))
+    }
+
+    if (status === 'done' && currentOrder.status !== 'done') {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const invoice = generateInvoice()
+      const baseTx = {
+        user_id: effectiveUserId,
+        created_by: user.id,
+        invoice_number: invoice,
+        subtotal: currentOrder.total,
+        discount: 0,
+        tax: 0,
+        total: currentOrder.total,
+        payment_method: 'cash',
+        amount_paid: currentOrder.total,
+        change_amount: 0,
+        table_number: currentOrder.table_number,
+        notes: `Pesanan meja ${currentOrder.table_number}`,
+      }
+
+      let transaction: any = null
+      let txError: any = null
+
+      const insertResult = await supabase
+        .from('transactions')
+        .insert(baseTx)
+        .select()
+        .single()
+
+      transaction = insertResult.data
+      txError = insertResult.error
+
+      if (txError && /table_number/i.test(txError.message)) {
+        const retry = await supabase
+          .from('transactions')
+          .insert({
+            user_id: effectiveUserId,
+            created_by: user.id,
+            invoice_number: invoice,
+            subtotal: currentOrder.total,
+            discount: 0,
+            tax: 0,
+            total: currentOrder.total,
+            payment_method: 'cash',
+            amount_paid: currentOrder.total,
+            change_amount: 0,
+            notes: `Pesanan meja ${currentOrder.table_number}`,
+          })
+          .select()
+          .single()
+
+        transaction = retry.data
+        txError = retry.error
+      }
+
+      if (!transaction || txError) {
+        return
+      }
+
+      const itemsToInsert = currentOrder.items.map(item => {
+        const product = products.find(p => p.id === item.id)
+        return {
+          transaction_id: transaction.id,
+          product_id: item.id,
+          product_name: item.name,
+          quantity: item.quantity,
+          unit_price: item.price,
+          cost_price: product?.cost_price ?? 0,
+          subtotal: item.subtotal,
+        }
+      })
+
+      if (itemsToInsert.length > 0) {
+        await supabase.from('transaction_items').insert(itemsToInsert)
+      }
+
+      setSuccessMsg(`✅ Meja ${currentOrder.table_number} masuk ke transaksi hari ini`)
+      setTimeout(() => setSuccessMsg(''), 3000)
+    }
+  }
+
+  const deleteCompletedOrder = async (id: string) => {
+    const target = tableOrders.find(order => order.id === id)
+    if (!target || target.status !== 'done') return
+
+    const { error } = await supabase
+      .from('table_orders')
+      .delete()
+      .eq('id', id)
+
+    if (!error) {
+      setTableOrders(prev => prev.filter(order => order.id !== id))
+      setSuccessMsg('✅ Pesanan selesai berhasil dihapus')
+      setTimeout(() => setSuccessMsg(''), 2500)
+    }
+  }
 
   const handlePayment = async (
     method: string,
@@ -339,6 +662,20 @@ export default function CashierPage() {
 
   const totalItems = cart.reduce((s, i) => s + i.quantity, 0)
 
+  const statusLabel: Record<TableOrder['status'], string> = {
+    pending: 'Menunggu',
+    processing: 'Diproses',
+    ready: 'Siap',
+    done: 'Selesai',
+  }
+
+  const statusColor: Record<TableOrder['status'], string> = {
+    pending: 'bg-amber-100 text-amber-700',
+    processing: 'bg-blue-100 text-blue-700',
+    ready: 'bg-emerald-100 text-emerald-700',
+    done: 'bg-gray-200 text-gray-700',
+  }
+
   return (
     <div className="flex h-full relative">
 
@@ -405,6 +742,13 @@ export default function CashierPage() {
         {successMsg && (
           <div className="mx-4 mt-3 bg-green-50 text-green-700 text-sm px-4 py-2.5 rounded-lg border border-green-200">
             {successMsg}
+          </div>
+        )}
+
+        {tableNotification && (
+          <div className="mx-4 mt-3 bg-indigo-50 text-indigo-700 text-sm px-4 py-2.5 rounded-lg border border-indigo-200 flex items-center gap-2">
+            <Bell size={16} />
+            {tableNotification.message}
           </div>
         )}
 
@@ -478,51 +822,130 @@ export default function CashierPage() {
           </div>
 
           {/* Selector Meja */}
-          <div className="px-3 py-2 border-b border-gray-100 flex items-center gap-1.5 overflow-x-auto">
-            {[
-              { key: 'takeaway', label: 'Bawa Pulang', canDelete: false },
-              ...tables.map(t => ({ key: String(t), label: `Meja ${t}`, canDelete: true })),
-            ].map(({ key, label, canDelete }) => {
-              const isActive = activeTable === key
-              const hasItems = (carts[key]?.length ?? 0) > 0
-              return (
-                <div
-                  key={key}
-                  className={`relative flex-shrink-0 flex items-center rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
-                    isActive
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          <div className="px-3 py-2 border-b border-gray-100 flex flex-col gap-2">
+            <div className="flex items-center gap-1.5 overflow-x-auto">
+              {[
+                { key: 'takeaway', label: 'Bawa Pulang', canDelete: false },
+                ...tables.map(t => ({ key: String(t), label: `Meja ${t}`, canDelete: true })),
+              ].map(({ key, label, canDelete }) => {
+                const isActive = activeTable === key
+                const hasItems = (carts[key]?.length ?? 0) > 0
+                const currentStatus = key === 'takeaway' ? 'occupied' : (tableStates[key] ?? 'empty')
+                return (
+                  <div
+                    key={key}
+                    className={`relative flex-shrink-0 flex items-center rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
+                      isActive
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    <button
+                      onClick={() => setActiveTable(key)}
+                      className={`py-1.5 pl-3 ${isActive && canDelete ? 'pr-1' : 'pr-3'}`}
+                    >
+                      {label}
+                    </button>
+                    {isActive && canDelete && (
+                      <button
+                        onClick={() => removeTable(key)}
+                        title="Hapus meja"
+                        className="pr-2 pl-0.5 py-1.5 text-indigo-200 hover:text-white"
+                      >
+                        <X size={13} />
+                      </button>
+                    )}
+                    {hasItems && !isActive && (
+                      <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-indigo-500 rounded-full ring-2 ring-white" />
+                    )}
+                    {key !== 'takeaway' && (
+                      <span className={`absolute -bottom-1.5 right-1 px-1 py-0.5 rounded-full text-[8px] font-semibold ${currentStatus === 'occupied' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                        {currentStatus === 'occupied' ? 'Aktif' : 'Kosong'}
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
+              <button
+                onClick={addTable}
+                title="Tambah meja"
+                className="flex-shrink-0 w-7 h-7 rounded-lg bg-gray-100 text-gray-500 hover:bg-gray-200 flex items-center justify-center"
+              >
+                <Plus size={14} />
+              </button>
+            </div>
+
+            {activeTable !== 'takeaway' && (
+              <div className="flex items-center justify-between rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 text-[11px] text-gray-600">
+                <span>Status meja {activeTable}</span>
+                <button
+                  onClick={() => setTableAvailability(activeTable, (tableStates[activeTable] ?? 'empty') === 'occupied' ? 'empty' : 'occupied')}
+                  className={`px-2.5 py-1 rounded-full font-semibold ${
+                    (tableStates[activeTable] ?? 'empty') === 'occupied'
+                      ? 'bg-amber-100 text-amber-700'
+                      : 'bg-emerald-100 text-emerald-700'
                   }`}
                 >
-                  <button
-                    onClick={() => setActiveTable(key)}
-                    className={`py-1.5 pl-3 ${isActive && canDelete ? 'pr-1' : 'pr-3'}`}
-                  >
-                    {label}
-                  </button>
-                  {isActive && canDelete && (
-                    <button
-                      onClick={() => removeTable(key)}
-                      title="Hapus meja"
-                      className="pr-2 pl-0.5 py-1.5 text-indigo-200 hover:text-white"
-                    >
-                      <X size={13} />
-                    </button>
-                  )}
-                  {hasItems && !isActive && (
-                    <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-indigo-500 rounded-full ring-2 ring-white" />
-                  )}
-                </div>
-              )
-            })}
-            <button
-              onClick={addTable}
-              title="Tambah meja"
-              className="flex-shrink-0 w-7 h-7 rounded-lg bg-gray-100 text-gray-500 hover:bg-gray-200 flex items-center justify-center"
-            >
-              <Plus size={14} />
-            </button>
+                  {(tableStates[activeTable] ?? 'empty') === 'occupied' ? 'Aktif' : 'Kosong'}
+                </button>
+              </div>
+            )}
           </div>
+
+          {tableOrders.length > 0 && (
+            <div className="border-b border-gray-100 px-4 py-3 bg-amber-50">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2 text-sm font-semibold text-amber-800">
+                  <Bell size={15} />
+                  Pesanan Meja
+                </div>
+                <span className="text-[10px] text-amber-700 font-medium">
+                  {tableOrders.filter(order => order.status !== 'done').length} pending
+                </span>
+              </div>
+
+              <div className="space-y-2">
+                {tableOrders.slice(0, 3).map(order => (
+                  <div key={order.id} className="bg-white rounded-lg border border-amber-200 p-2.5">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs font-semibold text-gray-800">Meja {order.table_number}</p>
+                      <span className={`px-2 py-0.5 text-[10px] font-medium rounded-full ${statusColor[order.status]}`}>
+                        {statusLabel[order.status]}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-gray-500 mt-1">
+                      {order.items.slice(0, 2).map(item => `${item.name} x${item.quantity}`).join(', ')}
+                      {order.items.length > 2 ? ' ...' : ''}
+                    </p>
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <div className="flex flex-col">
+                        <span className="text-[11px] font-medium text-gray-700">{formatRupiah(order.total)}</span>
+                        <span className="text-[10px] text-gray-500">{order.payment_method === 'qris' ? 'QRIS' : 'Tunai'}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {order.status !== 'done' && (
+                          <button
+                            onClick={() => updateOrderStatus(order.id, order.status === 'pending' ? 'processing' : order.status === 'processing' ? 'ready' : 'done')}
+                            className="text-[10px] px-2 py-1 rounded-md bg-indigo-600 text-white hover:bg-indigo-700"
+                          >
+                            {order.status === 'pending' ? 'Proses' : order.status === 'processing' ? 'Siap' : 'Selesai'}
+                          </button>
+                        )}
+                        {order.status === 'done' && (
+                          <button
+                            onClick={() => deleteCompletedOrder(order.id)}
+                            className="text-[10px] px-2 py-1 rounded-md bg-red-100 text-red-600 hover:bg-red-200"
+                          >
+                            Hapus
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="flex-1 overflow-y-auto px-4">
             {cart.length === 0 ? (
@@ -552,6 +975,16 @@ export default function CashierPage() {
                 <span className="text-gray-500">{totalItems} item</span>
                 <span className="font-bold text-gray-900">{formatRupiah(subtotal)}</span>
               </div>
+
+              {activeTable !== 'takeaway' && (
+                <button
+                  onClick={submitTableOrder}
+                  className="w-full bg-amber-500 text-white py-3 rounded-xl font-semibold text-sm hover:bg-amber-600 transition-colors"
+                >
+                  Kirim Pesanan Meja {activeTable}
+                </button>
+              )}
+
               <button
                 onClick={() => setShowPayment(true)}
                 className="w-full bg-indigo-600 text-white py-3 rounded-xl font-semibold text-sm hover:bg-indigo-700 transition-colors"

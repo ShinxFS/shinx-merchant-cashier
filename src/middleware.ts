@@ -23,9 +23,14 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
+  // Route publik untuk scan QR pelanggan / table order
+  const isPublicRoute =
+    request.nextUrl.pathname.startsWith('/login') ||
+    request.nextUrl.pathname.startsWith('/register') ||
+    request.nextUrl.pathname.startsWith('/table')
+
   // Redirect ke login jika belum auth dan bukan halaman publik
-  if (!user && !request.nextUrl.pathname.startsWith('/login') && 
-      !request.nextUrl.pathname.startsWith('/register')) {
+  if (!user && !isPublicRoute) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 

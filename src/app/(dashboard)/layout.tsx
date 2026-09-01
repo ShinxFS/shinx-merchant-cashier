@@ -51,6 +51,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const allNavItems = [
     { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', ownerOnly: false },
     { href: '/cashier', icon: ShoppingCart, label: 'Kasir', ownerOnly: false },
+    { href: '/table-orders', icon: Receipt, label: 'Order Meja', ownerOnly: false },
     { href: '/products', icon: Package, label: 'Produk', ownerOnly: false },
     { href: '/transactions', icon: Receipt, label: 'Transaksi', ownerOnly: false },
     { href: '/hpp', icon: Calculator, label: 'Kalkulator HPP', ownerOnly: true },

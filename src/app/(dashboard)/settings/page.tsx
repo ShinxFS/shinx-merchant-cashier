@@ -33,6 +33,12 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false)
   const [qrisUrl, setQrisUrl] = useState<string | null>(null)
   const [qrisUploading, setQrisUploading] = useState(false)
+  const [tableQrLinks, setTableQrLinks] = useState<Record<number, string>>({})
+  const [qrReady, setQrReady] = useState(false)
+
+  useEffect(() => {
+    setQrReady(true)
+  }, [])
 
   useEffect(() => {
     const load = async () => {
@@ -52,6 +58,15 @@ export default function SettingsPage() {
         setQrisUrl(prof.qris_image_url ?? null)
       }
       setCategories(cats ?? [])
+
+      const links = Object.fromEntries(
+        [1, 2, 3, 4].map(table => {
+          const target = `${window.location.origin}/table/${table}?owner=${user.id}`
+          return [table, `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(target)}`]
+        })
+      ) as Record<number, string>
+
+      setTableQrLinks(links)
     }
     load()
   }, [])
@@ -226,6 +241,32 @@ export default function SettingsPage() {
             <span className="text-xs text-gray-400">PNG / JPG</span>
             <input type="file" accept="image/*" onChange={handleUploadQris} disabled={qrisUploading} className="hidden" />
           </label>
+        )}
+      </div>
+
+      {/* QR Meja Pelanggan */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <QrCode size={18} className="text-indigo-600" />
+          <h2 className="font-semibold text-gray-800">QR Meja Pelanggan</h2>
+        </div>
+
+        {qrReady ? (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[1, 2, 3, 4].map(tableNumber => (
+              <div key={tableNumber} className="flex flex-col items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 p-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={tableQrLinks[tableNumber]}
+                  alt={`QR Meja ${tableNumber}`}
+                  className="w-24 h-24 rounded-lg bg-white border border-gray-200"
+                />
+                <span className="text-xs font-medium text-gray-700">Meja {tableNumber}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-sm text-gray-400">Menyiapkan QR meja...</div>
         )}
       </div>
 
