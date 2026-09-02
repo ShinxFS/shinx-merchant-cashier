@@ -169,6 +169,47 @@ export default function CashierPage() {
     }
   }
 
+  const playClickSound = () => {
+    const fallbackTone = () => {
+      try {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
+        if (!AudioCtx) return
+
+        const audioContext = audioContextRef.current ?? new AudioCtx()
+        audioContextRef.current = audioContext
+
+        const oscillator = audioContext.createOscillator()
+        const gain = audioContext.createGain()
+        const now = audioContext.currentTime
+
+        oscillator.type = 'square'
+        oscillator.frequency.setValueAtTime(620, now)
+        oscillator.frequency.exponentialRampToValueAtTime(870, now + 0.08)
+        gain.gain.setValueAtTime(0.025, now)
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1)
+
+        oscillator.connect(gain)
+        gain.connect(audioContext.destination)
+        oscillator.start(now)
+        oscillator.stop(now + 0.1)
+      } catch {
+        // ignore unsupported browsers
+      }
+    }
+
+    try {
+      void unlockAudio()
+      const audio = new Audio('/sounds/click.wav')
+      audio.volume = 0.35
+      const playPromise = audio.play()
+      if (playPromise && typeof playPromise.catch === 'function') {
+        playPromise.catch(() => fallbackTone())
+      }
+    } catch {
+      fallbackTone()
+    }
+  }
+
   useEffect(() => {
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser()
@@ -462,6 +503,7 @@ export default function CashierPage() {
         image_url: product.image_url,
       }]
     })
+    playClickSound()
   }
 
   const handleScan = (code: string) => {
@@ -486,20 +528,34 @@ export default function CashierPage() {
     flash(`✅ ${product.name} ditambahkan ke keranjang`)
   }
 
-  const increase = (id: string) => setActiveCart(prev =>
-    prev.map(i => i.id === id && i.quantity < i.stock ? { ...i, quantity: i.quantity + 1 } : i)
-  )
-  const decrease = (id: string) => setActiveCart(prev =>
-    prev.map(i => i.id === id && i.quantity > 1 ? { ...i, quantity: i.quantity - 1 } : i)
-      .filter(i => i.quantity > 0)
-  )
-  const remove = (id: string) => setActiveCart(prev => prev.filter(i => i.id !== id))
-  const clearCart = () => setActiveCart(() => [])
+  const increase = (id: string) => {
+    setActiveCart(prev =>
+      prev.map(i => i.id === id && i.quantity < i.stock ? { ...i, quantity: i.quantity + 1 } : i)
+    )
+    playClickSound()
+  }
+  const decrease = (id: string) => {
+    setActiveCart(prev =>
+      prev.map(i => i.id === id && i.quantity > 1 ? { ...i, quantity: i.quantity - 1 } : i)
+        .filter(i => i.quantity > 0)
+    )
+    playClickSound()
+  }
+  const remove = (id: string) => {
+    setActiveCart(prev => prev.filter(i => i.id !== id))
+    playClickSound()
+  }
+  const clearCart = () => {
+    setActiveCart(() => [])
+    playClickSound()
+  }
 
   const subtotal = cart.reduce((s, i) => s + i.price * i.quantity, 0)
 
   const submitTableOrder = async () => {
     if (activeTable === 'takeaway' || !effectiveUserId || cart.length === 0) return
+
+    playClickSound()
 
     const payload = {
       user_id: effectiveUserId,
@@ -537,7 +593,7 @@ export default function CashierPage() {
     playCashierTone()
     setTimeout(() => setTableNotification(null), 4000)
     setActiveCart(() => [])
-    setSuccessMsg(`✅ Pesanan meja ${activeTable} dikirim`) 
+    setSuccessMsg(`✅ Pesanan meja ${activeTable} dikirim`)
     setTimeout(() => setSuccessMsg(''), 2500)
   }
 
@@ -661,6 +717,7 @@ export default function CashierPage() {
     discount: number,
     tax: number
   ) => {
+    playClickSound()
     setPaymentLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
@@ -799,7 +856,10 @@ export default function CashierPage() {
               />
             </div>
             <button
-              onClick={() => setShowScanner(true)}
+              onClick={() => {
+                playClickSound()
+                setShowScanner(true)
+              }}
               title="Scan barcode"
               className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 transition-colors"
             >
@@ -881,7 +941,10 @@ export default function CashierPage() {
 
       {/* Tombol Toggle Keranjang */}
       <button
-        onClick={() => setCartVisible(v => !v)}
+        onClick={() => {
+          playClickSound()
+          setCartVisible(v => !v)
+        }}
         className="absolute top-1/2 -translate-y-1/2 z-10 bg-white border border-gray-200 rounded-l-xl px-1.5 py-3 shadow-md hover:bg-gray-50 transition-colors"
         style={{ right: cartVisible ? '320px' : '0px' }}
       >
@@ -947,7 +1010,10 @@ export default function CashierPage() {
                     }`}
                   >
                     <button
-                      onClick={() => setActiveTable(key)}
+                      onClick={() => {
+                        playClickSound()
+                        setActiveTable(key)
+                      }}
                       className={`py-1.5 pl-3 ${isActive && canDelete ? 'pr-1' : 'pr-3'}`}
                     >
                       {label}
@@ -973,7 +1039,10 @@ export default function CashierPage() {
                 )
               })}
               <button
-                onClick={addTable}
+                onClick={() => {
+                  playClickSound()
+                  addTable()
+                }}
                 title="Tambah meja"
                 className="flex-shrink-0 w-7 h-7 rounded-lg bg-gray-100 text-gray-500 hover:bg-gray-200 flex items-center justify-center"
               >
@@ -1068,7 +1137,10 @@ export default function CashierPage() {
 
               {activeTable !== 'takeaway' && (
                 <button
-                  onClick={submitTableOrder}
+                  onClick={() => {
+                    playClickSound()
+                    void submitTableOrder()
+                  }}
                   className="w-full bg-amber-500 text-white py-3 rounded-xl font-semibold text-sm hover:bg-amber-600 transition-colors"
                 >
                   Kirim Pesanan Meja {activeTable}
@@ -1076,7 +1148,10 @@ export default function CashierPage() {
               )}
 
               <button
-                onClick={() => setShowPayment(true)}
+                onClick={() => {
+                  playClickSound()
+                  setShowPayment(true)
+                }}
                 className="w-full bg-indigo-600 text-white py-3 rounded-xl font-semibold text-sm hover:bg-indigo-700 transition-colors"
               >
                 Bayar {formatRupiah(subtotal)}
@@ -1090,7 +1165,10 @@ export default function CashierPage() {
       {!cartVisible && cart.length > 0 && (
         <div className="fixed bottom-6 right-6 z-20">
           <button
-            onClick={() => setShowPayment(true)}
+            onClick={() => {
+              playClickSound()
+              setShowPayment(true)
+            }}
             className="bg-indigo-600 text-white px-6 py-3 rounded-2xl font-semibold text-sm shadow-lg hover:bg-indigo-700 transition-colors flex items-center gap-2"
           >
             <ShoppingCart size={16} />
@@ -1113,9 +1191,13 @@ export default function CashierPage() {
         <PaymentModal
           subtotal={subtotal}
           onConfirm={handlePayment}
-          onClose={() => setShowPayment(false)}
+          onClose={() => {
+            playClickSound()
+            setShowPayment(false)
+          }}
           loading={paymentLoading}
           qrisImageUrl={qrisImageUrl}
+          onSound={playClickSound}
         />
       )}
 

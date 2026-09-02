@@ -78,3 +78,52 @@ drop trigger if exists table_orders_updated_at on public.table_orders;
 create trigger table_orders_updated_at
   before update on public.table_orders
   for each row execute function public.touch_table_order_updated_at();
+
+-- Kurangi stok produk saat order meja dibuat oleh pelanggan atau kasir
+create or replace function public.apply_table_order_stock_delta()
+returns trigger
+language plpgsql
+security definer
+as $$
+declare
+  item_record jsonb;
+begin
+  if TG_OP = 'INSERT' then
+    for item_record in
+      select value
+      from jsonb_array_elements(coalesce(NEW.items, '[]'::jsonb))
+    loop
+      update public.products
+      set stock = greatest(
+        stock - coalesce((item_record->>'quantity')::int, 0),
+        0
+      )
+      where id::text = item_record->>'id'
+        and user_id = NEW.user_id;
+    end loop;
+    return NEW;
+  elsif TG_OP = 'DELETE' then
+    if OLD.status = 'done' then
+      return OLD;
+    end if;
+
+    for item_record in
+      select value
+      from jsonb_array_elements(coalesce(OLD.items, '[]'::jsonb))
+    loop
+      update public.products
+      set stock = stock + coalesce((item_record->>'quantity')::int, 0)
+      where id::text = item_record->>'id'
+        and user_id = OLD.user_id;
+    end loop;
+    return OLD;
+  end if;
+
+  return NEW;
+end;
+$$;
+
+drop trigger if exists table_orders_stock_adjustment on public.table_orders;
+create trigger table_orders_stock_adjustment
+  after insert or delete on public.table_orders
+  for each row execute function public.apply_table_order_stock_delta();

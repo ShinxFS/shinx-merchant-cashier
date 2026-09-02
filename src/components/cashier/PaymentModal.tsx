@@ -8,6 +8,7 @@ interface Props {
   onClose: () => void
   loading: boolean
   qrisImageUrl?: string | null
+  onSound?: () => void
 }
 
 const paymentMethods = [
@@ -18,7 +19,7 @@ const paymentMethods = [
 
 const inputClass = "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
 
-export default function PaymentModal({ subtotal, onConfirm, onClose, loading, qrisImageUrl }: Props) {
+export default function PaymentModal({ subtotal, onConfirm, onClose, loading, qrisImageUrl, onSound }: Props) {
   const [method, setMethod] = useState('cash')
   const [amountPaid, setAmountPaid] = useState('')
   const [discountType, setDiscountType] = useState<'nominal' | 'percent'>('nominal')
@@ -46,6 +47,10 @@ export default function PaymentModal({ subtotal, onConfirm, onClose, loading, qr
     200000,
   ].filter((v, i, a) => a.indexOf(v) === i).sort((a, b) => a - b)
 
+  const triggerSound = () => {
+    if (onSound) onSound()
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/50">
       <div className="bg-white rounded-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto">
@@ -53,7 +58,13 @@ export default function PaymentModal({ subtotal, onConfirm, onClose, loading, qr
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 sticky top-0 bg-white">
           <h3 className="font-bold text-gray-900">Proses Pembayaran</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+          <button
+            onClick={() => {
+              triggerSound()
+              onClose()
+            }}
+            className="text-gray-400 hover:text-gray-600"
+          >
             <X size={20} />
           </button>
         </div>
@@ -69,7 +80,11 @@ export default function PaymentModal({ subtotal, onConfirm, onClose, loading, qr
             <div className="flex gap-2">
               <div className="flex rounded-lg border border-gray-300 overflow-hidden text-xs">
                 <button
-                  onClick={() => { setDiscountType('nominal'); setDiscountValue('') }}
+                  onClick={() => {
+                    triggerSound()
+                    setDiscountType('nominal')
+                    setDiscountValue('')
+                  }}
                   className={`px-3 py-1.5 font-medium transition-colors ${
                     discountType === 'nominal'
                       ? 'bg-indigo-600 text-white'
@@ -79,7 +94,11 @@ export default function PaymentModal({ subtotal, onConfirm, onClose, loading, qr
                   Rp
                 </button>
                 <button
-                  onClick={() => { setDiscountType('percent'); setDiscountValue('') }}
+                  onClick={() => {
+                    triggerSound()
+                    setDiscountType('percent')
+                    setDiscountValue('')
+                  }}
                   className={`px-3 py-1.5 font-medium transition-colors ${
                     discountType === 'percent'
                       ? 'bg-indigo-600 text-white'
@@ -151,7 +170,10 @@ export default function PaymentModal({ subtotal, onConfirm, onClose, loading, qr
               {paymentMethods.map(({ id, label, icon: Icon }) => (
                 <button
                   key={id}
-                  onClick={() => setMethod(id)}
+                  onClick={() => {
+                    triggerSound()
+                    setMethod(id)
+                  }}
                   className={`flex flex-col items-center gap-1.5 py-3 rounded-xl border text-xs font-medium transition-all ${
                     method === id
                       ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
@@ -180,7 +202,10 @@ export default function PaymentModal({ subtotal, onConfirm, onClose, loading, qr
                 {quickAmounts.map(a => (
                   <button
                     key={a}
-                    onClick={() => setAmountPaid(String(a))}
+                    onClick={() => {
+                      triggerSound()
+                      setAmountPaid(String(a))
+                    }}
                     className="text-xs px-2.5 py-1 bg-gray-100 text-gray-700 rounded-lg hover:bg-indigo-100 hover:text-indigo-700 transition-colors"
                   >
                     {formatRupiah(a)}
@@ -236,7 +261,10 @@ export default function PaymentModal({ subtotal, onConfirm, onClose, loading, qr
         {/* Tombol Bayar */}
         <div className="px-5 pb-5">
           <button
-            onClick={() => onConfirm(method, method === 'cash' ? paid : total, discountAmount, taxAmount)}
+            onClick={() => {
+              triggerSound()
+              onConfirm(method, method === 'cash' ? paid : total, discountAmount, taxAmount)
+            }}
             disabled={
               loading ||
               (method === 'cash' && paid < total) ||

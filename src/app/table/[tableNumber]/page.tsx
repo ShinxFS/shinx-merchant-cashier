@@ -380,6 +380,8 @@ export default function TableOrderPage() {
       payment_method: paymentMethod,
     }
 
+    let createdOrderId: string | null = null
+
     const { data, error: insertErr } = await supabase
       .from('table_orders')
       .insert(payload)
@@ -407,11 +409,12 @@ export default function TableOrderPage() {
         return
       }
 
-      setOrderId(fallback.data.id ?? null)
+      createdOrderId = fallback.data.id ?? null
     } else {
-      setOrderId(data?.id ?? null)
+      createdOrderId = data?.id ?? null
     }
 
+    setOrderId(createdOrderId)
     setCart({})
     setOrderStatus('pending')
     setLatestOrderItems(orderItems)
