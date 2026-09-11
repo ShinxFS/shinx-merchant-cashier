@@ -218,12 +218,17 @@ export default function TableOrderPage() {
     }
 
     const loadLatestOrderStatus = async () => {
-      const { data } = await supabase
+      const { data, error: orderError } = await supabase
         .from('table_orders')
         .select('id, status, table_number, items, total, payment_method, updated_at, created_at')
         .eq('user_id', ownerId)
         .eq('table_number', tableNumber)
         .order('updated_at', { ascending: false })
+
+      if (orderError) {
+        setError('Status pesanan belum bisa dimuat. Periksa koneksi atau policy table_orders di Supabase.')
+        return
+      }
 
       const latest = pickLatestTableOrder((data ?? []) as Array<{ id?: string; status?: 'pending' | 'processing' | 'ready' | 'done'; items?: unknown; total?: number; payment_method?: 'cash' | 'qris'; updated_at?: string; created_at?: string }>)
 
@@ -579,6 +584,7 @@ export default function TableOrderPage() {
 
                         {outOfStock ? (
                           <div className="mt-3 flex items-center justify-between gap-3">
+                            <span className="font-bold text-indigo-600">{formatRupiah(product.price)}</span>
                             <span className="text-xs font-medium text-red-500">Stok habis</span>
                           </div>
                         ) : (
