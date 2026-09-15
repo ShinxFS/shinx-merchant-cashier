@@ -41,6 +41,9 @@ export default function TableOrderPage() {
   const [customerTone, setCustomerTone] = useState('classic')
   const [latestOrderItems, setLatestOrderItems] = useState<Array<{ id: string; name: string; quantity: number; price: number; subtotal: number }>>([])
   const [latestOrderTotal, setLatestOrderTotal] = useState(0)
+  const [latestOrderNote, setLatestOrderNote] = useState('')
+  const [latestOrderCreatedAt, setLatestOrderCreatedAt] = useState<string | null>(null)
+  const [customerNote, setCustomerNote] = useState('')
   const [showPaymentSummary, setShowPaymentSummary] = useState(false)
   const audioContextRef = useRef<AudioContext | null>(null)
   const lastStatusRef = useRef<'pending' | 'processing' | 'ready' | 'done' | null>(null)
@@ -206,7 +209,7 @@ export default function TableOrderPage() {
         .filter(Boolean) as Array<{ id: string; name: string; quantity: number; price: number; subtotal: number }>
     }
 
-    const pickLatestTableOrder = (rows: Array<{ id?: string; status?: 'pending' | 'processing' | 'ready' | 'done'; items?: unknown; total?: number; payment_method?: 'cash' | 'qris'; updated_at?: string; created_at?: string }>) => {
+    const pickLatestTableOrder = (rows: Array<{ id?: string; status?: 'pending' | 'processing' | 'ready' | 'done'; items?: unknown; total?: number; payment_method?: 'cash' | 'qris'; note?: string; updated_at?: string; created_at?: string }>) => {
       if (!rows || rows.length === 0) return null
 
       const sortedRows = [...rows].sort((a, b) => {
@@ -222,7 +225,7 @@ export default function TableOrderPage() {
     const loadLatestOrderStatus = async () => {
       const { data, error: orderError } = await supabase
         .from('table_orders')
-        .select('id, status, table_number, items, total, payment_method, updated_at, created_at')
+        .select('id, status, table_number, items, total, payment_method, note, updated_at, created_at')
         .eq('user_id', ownerId)
         .eq('table_number', tableNumber)
         .order('updated_at', { ascending: false })
@@ -232,7 +235,7 @@ export default function TableOrderPage() {
         return
       }
 
-      const latest = pickLatestTableOrder((data ?? []) as Array<{ id?: string; status?: 'pending' | 'processing' | 'ready' | 'done'; items?: unknown; total?: number; payment_method?: 'cash' | 'qris'; updated_at?: string; created_at?: string }>)
+      const latest = pickLatestTableOrder((data ?? []) as Array<{ id?: string; status?: 'pending' | 'processing' | 'ready' | 'done'; items?: unknown; total?: number; payment_method?: 'cash' | 'qris'; note?: string; updated_at?: string; created_at?: string }>)
 
       if (latest) {
         const items = normalizeOrderItems(latest.items)
@@ -249,6 +252,8 @@ export default function TableOrderPage() {
         setPaymentMethod(latest.payment_method ?? 'cash')
         setLatestOrderItems(items)
         setLatestOrderTotal(Number(latest.total ?? items.reduce((sum, item) => sum + item.subtotal, 0)))
+        setLatestOrderNote(latest.note?.split(' — ').slice(1).join(' — ') ?? '')
+        setLatestOrderCreatedAt(latest.created_at ?? null)
 
         if (nextStatus === 'done') {
           orderDetailUserOverrideRef.current = false
@@ -263,6 +268,8 @@ export default function TableOrderPage() {
         lastOrderIdRef.current = null
         setLatestOrderItems([])
         setLatestOrderTotal(0)
+        setLatestOrderNote('')
+        setLatestOrderCreatedAt(null)
         orderDetailUserOverrideRef.current = false
         setShowOrderDetail(false)
       }
@@ -393,16 +400,20 @@ export default function TableOrderPage() {
     setError('')
     setSuccess('')
 
+    const trimmedNote = customerNote.trim()
+    const qrText = paymentMethod === 'qris'
+      ? `Order via QR Meja ${tableNumber} - menunggu konfirmasi pembayaran QRIS`
+      : `Order via QR Meja ${tableNumber}`
+    const noteText = trimmedNote ? `${qrText} — ${trimmedNote}` : qrText
+
     const payload = {
       user_id: ownerId,
       table_number: tableNumber,
       customer_name: `Pelanggan Meja ${tableNumber}`,
       total: subtotal,
-      status: paymentMethod === 'qris' ? 'pending' : 'pending',
+      status: 'pending',
       items: orderItems,
-      note: paymentMethod === 'qris'
-        ? `Order via QR Meja ${tableNumber} - menunggu konfirmasi pembayaran QRIS`
-        : `Order via QR Meja ${tableNumber}`,
+      note: noteText,
       payment_method: paymentMethod,
     }
 
@@ -424,7 +435,7 @@ export default function TableOrderPage() {
           total: subtotal,
           status: 'pending',
           items: orderItems,
-          note: `Order via QR Meja ${tableNumber}`,
+          note: noteText,
         })
         .select('id')
         .single()
@@ -445,6 +456,9 @@ export default function TableOrderPage() {
     setOrderStatus('pending')
     setLatestOrderItems(orderItems)
     setLatestOrderTotal(subtotal)
+    setLatestOrderNote(trimmedNote)
+    setLatestOrderCreatedAt(new Date().toISOString())
+    setCustomerNote('')
     orderDetailUserOverrideRef.current = false
     setShowOrderDetail(true)
     setSuccess(
@@ -550,22 +564,44 @@ export default function TableOrderPage() {
           {hasOrderRecord && liveOrderStatus && showOrderDetail && (
             <div className="mt-4 rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
               <div className="flex items-center justify-between gap-3 mb-3">
-                <p className="text-sm font-semibold text-indigo-800">Detail pesanan Anda</p>
+                <p className="text-sm font-semibold text-indigo-800">Rincian Order</p>
                 <span className="text-xs font-medium text-indigo-600">{orderStatusMeta[liveOrderStatus].label}</span>
               </div>
 
-              <div className="space-y-2 text-sm text-indigo-900">
-                {summaryItems.map(item => (
-                  <div key={`${item.id}-${item.name}`} className="flex items-center justify-between gap-3">
-                    <span>
-                      {item.name} <span className="text-indigo-600">x{item.quantity}</span>
-                    </span>
-                    <span className="font-semibold">{formatRupiah(item.subtotal)}</span>
-                  </div>
-                ))}
+              {latestOrderCreatedAt && (
+                <div className="mb-3 rounded-lg border border-indigo-200 bg-white px-3 py-2 text-[11px] text-indigo-800">
+                  <span className="font-semibold">Waktu order:</span>{' '}
+                  {new Date(latestOrderCreatedAt).toLocaleString('id-ID', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: false,
+                  })}
+                </div>
+              )}
+
+              <div className="rounded-lg border border-indigo-200 bg-white p-3">
+                <div className="space-y-2 text-sm text-indigo-900">
+                  {summaryItems.map(item => (
+                    <div key={`${item.id}-${item.name}`} className="flex items-center justify-between gap-3">
+                      <span>
+                        {item.name} <span className="text-indigo-600">x{item.quantity}</span>
+                      </span>
+                      <span className="font-semibold">{formatRupiah(item.subtotal)}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
 
-              <div className="mt-3 pt-3 border-t border-indigo-200 flex items-center justify-between text-sm font-semibold text-indigo-900">
+              {latestOrderNote && (
+                <div className="mt-3 rounded-lg border border-indigo-200 bg-white px-3 py-2 text-xs text-indigo-800 break-words whitespace-pre-wrap">
+                  <span className="font-semibold">Catatan:</span> {latestOrderNote}
+                </div>
+              )}
+
+              <div className="mt-3 rounded-lg border border-indigo-200 bg-white px-3 py-2 flex items-center justify-between text-sm font-semibold text-indigo-900">
                 <span>Total</span>
                 <span>{formatRupiah(summaryTotal)}</span>
               </div>
@@ -690,6 +726,22 @@ export default function TableOrderPage() {
                 <span>{hasActiveOrder ? 'Total pesanan' : 'Subtotal'}</span>
                 <span className="font-semibold text-gray-900">{formatRupiah(summaryTotal)}</span>
               </div>
+
+              {!hasActiveOrder && (
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                  <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-2">
+                    Catatan untuk kasir
+                  </label>
+                  <textarea
+                    value={customerNote}
+                    onChange={e => setCustomerNote(e.target.value.slice(0, 200))}
+                    rows={3}
+                    maxLength={200}
+                    placeholder="Contoh: tidak pedas, tolong dipisah pakai wadah"
+                    className="w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 overflow-y-auto break-words"
+                  />
+                </div>
+              )}
 
               <div className="rounded-xl border border-gray-200 bg-white p-2.5">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-2">Metode bayar</p>
@@ -847,6 +899,20 @@ export default function TableOrderPage() {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-2">
+                  Catatan untuk kasir
+                </label>
+                <textarea
+                  value={customerNote}
+                  onChange={e => setCustomerNote(e.target.value.slice(0, 200))}
+                  rows={3}
+                  maxLength={200}
+                  placeholder="Contoh: tidak pedas, tolong dipisah pakai wadah"
+                  className="w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 overflow-y-auto break-words"
+                />
               </div>
 
               {/* QRIS */}
