@@ -79,8 +79,8 @@ export default function CashierPage() {
   const [filtered, setFiltered] = useState<Product[]>([])
   // Keranjang per-meja: key 'takeaway' | '1' | '2' | ... → daftar item
   const [carts, setCarts] = useState<Record<string, CartItemType[]>>({})
-  const [tables, setTables] = useState<number[]>([1, 2, 3, 4])
-  const [activeTable, setActiveTable] = useState<string>('1')
+  const [tables, setTables] = useState<number[]>([1, 2])
+  const [activeTable, setActiveTable] = useState<string>('takeaway')
   const [hydrated, setHydrated] = useState(false)
   const [search, setSearch] = useState('')
   const [activeCategory, setActiveCategory] = useState<string>('all')
@@ -456,12 +456,19 @@ export default function CashierPage() {
       const raw = localStorage.getItem(`pos_carts_${effectiveUserId}`)
       if (raw) {
         const saved = JSON.parse(raw)
+        const savedCarts = saved.carts as Record<string, CartItemType[]> | undefined
         // eslint-disable-next-line react-hooks/set-state-in-effect
-        if (saved.carts) setCarts(saved.carts)
+        if (savedCarts) setCarts(savedCarts)
         // eslint-disable-next-line react-hooks/set-state-in-effect
-        if (Array.isArray(saved.tables) && saved.tables.length) setTables(saved.tables)
+        if (savedCarts) {
+          const nonEmptyTables = Object.keys(savedCarts)
+            .filter(key => key !== 'takeaway' && (savedCarts[key]?.length ?? 0) > 0)
+            .map(Number)
+            .filter(Number.isFinite)
+          setTables(Array.from(new Set([1, 2, ...nonEmptyTables])).sort((a, b) => a - b))
+        }
         // eslint-disable-next-line react-hooks/set-state-in-effect
-        if (saved.activeTable) setActiveTable(saved.activeTable)
+        setActiveTable('takeaway')
       }
 
       const tableStateRaw = localStorage.getItem(`pos_table_states_${effectiveUserId}`)
@@ -492,14 +499,27 @@ export default function CashierPage() {
   // Keranjang meja yang sedang aktif
   const cart = carts[activeTable] ?? []
   const activeLabel = activeTable === 'takeaway' ? 'Bawa Pulang' : `Meja ${activeTable}`
+  const visibleTables = tables
 
   const setActiveCart = (updater: (prev: CartItemType[]) => CartItemType[]) =>
     setCarts(prev => ({ ...prev, [activeTable]: updater(prev[activeTable] ?? []) }))
 
+  const returnToTakeawayAfterEmptyCart = () => {
+    if (activeTable === 'takeaway') return
+
+    const emptyTable = Number(activeTable)
+    setTables(prev => prev.filter(table => table !== emptyTable))
+    setTableStates(prev => {
+      const next = { ...prev }
+      delete next[activeTable]
+      return next
+    })
+    setActiveTable('takeaway')
+  }
+
   const addTable = () => {
     const next = (tables.length ? Math.max(...tables) : 0) + 1
     setTables(prev => [...prev, next])
-    setActiveTable(String(next))
     setTableStates(prev => ({ ...prev, [String(next)]: 'empty' }))
   }
 
@@ -587,6 +607,7 @@ export default function CashierPage() {
   }
   const clearCart = () => {
     setActiveCart(() => [])
+    returnToTakeawayAfterEmptyCart()
     playClickSound()
   }
 
@@ -633,6 +654,7 @@ export default function CashierPage() {
     playCashierTone()
     setTimeout(() => setTableNotification(null), 4000)
     setActiveCart(() => [])
+    returnToTakeawayAfterEmptyCart()
     setSuccessMsg(`✅ Pesanan meja ${activeTable} dikirim`)
     setTimeout(() => setSuccessMsg(''), 2500)
   }
@@ -859,6 +881,7 @@ export default function CashierPage() {
     })
 
     setActiveCart(() => [])
+  returnToTakeawayAfterEmptyCart()
     setShowPayment(false)
     setPaymentLoading(false)
   }
@@ -1035,7 +1058,7 @@ export default function CashierPage() {
             <div className="flex flex-wrap items-center gap-1.5">
               {[
                 { key: 'takeaway', label: 'Bawa Pulang', canDelete: false },
-                ...tables.map(t => ({ key: String(t), label: `Meja ${t}`, canDelete: true })),
+                ...visibleTables.map(t => ({ key: String(t), label: `Meja ${t}`, canDelete: true })),
               ].map(({ key, label, canDelete }) => {
                 const isActive = activeTable === key
                 const hasItems = (carts[key]?.length ?? 0) > 0
