@@ -51,7 +51,7 @@ export default function TableOrderPage() {
     if (hasUserInteractionRef.current) return
 
     try {
-      const AudioCtor = window.AudioContext || (window as any).webkitAudioContext
+      const AudioCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
       if (!AudioCtor) return
 
       const context = audioContextRef.current ?? new AudioCtor()
@@ -84,7 +84,7 @@ export default function TableOrderPage() {
   const playReadyTone = () => {
     const fallbackTone = () => {
       try {
-        const AudioCtor = window.AudioContext || (window as any).webkitAudioContext
+        const AudioCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
         if (!AudioCtor) return
 
         const context = audioContextRef.current ?? new AudioCtor()
@@ -315,6 +315,7 @@ export default function TableOrderPage() {
   const liveOrderStatus = orderStatus ?? (orderId ? 'pending' : null)
   const hasOrderRecord = Boolean(orderId || latestOrderItems.length > 0 || liveOrderStatus)
   const hasActiveOrder = Boolean(orderId || latestOrderItems.length > 0 || (liveOrderStatus && liveOrderStatus !== 'done'))
+  const isOrderLocked = Boolean(hasActiveOrder && liveOrderStatus && liveOrderStatus !== 'done')
   const summaryItems = latestOrderItems.length > 0 ? latestOrderItems : orderReview.map(product => ({
     id: product.id,
     name: product.name,
@@ -335,6 +336,8 @@ export default function TableOrderPage() {
   }
 
   const addItem = (product: Product) => {
+    if (isOrderLocked) return
+
     setCart(prev => {
       const qty = prev[product.id] ?? 0
       if (product.stock <= 0) return prev
@@ -344,6 +347,8 @@ export default function TableOrderPage() {
   }
 
   const removeItem = (product: Product) => {
+    if (isOrderLocked) return
+
     setCart(prev => {
       const qty = prev[product.id] ?? 0
       if (!qty) return prev
@@ -357,6 +362,11 @@ export default function TableOrderPage() {
   }
 
   const submitOrder = async () => {
+    if (isOrderLocked) {
+      setError('Order yang sedang aktif tidak bisa diubah. Tunggu proses selesai dulu.')
+      return
+    }
+
     if (!ownerId || !tableNumber || totalItems === 0) return
 
     const orderItems = products
@@ -435,6 +445,11 @@ export default function TableOrderPage() {
   }
 
   const cancelOrder = async () => {
+    if (isOrderLocked) {
+      setError('Order sedang diproses, pembatalan tidak tersedia.')
+      return
+    }
+
     if (!ownerId || !tableNumber || !orderId) {
       setError('Belum ada pesanan yang bisa dibatalkan.')
       return
@@ -594,7 +609,12 @@ export default function TableOrderPage() {
                             <div className="flex items-center gap-2">
                               <button
                                 onClick={() => removeItem(product)}
-                                className="w-8 h-8 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 flex items-center justify-center"
+                                disabled={isOrderLocked}
+                                className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                                  isOrderLocked
+                                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                }`}
                                 aria-label={`Kurangi ${product.name}`}
                               >
                                 <Minus size={15} />
@@ -602,7 +622,12 @@ export default function TableOrderPage() {
                               <span className="w-6 text-center text-sm font-semibold text-gray-800">{qty}</span>
                               <button
                                 onClick={() => addItem(product)}
-                                className="w-8 h-8 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 flex items-center justify-center"
+                                disabled={isOrderLocked}
+                                className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                                  isOrderLocked
+                                    ? 'bg-indigo-300 text-white cursor-not-allowed'
+                                    : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                                }`}
                                 aria-label={`Tambah ${product.name}`}
                               >
                                 <Plus size={15} />
@@ -728,7 +753,7 @@ export default function TableOrderPage() {
       </div>
 
       {/* Floating Payment Button */}
-      {(totalItems > 0 || hasActiveOrder) && (
+      {!isOrderLocked && (totalItems > 0 || hasActiveOrder) && (
         <button
           onClick={() => setShowPaymentSummary(true)}
           className="fixed bottom-6 right-6 z-50 bg-indigo-600 text-white rounded-full shadow-lg hover:bg-indigo-700 transition-all flex items-center gap-2 px-5 py-3"
@@ -850,14 +875,16 @@ export default function TableOrderPage() {
                   setShowPaymentSummary(false)
                   submitOrder()
                 }}
-                disabled={submitting || totalItems === 0}
+                disabled={submitting || totalItems === 0 || isOrderLocked}
                 className="w-full bg-indigo-600 text-white py-3 rounded-xl font-semibold text-sm hover:bg-indigo-700 disabled:opacity-50 transition-colors"
               >
                 {submitting
                   ? 'Memproses...'
-                  : paymentMethod === 'qris'
-                    ? `Bayar ${formatRupiah(summaryTotal)} via QRIS`
-                    : `Bayar ${formatRupiah(summaryTotal)}`}
+                  : isOrderLocked
+                    ? 'Order sedang diproses'
+                    : paymentMethod === 'qris'
+                      ? `Bayar ${formatRupiah(summaryTotal)} via QRIS`
+                      : `Bayar ${formatRupiah(summaryTotal)}`}
               </button>
             </div>
           </div>

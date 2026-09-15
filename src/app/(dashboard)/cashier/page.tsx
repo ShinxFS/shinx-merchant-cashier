@@ -8,7 +8,7 @@ import CartItem, { CartItemType } from '@/components/cashier/CartItem'
 import PaymentModal from '@/components/cashier/PaymentModal'
 import ReceiptModal from '@/components/cashier/ReceiptModal'
 import BarcodeScanner from '@/components/cashier/BarcodeScanner'
-import { Search, ShoppingCart, Trash2, ChevronRight, ChevronLeft, ScanLine, Plus, X, Bell, CheckCheck } from 'lucide-react'
+import { Search, ShoppingCart, Trash2, ChevronRight, ChevronLeft, ScanLine, Plus, X, Bell } from 'lucide-react'
 import { formatRupiah } from '@/lib/utils'
 
 interface TableOrder {
@@ -42,6 +42,37 @@ interface Product {
   category2?: { name: string; color: string } | null
 }
 
+interface ReceiptData {
+  invoice_number: string
+  created_at: string
+  items: Array<{
+    product_name: string
+    quantity: number
+    unit_price: number
+    subtotal: number
+  }>
+  subtotal: number
+  discount: number
+  tax: number
+  total: number
+  payment_method: string
+  amount_paid: number
+  change_amount: number
+  business_name: string
+  address: string
+  phone: string
+  table_number: number | null
+  table_label: string
+}
+
+interface MinimalTransaction {
+  id: string
+}
+
+interface MinimalTransactionError {
+  message: string
+}
+
 export default function CashierPage() {
   const supabase = createClient()
   const [products, setProducts] = useState<Product[]>([])
@@ -57,7 +88,7 @@ export default function CashierPage() {
   const [showPayment, setShowPayment] = useState(false)
   const [paymentLoading, setPaymentLoading] = useState(false)
   const [successMsg, setSuccessMsg] = useState('')
-  const [receiptData, setReceiptData] = useState<any>(null)
+  const [receiptData, setReceiptData] = useState<ReceiptData | null>(null)
   const [cartVisible, setCartVisible] = useState(true)
   const [effectiveUserId, setEffectiveUserId] = useState<string>('')
   const [qrisImageUrl, setQrisImageUrl] = useState<string | null>(null)
@@ -76,12 +107,14 @@ export default function CashierPage() {
   const audioContextRef = useRef<AudioContext | null>(null)
   const hasUserInteractionRef = useRef(false)
   const lastOrderSnapshotRef = useRef<string[]>([])
+  const lastOrderStatusRef = useRef<Record<string, TableOrder['status']>>({})
+  const notifiedOrderIdsRef = useRef<Set<string>>(new Set())
 
   const unlockAudio = async () => {
     if (hasUserInteractionRef.current) return
 
     try {
-      const AudioCtor = window.AudioContext || (window as any).webkitAudioContext
+      const AudioCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
       if (!AudioCtor) return
 
       const context = audioContextRef.current ?? new AudioCtor()
@@ -114,7 +147,7 @@ export default function CashierPage() {
   const playCashierTone = () => {
     const fallbackTone = () => {
       try {
-        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
+        const AudioCtx = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
         if (!AudioCtx) return
 
         const audioContext = audioContextRef.current ?? new AudioCtx()
@@ -172,7 +205,7 @@ export default function CashierPage() {
   const playClickSound = () => {
     const fallbackTone = () => {
       try {
-        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
+        const AudioCtx = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
         if (!AudioCtx) return
 
         const audioContext = audioContextRef.current ?? new AudioCtx()
@@ -272,15 +305,17 @@ export default function CashierPage() {
       const loadedOrders = (data as TableOrder[]) ?? []
       const currentIds = loadedOrders.map(order => order.id)
       const previousIds = lastOrderSnapshotRef.current
+      const previousStatuses = lastOrderStatusRef.current
 
       const newOrderIds = currentIds.filter(id => !previousIds.includes(id))
       const justCompleted = loadedOrders.filter(order => {
-        const prev = previousIds.includes(order.id)
-        return prev && order.status === 'done'
+        const prevStatus = previousStatuses[order.id]
+        return prevStatus && prevStatus !== 'done' && order.status === 'done'
       })
 
       setTableOrders(loadedOrders)
       lastOrderSnapshotRef.current = currentIds
+      lastOrderStatusRef.current = Object.fromEntries(loadedOrders.map(order => [order.id, order.status]))
 
       const nextState = {} as Record<string, 'empty' | 'occupied'>
       for (const tableNumber of tablesRef.current) {
@@ -297,8 +332,9 @@ export default function CashierPage() {
 
       if (newOrderIds.length > 0) {
         const newestNewOrder = loadedOrders.find(order => newOrderIds.includes(order.id))
-        if (newestNewOrder?.table_number) {
+        if (newestNewOrder?.id && newestNewOrder.table_number && !notifiedOrderIdsRef.current.has(newestNewOrder.id)) {
           setTableNotification({ table: newestNewOrder.table_number, message: `Pesanan meja ${newestNewOrder.table_number} masuk!` })
+          notifiedOrderIdsRef.current.add(newestNewOrder.id)
           playCashierTone()
           setTimeout(() => setTableNotification(null), 4000)
         }
@@ -306,8 +342,9 @@ export default function CashierPage() {
 
       if (justCompleted.length > 0) {
         const newestCompleted = justCompleted[0]
-        if (newestCompleted.table_number) {
+        if (newestCompleted.id && newestCompleted.table_number && !notifiedOrderIdsRef.current.has(newestCompleted.id)) {
           setTableNotification({ table: newestCompleted.table_number, message: `Meja ${newestCompleted.table_number} sudah selesai!` })
+          notifiedOrderIdsRef.current.add(newestCompleted.id)
           playCashierTone()
           setTimeout(() => setTableNotification(null), 4000)
         }
@@ -317,14 +354,16 @@ export default function CashierPage() {
     const refreshAndNotify = async (eventType: 'insert' | 'update' | 'delete', row?: Partial<TableOrder>) => {
       await loadTableOrders()
 
-      if (eventType === 'insert' && row?.table_number) {
+      if (eventType === 'insert' && row?.id && row?.table_number && !notifiedOrderIdsRef.current.has(row.id)) {
         setTableNotification({ table: row.table_number, message: `Pesanan meja ${row.table_number} masuk!` })
+        notifiedOrderIdsRef.current.add(row.id)
         playCashierTone()
         setTimeout(() => setTableNotification(null), 4000)
       }
 
-      if (eventType === 'update' && row?.table_number && row.status === 'done') {
+      if (eventType === 'update' && row?.id && row?.table_number && row.status === 'done' && !notifiedOrderIdsRef.current.has(row.id)) {
         setTableNotification({ table: row.table_number, message: `Meja ${row.table_number} sudah selesai!` })
+        notifiedOrderIdsRef.current.add(row.id)
         playCashierTone()
         setTimeout(() => setTableNotification(null), 4000)
       }
@@ -397,6 +436,7 @@ export default function CashierPage() {
 
   useEffect(() => {
     const q = search.toLowerCase()
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setFiltered(
       products.filter(p => {
         const matchName = p.name.toLowerCase().includes(q)
@@ -416,14 +456,18 @@ export default function CashierPage() {
       const raw = localStorage.getItem(`pos_carts_${effectiveUserId}`)
       if (raw) {
         const saved = JSON.parse(raw)
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         if (saved.carts) setCarts(saved.carts)
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         if (Array.isArray(saved.tables) && saved.tables.length) setTables(saved.tables)
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         if (saved.activeTable) setActiveTable(saved.activeTable)
       }
 
       const tableStateRaw = localStorage.getItem(`pos_table_states_${effectiveUserId}`)
       if (tableStateRaw) {
         const parsed = JSON.parse(tableStateRaw)
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         if (parsed && typeof parsed === 'object') setTableStates(parsed)
       }
     } catch {}
@@ -479,10 +523,6 @@ export default function CashierPage() {
     if (activeTable === key) {
       setActiveTable(remaining.length ? String(remaining[0]) : 'takeaway')
     }
-  }
-
-  const setTableAvailability = (key: string, status: 'empty' | 'occupied') => {
-    setTableStates(prev => ({ ...prev, [key]: status }))
   }
 
   const addToCart = (product: Product) => {
@@ -634,8 +674,8 @@ export default function CashierPage() {
         notes: `Pesanan meja ${currentOrder.table_number}`,
       }
 
-      let transaction: any = null
-      let txError: any = null
+      let transaction: MinimalTransaction | null = null
+      let txError: MinimalTransactionError | null = null
 
       const insertResult = await supabase
         .from('transactions')
@@ -643,8 +683,8 @@ export default function CashierPage() {
         .select()
         .single()
 
-      transaction = insertResult.data
-      txError = insertResult.error
+      transaction = (insertResult.data as MinimalTransaction | null) ?? null
+      txError = (insertResult.error as MinimalTransactionError | null) ?? null
 
       if (txError && /table_number/i.test(txError.message)) {
         const retry = await supabase
@@ -665,8 +705,8 @@ export default function CashierPage() {
           .select()
           .single()
 
-        transaction = retry.data
-        txError = retry.error
+        transaction = (retry.data as MinimalTransaction | null) ?? null
+        txError = (retry.error as MinimalTransactionError | null) ?? null
       }
 
       if (!transaction || txError) {
