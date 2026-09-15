@@ -562,15 +562,15 @@ export default function TableOrderPage() {
           </div>
 
           {hasOrderRecord && liveOrderStatus && showOrderDetail && (
-            <div className="mt-4 rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
+            <div className="mt-4 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4">
               <div className="flex items-center justify-between gap-3 mb-3">
-                <p className="text-sm font-semibold text-indigo-800">Rincian Order</p>
+                <p className="text-sm font-bold tracking-wide text-indigo-900">RINCIAN ORDER</p>
                 <span className="text-xs font-medium text-indigo-600">{orderStatusMeta[liveOrderStatus].label}</span>
               </div>
 
               {latestOrderCreatedAt && (
-                <div className="mb-3 rounded-lg border border-indigo-200 bg-white px-3 py-2 text-[11px] text-indigo-800">
-                  <span className="font-semibold">Waktu order:</span>{' '}
+                <div className="mb-3 rounded-lg border border-indigo-100 bg-white px-3 py-2 text-[11px] text-indigo-800 shadow-sm">
+                  <span className="font-semibold">WAKTU ORDER:</span>{' '}
                   {new Date(latestOrderCreatedAt).toLocaleString('id-ID', {
                     day: '2-digit',
                     month: '2-digit',
@@ -582,7 +582,7 @@ export default function TableOrderPage() {
                 </div>
               )}
 
-              <div className="rounded-lg border border-indigo-200 bg-white p-3">
+              <div className="rounded-lg border border-indigo-100 bg-white p-3 shadow-sm">
                 <div className="space-y-2 text-sm text-indigo-900">
                   {summaryItems.map(item => (
                     <div key={`${item.id}-${item.name}`} className="flex items-center justify-between gap-3">
@@ -593,17 +593,27 @@ export default function TableOrderPage() {
                     </div>
                   ))}
                 </div>
-              </div>
 
               {latestOrderNote && (
-                <div className="mt-3 rounded-lg border border-indigo-200 bg-white px-3 py-2 text-xs text-indigo-800 break-words whitespace-pre-wrap">
+                <div className="mt-3 border-t border-indigo-100 pt-3 text-xs text-indigo-800 break-words whitespace-pre-wrap">
                   <span className="font-semibold">Catatan:</span> {latestOrderNote}
                 </div>
               )}
 
-              <div className="mt-3 rounded-lg border border-indigo-200 bg-white px-3 py-2 flex items-center justify-between text-sm font-semibold text-indigo-900">
+              <div className="mt-3 border-t border-indigo-100 pt-3 flex items-center justify-between text-sm font-bold text-indigo-900">
                 <span>Total</span>
                 <span>{formatRupiah(summaryTotal)}</span>
+              </div>
+
+              {canCancelOrder && (
+                <button
+                  type="button"
+                  onClick={cancelOrder}
+                  className="mt-3 w-full rounded-lg border border-red-200 bg-red-50 py-2 text-xs font-semibold text-red-600 transition-colors hover:bg-red-100"
+                >
+                  Batal Order
+                </button>
+              )}
               </div>
             </div>
           )}
@@ -790,15 +800,6 @@ export default function TableOrderPage() {
                 </div>
               )}
             </div>
-
-            {canCancelOrder ? (
-              <button
-                onClick={cancelOrder}
-                className="w-full mt-3 bg-red-50 text-red-600 border border-red-200 rounded-xl py-3 text-sm font-semibold hover:bg-red-100 transition-colors"
-              >
-                Batal / Hapus Order
-              </button>
-            ) : null}
 
             {!hasActiveOrder || orderStatus === 'done' ? (
               <button
