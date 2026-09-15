@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { formatRupiah } from '@/lib/utils'
-import { Minus, Plus, ShoppingCart, CheckCircle2, AlertCircle } from 'lucide-react'
+import { Minus, Plus, ShoppingCart, CheckCircle2, AlertCircle, Wallet, X } from 'lucide-react'
 
 interface Product {
   id: string
@@ -41,6 +41,7 @@ export default function TableOrderPage() {
   const [customerTone, setCustomerTone] = useState('classic')
   const [latestOrderItems, setLatestOrderItems] = useState<Array<{ id: string; name: string; quantity: number; price: number; subtotal: number }>>([])
   const [latestOrderTotal, setLatestOrderTotal] = useState(0)
+  const [showPaymentSummary, setShowPaymentSummary] = useState(false)
   const audioContextRef = useRef<AudioContext | null>(null)
   const lastStatusRef = useRef<'pending' | 'processing' | 'ready' | 'done' | null>(null)
   const lastOrderIdRef = useRef<string | null>(null)
@@ -725,6 +726,143 @@ export default function TableOrderPage() {
           </aside>
         </div>
       </div>
+
+      {/* Floating Payment Button */}
+      {(totalItems > 0 || hasActiveOrder) && (
+        <button
+          onClick={() => setShowPaymentSummary(true)}
+          className="fixed bottom-6 right-6 z-50 bg-indigo-600 text-white rounded-full shadow-lg hover:bg-indigo-700 transition-all flex items-center gap-2 px-5 py-3"
+        >
+          <Wallet size={20} />
+          <span className="font-semibold text-sm">{formatRupiah(summaryTotal)}</span>
+        </button>
+      )}
+
+      {/* Payment Summary Bottom Sheet */}
+      {showPaymentSummary && (
+        <div className="fixed inset-0 z-[60] flex items-end justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setShowPaymentSummary(false)} />
+          <div className="relative bg-white rounded-2xl w-full max-w-sm mx-4 mb-2 max-h-[85vh] overflow-y-auto shadow-2xl">
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h3 className="font-bold text-gray-900">Ringkasan Pembayaran</h3>
+              <button
+                onClick={() => setShowPaymentSummary(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+
+              {/* Rincian Order */}
+              <div className="rounded-xl border border-gray-200 bg-white p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-2">
+                  Rincian Order
+                </p>
+                <div className="space-y-2">
+                  {summaryItems.map(item => (
+                    <div key={`${item.id}-${item.name}`} className="flex items-center justify-between gap-3 text-xs">
+                      <span className="text-gray-700">
+                        {item.name} <span className="text-gray-400">x{item.quantity}</span>
+                      </span>
+                      <span className="font-semibold text-gray-900">{formatRupiah(item.subtotal)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Rincian Harga */}
+              <div className="bg-gray-50 rounded-xl px-4 py-3 space-y-1.5">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Subtotal</span>
+                  <span className="text-gray-700">{formatRupiah(summaryTotal)}</span>
+                </div>
+                <div className="flex justify-between text-base font-bold border-t border-gray-200 pt-2 mt-1">
+                  <span className="text-gray-800">Total</span>
+                  <span className="text-indigo-700">{formatRupiah(summaryTotal)}</span>
+                </div>
+              </div>
+
+              {/* Metode Bayar */}
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Metode Bayar</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {(['cash', 'qris'] as const).map(method => (
+                    <button
+                      key={method}
+                      type="button"
+                      onClick={() => {
+                        setPaymentMethod(method)
+                      }}
+                      className={`rounded-lg px-3 py-3 text-sm font-semibold transition-colors ${
+                        paymentMethod === method
+                          ? 'bg-indigo-600 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      {method === 'cash' ? 'Tunai' : 'QRIS'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* QRIS */}
+              {paymentMethod === 'qris' && (
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Scan QRIS</p>
+                  {qrisImageUrl ? (
+                    <div className="flex flex-col items-center bg-gray-50 rounded-xl p-4">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={qrisImageUrl}
+                        alt="QRIS Pembayaran"
+                        className="w-48 h-48 object-contain rounded-lg bg-white"
+                      />
+                      <p className="text-xs text-gray-500 mt-3">Scan & bayar sejumlah</p>
+                      <p className="text-lg font-bold text-indigo-700">{formatRupiah(summaryTotal)}</p>
+                    </div>
+                  ) : (
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-center">
+                      <p className="text-sm text-amber-700 font-medium">QRIS belum diatur</p>
+                      <p className="text-xs text-amber-600 mt-1">
+                        Unggah gambar QRIS di menu Pengaturan terlebih dahulu.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Status Pesanan */}
+              {hasOrderRecord && liveOrderStatus && (
+                <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-700">
+                  Status pesanan: <span className="font-semibold">{orderStatusMeta[liveOrderStatus].label}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Tombol Bayar */}
+            <div className="px-5 pb-5">
+              <button
+                onClick={() => {
+                  setShowPaymentSummary(false)
+                  submitOrder()
+                }}
+                disabled={submitting || totalItems === 0}
+                className="w-full bg-indigo-600 text-white py-3 rounded-xl font-semibold text-sm hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+              >
+                {submitting
+                  ? 'Memproses...'
+                  : paymentMethod === 'qris'
+                    ? `Bayar ${formatRupiah(summaryTotal)} via QRIS`
+                    : `Bayar ${formatRupiah(summaryTotal)}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

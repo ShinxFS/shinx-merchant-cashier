@@ -42,8 +42,8 @@ const compressImage = (file: File, quality = 0.75): Promise<File> => {
       img.onload = () => {
         const canvas = document.createElement('canvas')
 
-        // Max dimensi 320px
-        const MAX_SIZE = 320
+        // Max dimensi 1000px
+        const MAX_SIZE = 1000
         let { width, height } = img
         if (width > MAX_SIZE || height > MAX_SIZE) {
           if (width > height) {
@@ -135,9 +135,19 @@ export default function ProductFormModal({ product, categories, onClose }: Props
     const { error } = await supabase.storage
       .from('product-images')
       .upload(path, imageFile, { upsert: true })
-    if (error) return null
+    if (error) throw new Error(`Gagal mengunggah gambar: ${error.message}`)
     const { data } = supabase.storage.from('product-images').getPublicUrl(path)
     return data.publicUrl
+  }
+
+  const getStoragePath = (url: string | null) => {
+    if (!url) return null
+
+    const marker = '/storage/v1/object/public/product-images/'
+    const markerIndex = url.indexOf(marker)
+    if (markerIndex === -1) return null
+
+    return decodeURIComponent(url.slice(markerIndex + marker.length))
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -148,7 +158,14 @@ export default function ProductFormModal({ product, categories, onClose }: Props
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    const imageUrl = await uploadImage(user.id)
+    let imageUrl: string | null
+    try {
+      imageUrl = await uploadImage(user.id)
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : 'Gagal mengunggah gambar')
+      setLoading(false)
+      return
+    }
 
     const payload = {
       name: form.name,
@@ -167,6 +184,11 @@ export default function ProductFormModal({ product, categories, onClose }: Props
     if (isEdit) {
       const { error } = await supabase.from('products').update(payload).eq('id', product.id)
       if (error) { setError(error.message); setLoading(false); return }
+
+      if (imageFile && product.image_url && product.image_url !== imageUrl) {
+        const oldPath = getStoragePath(product.image_url)
+        if (oldPath) await supabase.storage.from('product-images').remove([oldPath])
+      }
     } else {
       const { error } = await supabase.from('products').insert({ ...payload, user_id: user.id })
       if (error) { setError(error.message); setLoading(false); return }
