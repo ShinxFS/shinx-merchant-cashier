@@ -46,6 +46,7 @@ export default function TableOrderPage() {
   const lastStatusRef = useRef<'pending' | 'processing' | 'ready' | 'done' | null>(null)
   const lastOrderIdRef = useRef<string | null>(null)
   const hasUserInteractionRef = useRef(false)
+  const orderDetailUserOverrideRef = useRef(false)
 
   const unlockAudio = async () => {
     if (hasUserInteractionRef.current) return
@@ -248,7 +249,13 @@ export default function TableOrderPage() {
         setPaymentMethod(latest.payment_method ?? 'cash')
         setLatestOrderItems(items)
         setLatestOrderTotal(Number(latest.total ?? items.reduce((sum, item) => sum + item.subtotal, 0)))
-        setShowOrderDetail(Boolean(latest.id) && nextStatus !== 'done')
+
+        if (nextStatus === 'done') {
+          orderDetailUserOverrideRef.current = false
+          setShowOrderDetail(false)
+        } else if (!orderDetailUserOverrideRef.current) {
+          setShowOrderDetail(Boolean(latest.id))
+        }
       } else {
         setOrderId(null)
         setOrderStatus(null)
@@ -256,6 +263,7 @@ export default function TableOrderPage() {
         lastOrderIdRef.current = null
         setLatestOrderItems([])
         setLatestOrderTotal(0)
+        orderDetailUserOverrideRef.current = false
         setShowOrderDetail(false)
       }
     }
@@ -315,7 +323,9 @@ export default function TableOrderPage() {
   const liveOrderStatus = orderStatus ?? (orderId ? 'pending' : null)
   const hasOrderRecord = Boolean(orderId || latestOrderItems.length > 0 || liveOrderStatus)
   const hasActiveOrder = Boolean(orderId || latestOrderItems.length > 0 || (liveOrderStatus && liveOrderStatus !== 'done'))
-  const isOrderLocked = Boolean(hasActiveOrder && liveOrderStatus && liveOrderStatus !== 'done')
+  const canCancelOrder = Boolean(liveOrderStatus === 'pending')
+  const isOrderLocked = Boolean(hasActiveOrder && liveOrderStatus && liveOrderStatus !== 'done' && liveOrderStatus !== 'pending')
+  const canShowPaymentButton = !hasOrderRecord && !isOrderLocked && totalItems > 0
   const summaryItems = latestOrderItems.length > 0 ? latestOrderItems : orderReview.map(product => ({
     id: product.id,
     name: product.name,
@@ -327,11 +337,11 @@ export default function TableOrderPage() {
 
   const orderStatusMeta: Record<NonNullable<typeof orderStatus>, { label: string; className: string }> = {
     pending: {
-      label: paymentMethod === 'qris' ? 'Menunggu konfirmasi bayar' : 'Masih diproses',
+      label: 'Menunggu konfirmasi',
       className: 'bg-amber-100 text-amber-700 border border-amber-200 shadow-[0_0_0_4px_rgba(251,191,36,0.12)] animate-pulse',
     },
     processing: { label: 'Sedang diproses', className: 'bg-blue-100 text-blue-700 border border-blue-200 shadow-[0_0_0_4px_rgba(59,130,246,0.12)] animate-pulse' },
-    ready: { label: 'Sudah siap', className: 'bg-emerald-100 text-emerald-700 border border-emerald-200 shadow-[0_0_0_4px_rgba(16,185,129,0.12)] animate-bounce' },
+    ready: { label: 'Sudah siap', className: 'bg-emerald-100 text-emerald-700 border border-emerald-200 shadow-[0_0_0_4px_rgba(16,185,129,0.12)] animate-pulse' },
     done: { label: 'Selesai', className: 'bg-slate-200 text-slate-700 border border-slate-300' },
   }
 
@@ -435,6 +445,7 @@ export default function TableOrderPage() {
     setOrderStatus('pending')
     setLatestOrderItems(orderItems)
     setLatestOrderTotal(subtotal)
+    orderDetailUserOverrideRef.current = false
     setShowOrderDetail(true)
     setSuccess(
       paymentMethod === 'qris'
@@ -445,8 +456,8 @@ export default function TableOrderPage() {
   }
 
   const cancelOrder = async () => {
-    if (isOrderLocked) {
-      setError('Order sedang diproses, pembatalan tidak tersedia.')
+    if (!canCancelOrder) {
+      setError('Order sudah diproses oleh kasir, pembatalan tidak tersedia.')
       return
     }
 
@@ -469,6 +480,7 @@ export default function TableOrderPage() {
     setOrderStatus(null)
     setLatestOrderItems([])
     setLatestOrderTotal(0)
+    orderDetailUserOverrideRef.current = false
     setShowOrderDetail(false)
     setSuccess(`✅ Pesanan meja ${tableNumber} berhasil dibatalkan.`)
     setError('')
@@ -523,7 +535,10 @@ export default function TableOrderPage() {
               {hasActiveOrder && liveOrderStatus && liveOrderStatus !== 'done' && (
                 <button
                   type="button"
-                  onClick={() => setShowOrderDetail(value => !value)}
+                  onClick={() => {
+                    orderDetailUserOverrideRef.current = true
+                    setShowOrderDetail(value => !value)
+                  }}
                   className="bg-slate-900 text-white rounded-full px-3 py-1.5 text-xs font-semibold hover:bg-slate-700 transition-colors"
                 >
                   {showOrderDetail ? 'Sembunyikan Detail' : 'Lihat Detail'}
@@ -724,7 +739,7 @@ export default function TableOrderPage() {
               )}
             </div>
 
-            {hasActiveOrder && orderStatus === 'pending' ? (
+            {canCancelOrder ? (
               <button
                 onClick={cancelOrder}
                 className="w-full mt-3 bg-red-50 text-red-600 border border-red-200 rounded-xl py-3 text-sm font-semibold hover:bg-red-100 transition-colors"
@@ -753,7 +768,7 @@ export default function TableOrderPage() {
       </div>
 
       {/* Floating Payment Button */}
-      {!isOrderLocked && (totalItems > 0 || hasActiveOrder) && (
+      {canShowPaymentButton && (
         <button
           onClick={() => setShowPaymentSummary(true)}
           className="fixed bottom-6 right-6 z-50 bg-indigo-600 text-white rounded-full shadow-lg hover:bg-indigo-700 transition-all flex items-center gap-2 px-5 py-3"
