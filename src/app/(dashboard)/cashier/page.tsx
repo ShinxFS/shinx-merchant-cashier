@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { generateInvoice } from '@/lib/utils'
 import ProductCard from '@/components/cashier/ProductCard'
 import CartItem, { CartItemType } from '@/components/cashier/CartItem'
-import PaymentModal from '@/components/cashier/PaymentModal'
+import PaymentModal, { PaymentAccount } from '@/components/cashier/PaymentModal'
 import ReceiptModal from '@/components/cashier/ReceiptModal'
 import BarcodeScanner from '@/components/cashier/BarcodeScanner'
 import { Search, ShoppingCart, Trash2, ChevronRight, ChevronLeft, ScanLine, Plus, X, Bell } from 'lucide-react'
@@ -56,6 +56,7 @@ interface ReceiptData {
   tax: number
   total: number
   payment_method: string
+  payment_account?: string | null
   amount_paid: number
   change_amount: number
   business_name: string
@@ -92,6 +93,7 @@ export default function CashierPage() {
   const [cartVisible, setCartVisible] = useState(true)
   const [effectiveUserId, setEffectiveUserId] = useState<string>('')
   const [qrisImageUrl, setQrisImageUrl] = useState<string | null>(null)
+  const [paymentAccounts, setPaymentAccounts] = useState<PaymentAccount[]>([])
   const [tableOrders, setTableOrders] = useState<TableOrder[]>([])
   const [tableNotification, setTableNotification] = useState<{ table: number; message: string } | null>(null)
   const [tableStates, setTableStates] = useState<Record<string, 'empty' | 'occupied'>>({})
@@ -282,6 +284,13 @@ export default function CashierPage() {
         setCashierSoundUrl(prof.cashier_sound_url ?? null)
         setCashierTone(prof.cashier_tone ?? 'classic')
       }
+
+      const { data: accounts } = await supabase
+        .from('payment_accounts')
+        .select('id, bank_name, account_number, account_name')
+        .eq('user_id', targetUserId)
+        .order('created_at')
+      setPaymentAccounts(accounts ?? [])
     }
     load()
   }, [])
@@ -777,7 +786,8 @@ export default function CashierPage() {
     method: string,
     amountPaid: number,
     discount: number,
-    tax: number
+    tax: number,
+    paymentAccount: PaymentAccount | null,
   ) => {
     playClickSound()
     setPaymentLoading(true)
@@ -799,6 +809,9 @@ export default function CashierPage() {
       tax,
       total,
       payment_method: method,
+      payment_account: paymentAccount
+        ? `${paymentAccount.bank_name} · ${paymentAccount.account_number} · a.n. ${paymentAccount.account_name}`
+        : null,
       amount_paid: amountPaid,
       change_amount: change,
     }
@@ -871,6 +884,9 @@ export default function CashierPage() {
       tax,
       total,
       payment_method: method,
+      payment_account: paymentAccount
+        ? `${paymentAccount.bank_name} · ${paymentAccount.account_number} · a.n. ${paymentAccount.account_name}`
+        : null,
       amount_paid: amountPaid,
       change_amount: change,
       business_name: businessProfile.business_name,
@@ -1260,6 +1276,7 @@ export default function CashierPage() {
           }}
           loading={paymentLoading}
           qrisImageUrl={qrisImageUrl}
+          paymentAccounts={paymentAccounts}
           onSound={playClickSound}
         />
       )}

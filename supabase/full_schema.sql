@@ -69,6 +69,37 @@ create trigger on_auth_user_created
 -- =============================================
 -- 2. TABEL: categories
 -- =============================================
+create table if not exists public.payment_accounts (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  bank_name text not null,
+  account_number text not null,
+  account_name text not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists payment_accounts_user_id_idx on public.payment_accounts (user_id);
+
+alter table public.payment_accounts enable row level security;
+
+drop policy if exists "payment_accounts_own" on public.payment_accounts;
+create policy "payment_accounts_own" on public.payment_accounts
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+drop policy if exists "payment_accounts_staff_read" on public.payment_accounts;
+create policy "payment_accounts_staff_read" on public.payment_accounts
+  for select using (
+    exists (
+      select 1 from public.profiles p
+      where p.id = auth.uid()
+        and p.role = 'staff'
+        and p.owner_id = payment_accounts.user_id
+    )
+  );
+
+-- =============================================
+-- 2.1 TABEL: categories
+-- =============================================
 create table if not exists public.categories (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.profiles(id) on delete cascade,
@@ -123,6 +154,7 @@ create table if not exists public.transactions (
   tax numeric not null default 0,
   total numeric not null default 0,
   payment_method text not null default 'cash' check (payment_method in ('cash', 'transfer', 'qris')),
+  payment_account text,
   amount_paid numeric not null default 0,
   change_amount numeric not null default 0,
   table_number integer,

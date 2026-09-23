@@ -109,7 +109,7 @@ export default function ReportsPage() {
           cogs,
           grossProfit,
           expenses,
-          profit: revenue - expenses,
+          profit: grossProfit - expenses,
           transactions: txData?.length ?? 0,
         }
       }))

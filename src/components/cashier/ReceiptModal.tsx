@@ -21,6 +21,7 @@ interface ReceiptData {
   tax: number
   total: number
   payment_method: string
+  payment_account?: string | null
   amount_paid: number
   change_amount: number
   business_name: string
@@ -209,6 +210,11 @@ export default function ReceiptModal({
                 <span>Bayar ({paymentLabel[data.payment_method]})</span>
                 <span>{formatRupiah(data.amount_paid)}</span>
               </div>
+              {data.payment_method === 'transfer' && data.payment_account && (
+                <div className="text-gray-600">
+                  <span>Rekening: </span><span>{data.payment_account}</span>
+                </div>
+              )}
               {data.payment_method === 'cash' && (
                 <div className="flex justify-between text-green-600 font-medium">
                   <span>Kembali</span><span>{formatRupiah(data.change_amount)}</span>

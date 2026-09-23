@@ -104,6 +104,15 @@ export default function ExpensesPage() {
   const formatDate = (str: string) =>
     new Date(str).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
 
+  const formatCreatedAt = (str: string) =>
+    new Date(str).toLocaleString('id-ID', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+
   return (
     <div className="p-6 max-w-4xl mx-auto">
 
@@ -190,6 +199,7 @@ export default function ExpensesPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         <p className="text-xs text-gray-400">{formatDate(expense.date)}</p>
+                        <p className="text-xs text-gray-400">· Dibuat {formatCreatedAt(expense.created_at)}</p>
                         {expense.notes && (
                           <p className="text-xs text-gray-400 truncate">· {expense.notes}</p>
                         )}

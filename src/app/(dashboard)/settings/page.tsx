@@ -10,6 +10,13 @@ interface Category {
   color: string
 }
 
+interface PaymentAccount {
+  id: string
+  bank_name: string
+  account_number: string
+  account_name: string
+}
+
 const PRESET_COLORS = [
   '#6366f1', '#8b5cf6', '#ec4899', '#ef4444',
   '#f97316', '#eab308', '#22c55e', '#14b8a6',
@@ -34,6 +41,9 @@ export default function SettingsPage() {
     address: '',
   })
   const [categories, setCategories] = useState<Category[]>([])
+  const [paymentAccounts, setPaymentAccounts] = useState<PaymentAccount[]>([])
+  const [accountForm, setAccountForm] = useState({ bank_name: '', account_number: '', account_name: '' })
+  const [accountSaving, setAccountSaving] = useState(false)
   const [newCatName, setNewCatName] = useState('')
   const [newCatColor, setNewCatColor] = useState('#6366f1')
   const [loading, setLoading] = useState(false)
@@ -56,9 +66,10 @@ export default function SettingsPage() {
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-      const [{ data: prof }, { data: cats }] = await Promise.all([
+      const [{ data: prof }, { data: cats }, { data: accounts }] = await Promise.all([
         supabase.from('profiles').select('*').eq('id', user.id).single(),
         supabase.from('categories').select('*').eq('user_id', user.id).order('name'),
+        supabase.from('payment_accounts').select('id, bank_name, account_number, account_name').eq('user_id', user.id).order('created_at'),
       ])
       if (prof) {
         setProfile({
@@ -74,6 +85,7 @@ export default function SettingsPage() {
         setCustomerTone(prof.customer_tone ?? 'classic')
       }
       setCategories(cats ?? [])
+      setPaymentAccounts(accounts ?? [])
 
       const links = Object.fromEntries(
         [1, 2, 3, 4].map(table => {
@@ -96,6 +108,39 @@ export default function SettingsPage() {
     setLoading(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 3000)
+  }
+
+  const handleAddPaymentAccount = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!accountForm.bank_name.trim() || !accountForm.account_number.trim() || !accountForm.account_name.trim()) return
+    setAccountSaving(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setAccountSaving(false); return }
+
+    const { data, error } = await supabase
+      .from('payment_accounts')
+      .insert({
+        user_id: user.id,
+        bank_name: accountForm.bank_name.trim(),
+        account_number: accountForm.account_number.trim(),
+        account_name: accountForm.account_name.trim(),
+      })
+      .select('id, bank_name, account_number, account_name')
+      .single()
+
+    if (error) {
+      alert('Gagal menyimpan rekening: ' + error.message)
+    } else if (data) {
+      setPaymentAccounts(prev => [...prev, data])
+      setAccountForm({ bank_name: '', account_number: '', account_name: '' })
+    }
+    setAccountSaving(false)
+  }
+
+  const handleDeletePaymentAccount = async (id: string) => {
+    if (!confirm('Hapus rekening ini?')) return
+    await supabase.from('payment_accounts').delete().eq('id', id)
+    setPaymentAccounts(prev => prev.filter(account => account.id !== id))
   }
 
   const handleUploadQris = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -301,6 +346,66 @@ export default function SettingsPage() {
             {loading ? 'Menyimpan...' : 'Simpan Perubahan'}
           </button>
         </form>
+      </div>
+
+      {/* Rekening Transfer */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <h2 className="font-semibold text-gray-800 mb-1">Rekening Transfer</h2>
+        <p className="text-sm text-gray-400 mb-4">
+          Rekening ini akan muncul di kasir saat metode pembayaran Transfer dipilih.
+        </p>
+
+        <form onSubmit={handleAddPaymentAccount} className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+          <input
+            required
+            value={accountForm.bank_name}
+            onChange={e => setAccountForm(prev => ({ ...prev, bank_name: e.target.value }))}
+            placeholder="Nama bank"
+            className={inputClass}
+          />
+          <input
+            required
+            value={accountForm.account_number}
+            onChange={e => setAccountForm(prev => ({ ...prev, account_number: e.target.value }))}
+            placeholder="Nomor rekening"
+            className={inputClass}
+          />
+          <input
+            required
+            value={accountForm.account_name}
+            onChange={e => setAccountForm(prev => ({ ...prev, account_name: e.target.value }))}
+            placeholder="Nama pemilik rekening"
+            className={inputClass}
+          />
+          <button
+            type="submit"
+            disabled={accountSaving}
+            className="sm:col-span-3 flex items-center justify-center gap-1.5 bg-indigo-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+          >
+            <Plus size={15} /> {accountSaving ? 'Menyimpan...' : 'Tambah Rekening'}
+          </button>
+        </form>
+
+        {paymentAccounts.length > 0 && (
+          <div className="space-y-2">
+            {paymentAccounts.map(account => (
+              <div key={account.id} className="flex items-center justify-between gap-3 rounded-lg bg-gray-50 border border-gray-200 px-3 py-2.5">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-gray-800">{account.bank_name} · {account.account_number}</p>
+                  <p className="text-xs text-gray-500">a.n. {account.account_name}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void handleDeletePaymentAccount(account.id)}
+                  className="text-gray-300 hover:text-red-400 transition-colors"
+                  aria-label={`Hapus rekening ${account.bank_name}`}
+                >
+                  <Trash2 size={15} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* QRIS Pembayaran */}

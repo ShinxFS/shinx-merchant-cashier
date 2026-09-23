@@ -4,11 +4,19 @@ import { X, Banknote, CreditCard, Tag, Percent, QrCode } from 'lucide-react'
 
 interface Props {
   subtotal: number
-  onConfirm: (method: string, amountPaid: number, discount: number, tax: number) => void
+  onConfirm: (method: string, amountPaid: number, discount: number, tax: number, paymentAccount: PaymentAccount | null) => void
   onClose: () => void
   loading: boolean
   qrisImageUrl?: string | null
+  paymentAccounts?: PaymentAccount[]
   onSound?: () => void
+}
+
+export interface PaymentAccount {
+  id: string
+  bank_name: string
+  account_number: string
+  account_name: string
 }
 
 const paymentMethods = [
@@ -19,12 +27,13 @@ const paymentMethods = [
 
 const inputClass = "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
 
-export default function PaymentModal({ subtotal, onConfirm, onClose, loading, qrisImageUrl, onSound }: Props) {
+export default function PaymentModal({ subtotal, onConfirm, onClose, loading, qrisImageUrl, paymentAccounts = [], onSound }: Props) {
   const [method, setMethod] = useState('cash')
   const [amountPaid, setAmountPaid] = useState('')
   const [discountType, setDiscountType] = useState<'nominal' | 'percent'>('nominal')
   const [discountValue, setDiscountValue] = useState('')
   const [taxPercent, setTaxPercent] = useState('')
+  const [selectedAccountId, setSelectedAccountId] = useState('')
 
   const discountAmount = discountValue === ''
     ? 0
@@ -78,31 +87,35 @@ export default function PaymentModal({ subtotal, onConfirm, onClose, loading, qr
               <p className="text-xs font-semibold text-gray-500 uppercase">Diskon</p>
             </div>
             <div className="flex gap-2">
-              <div className="flex rounded-lg border border-gray-300 overflow-hidden text-xs">
+              <div className="flex h-[42px] w-24 shrink-0 rounded-lg border border-gray-300 bg-gray-50 p-1 text-xs" role="group" aria-label="Jenis diskon">
                 <button
+                  type="button"
                   onClick={() => {
                     triggerSound()
                     setDiscountType('nominal')
                     setDiscountValue('')
                   }}
-                  className={`px-3 py-1.5 font-medium transition-colors ${
+                  aria-pressed={discountType === 'nominal'}
+                  className={`flex-1 rounded-md font-semibold transition-colors ${
                     discountType === 'nominal'
-                      ? 'bg-indigo-600 text-white'
-                      : 'text-gray-600 hover:bg-gray-50'
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'text-gray-500 hover:bg-white hover:text-gray-800'
                   }`}
                 >
                   Rp
                 </button>
                 <button
+                  type="button"
                   onClick={() => {
                     triggerSound()
                     setDiscountType('percent')
                     setDiscountValue('')
                   }}
-                  className={`px-3 py-1.5 font-medium transition-colors ${
+                  aria-pressed={discountType === 'percent'}
+                  className={`flex-1 rounded-md font-semibold transition-colors ${
                     discountType === 'percent'
-                      ? 'bg-indigo-600 text-white'
-                      : 'text-gray-600 hover:bg-gray-50'
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'text-gray-500 hover:bg-white hover:text-gray-800'
                   }`}
                 >
                   %
@@ -187,6 +200,38 @@ export default function PaymentModal({ subtotal, onConfirm, onClose, loading, qr
             </div>
           </div>
 
+          {/* Rekening Transfer */}
+          {method === 'transfer' && (
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Pilih Rekening Tujuan</p>
+              {paymentAccounts.length > 0 ? (
+                <div className="space-y-2">
+                  {paymentAccounts.map(account => (
+                    <button
+                      type="button"
+                      key={account.id}
+                      onClick={() => {
+                        triggerSound()
+                        setSelectedAccountId(account.id)
+                      }}
+                      aria-pressed={selectedAccountId === account.id}
+                      className={`w-full text-left rounded-xl border px-3 py-2.5 transition-colors ${selectedAccountId === account.id ? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-100' : 'border-gray-200 bg-white hover:border-indigo-300'}`}
+                    >
+                      <p className="text-sm font-semibold text-indigo-900">{account.bank_name}</p>
+                      <p className="text-sm text-indigo-800 tracking-wide">{account.account_number}</p>
+                      <p className="text-xs text-indigo-600">a.n. {account.account_name}</p>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
+                  <p className="text-sm font-medium text-amber-700">Belum ada rekening transfer</p>
+                  <p className="text-xs text-amber-600 mt-1">Tambahkan rekening di menu Pengaturan.</p>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Jumlah Bayar (tunai) */}
           {method === 'cash' && (
             <div>
@@ -263,12 +308,19 @@ export default function PaymentModal({ subtotal, onConfirm, onClose, loading, qr
           <button
             onClick={() => {
               triggerSound()
-              onConfirm(method, method === 'cash' ? paid : total, discountAmount, taxAmount)
+              onConfirm(
+                method,
+                method === 'cash' ? paid : total,
+                discountAmount,
+                taxAmount,
+                paymentAccounts.find(account => account.id === selectedAccountId) ?? null,
+              )
             }}
             disabled={
               loading ||
               (method === 'cash' && paid < total) ||
               (method === 'qris' && !qrisImageUrl) ||
+              (method === 'transfer' && !selectedAccountId) ||
               total <= 0
             }
             className="w-full bg-indigo-600 text-white py-3 rounded-xl font-semibold text-sm hover:bg-indigo-700 disabled:opacity-50 transition-colors"

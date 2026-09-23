@@ -22,6 +22,7 @@ interface Transaction {
   discount: number
   tax: number
   payment_method: string
+  payment_account: string | null
   amount_paid: number
   change_amount: number
   notes: string | null
@@ -264,6 +265,12 @@ export default function TransactionsPage() {
                         <span className="text-gray-500">Metode</span>
                         <span className="text-gray-700">{paymentLabel[tx.payment_method] ?? tx.payment_method}</span>
                       </div>
+                      {tx.payment_method === 'transfer' && tx.payment_account && (
+                        <div className="flex justify-between gap-4 text-sm">
+                          <span className="text-gray-500">Rekening</span>
+                          <span className="text-gray-700 text-right">{tx.payment_account}</span>
+                        </div>
+                      )}
 
                       {/* Laba — hanya owner */}
                       {isOwner && (
