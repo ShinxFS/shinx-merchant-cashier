@@ -7,8 +7,13 @@ import {
   Package,
   TrendingUp,
   Banknote,
-  ArrowUpRight
+  ArrowUpRight,
+  TrendingDown,
+  WalletCards,
+  CircleDollarSign,
 } from 'lucide-react'
+
+type CashflowPeriod = 'today' | '7days' | 'month'
 
 interface Stats {
   todayRevenue: number
@@ -25,6 +30,13 @@ interface RecentTransaction {
   created_at: string
 }
 
+interface CashflowStats {
+  revenue: number
+  expenses: number
+  cogs: number
+  netProfit: number
+}
+
 export default function DashboardPage() {
   const supabase = createClient()
   const [stats, setStats] = useState<Stats>({
@@ -36,6 +48,8 @@ export default function DashboardPage() {
   const [recent, setRecent] = useState<RecentTransaction[]>([])
   const [businessName, setBusinessName] = useState('')
   const [loading, setLoading] = useState(true)
+  const [cashflowPeriod, setCashflowPeriod] = useState<CashflowPeriod>('month')
+  const [cashflow, setCashflow] = useState<CashflowStats>({ revenue: 0, expenses: 0, cogs: 0, netProfit: 0 })
 
   useEffect(() => {
     const load = async () => {
@@ -87,6 +101,43 @@ export default function DashboardPage() {
         .order('created_at', { ascending: false })
         .limit(5)
 
+      const cashflowStart = new Date()
+      if (cashflowPeriod === 'today') {
+        cashflowStart.setHours(0, 0, 0, 0)
+      } else if (cashflowPeriod === '7days') {
+        cashflowStart.setDate(cashflowStart.getDate() - 6)
+        cashflowStart.setHours(0, 0, 0, 0)
+      } else {
+        cashflowStart.setDate(1)
+        cashflowStart.setHours(0, 0, 0, 0)
+      }
+
+      const [{ data: cashflowTx }, { data: cashflowExpenses }] = await Promise.all([
+        supabase
+          .from('transactions')
+          .select('id, total')
+          .eq('user_id', user.id)
+          .gte('created_at', cashflowStart.toISOString()),
+        supabase
+          .from('expenses')
+          .select('amount')
+          .eq('user_id', user.id)
+          .gte('date', cashflowStart.toISOString().split('T')[0]),
+      ])
+
+      const transactionIds = cashflowTx?.map(transaction => transaction.id) ?? []
+      const { data: cashflowItems } = transactionIds.length > 0
+        ? await supabase
+            .from('transaction_items')
+            .select('cost_price, quantity')
+            .in('transaction_id', transactionIds)
+        : { data: [] }
+
+      const revenue = cashflowTx?.reduce((sum, transaction) => sum + transaction.total, 0) ?? 0
+      const expenses = cashflowExpenses?.reduce((sum, expense) => sum + expense.amount, 0) ?? 0
+      const cogs = cashflowItems?.reduce((sum, item) => sum + (item.cost_price ?? 0) * item.quantity, 0) ?? 0
+      setCashflow({ revenue, expenses, cogs, netProfit: revenue - cogs - expenses })
+
       setStats({
         todayRevenue: todayTx?.reduce((s, t) => s + t.total, 0) ?? 0,
         todayTransactions: todayTx?.length ?? 0,
@@ -97,7 +148,7 @@ export default function DashboardPage() {
       setLoading(false)
     }
     load()
-  }, [])
+  }, [cashflowPeriod])
 
   const formatRupiah = (n: number) =>
     new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n)
@@ -110,6 +161,13 @@ export default function DashboardPage() {
     { label: 'Transaksi Hari Ini', value: stats.todayTransactions, icon: ShoppingCart, color: 'text-blue-600', bg: 'bg-blue-50' },
     { label: 'Total Produk Aktif', value: stats.totalProducts, icon: Package, color: 'text-purple-600', bg: 'bg-purple-50' },
     { label: 'Pendapatan Bulan Ini', value: formatRupiah(stats.monthRevenue), icon: TrendingUp, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+  ]
+
+  const cashflowCards = [
+    { label: 'Pendapatan', value: cashflow.revenue, icon: Banknote, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+    { label: 'Pengeluaran', value: cashflow.expenses, icon: TrendingDown, color: 'text-red-600', bg: 'bg-red-50' },
+    { label: 'HPP', value: cashflow.cogs, icon: WalletCards, color: 'text-orange-600', bg: 'bg-orange-50' },
+    { label: 'Laba Bersih', value: cashflow.netProfit, icon: CircleDollarSign, color: cashflow.netProfit >= 0 ? 'text-green-600' : 'text-red-600', bg: cashflow.netProfit >= 0 ? 'bg-green-50' : 'bg-red-50' },
   ]
 
   if (loading) {
@@ -141,6 +199,39 @@ export default function DashboardPage() {
             <p className="text-xs text-gray-500 mt-0.5">{label}</p>
           </div>
         ))}
+      </div>
+
+      {/* Cash Flow */}
+      <div className="bg-white rounded-xl border border-gray-200 mb-8">
+        <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between gap-4">
+          <div>
+            <h2 className="font-semibold text-gray-800">Cash Flow</h2>
+            <p className="text-xs text-gray-400 mt-0.5">Ringkasan pendapatan, biaya, dan laba bersih</p>
+          </div>
+          <select
+            value={cashflowPeriod}
+            onChange={e => setCashflowPeriod(e.target.value as CashflowPeriod)}
+            className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            aria-label="Periode arus kas"
+          >
+            <option value="today">Hari ini</option>
+            <option value="7days">7 Hari</option>
+            <option value="month">Bulan ini</option>
+          </select>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 p-5">
+          {cashflowCards.map(({ label, value, icon: Icon, color, bg }) => (
+            <div key={label} className="rounded-xl border border-gray-200 p-4">
+              <div className={`w-8 h-8 ${bg} rounded-lg flex items-center justify-center mb-3`}>
+                <Icon size={16} className={color} />
+              </div>
+              <p className={`text-lg font-bold ${label === 'Laba Bersih' && cashflow.netProfit < 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                {formatRupiah(value)}
+              </p>
+              <p className="text-xs text-gray-500 mt-0.5">{label}</p>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Transaksi Terbaru */}
