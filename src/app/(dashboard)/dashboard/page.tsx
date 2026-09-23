@@ -115,6 +115,20 @@ export default function DashboardPage() {
         cashflowStart.setHours(0, 0, 0, 0)
       }
 
+      const cashflowEnd = new Date()
+      if (cashflowPeriod === 'month') {
+        cashflowEnd.setMonth(cashflowEnd.getMonth() + 1, 1)
+      } else {
+        cashflowEnd.setDate(cashflowEnd.getDate() + 1)
+      }
+      cashflowEnd.setHours(0, 0, 0, 0)
+      const formatLocalDate = (date: Date) => {
+        const year = date.getFullYear()
+        const month = String(date.getMonth() + 1).padStart(2, '0')
+        const day = String(date.getDate()).padStart(2, '0')
+        return `${year}-${month}-${day}`
+      }
+
       const [{ data: cashflowTx }, { data: cashflowExpenses }] = await Promise.all([
         supabase
           .from('transactions')
@@ -125,7 +139,8 @@ export default function DashboardPage() {
           .from('expenses')
           .select('amount')
           .eq('user_id', user.id)
-          .gte('date', cashflowStart.toISOString().split('T')[0]),
+          .gte('date', formatLocalDate(cashflowStart))
+          .lt('date', formatLocalDate(cashflowEnd)),
       ])
 
       const transactionIds = cashflowTx?.map(transaction => transaction.id) ?? []
