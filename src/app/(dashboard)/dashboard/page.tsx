@@ -11,6 +11,8 @@ import {
   TrendingDown,
   WalletCards,
   CircleDollarSign,
+  Eye,
+  EyeOff,
 } from 'lucide-react'
 
 type CashflowPeriod = 'today' | '7days' | 'month'
@@ -50,6 +52,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [cashflowPeriod, setCashflowPeriod] = useState<CashflowPeriod>('month')
   const [cashflow, setCashflow] = useState<CashflowStats>({ revenue: 0, expenses: 0, cogs: 0, netProfit: 0 })
+  const [cashflowVisible, setCashflowVisible] = useState(false)
 
   useEffect(() => {
     const load = async () => {
@@ -205,32 +208,52 @@ export default function DashboardPage() {
       <div className="bg-white rounded-xl border border-gray-200 mb-8">
         <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between gap-4">
           <div>
-            <h2 className="font-semibold text-gray-800">Cash Flow</h2>
-            <p className="text-xs text-gray-400 mt-0.5">Ringkasan pendapatan, biaya, dan laba bersih</p>
+            <h2 className="font-semibold text-gray-800 whitespace-nowrap">Cash Inflow/Outflow</h2>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Ringkasan pendapatan, biaya, dan laba bersih
+            </p>
           </div>
-          <select
-            value={cashflowPeriod}
-            onChange={e => setCashflowPeriod(e.target.value as CashflowPeriod)}
-            className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            aria-label="Periode arus kas"
-          >
-            <option value="today">Hari ini</option>
-            <option value="7days">7 Hari</option>
-            <option value="month">Bulan ini</option>
-          </select>
-        </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 p-5">
-          {cashflowCards.map(({ label, value, icon: Icon, color, bg }) => (
-            <div key={label} className="rounded-xl border border-gray-200 p-4">
-              <div className={`w-8 h-8 ${bg} rounded-lg flex items-center justify-center mb-3`}>
-                <Icon size={16} className={color} />
-              </div>
-              <p className={`text-lg font-bold ${label === 'Laba Bersih' && cashflow.netProfit < 0 ? 'text-red-600' : 'text-gray-900'}`}>
-                {formatRupiah(value)}
-              </p>
-              <p className="text-xs text-gray-500 mt-0.5">{label}</p>
+          <div className="flex items-center gap-2">
+            <div className={`overflow-hidden transition-all duration-300 ease-out ${cashflowVisible ? 'max-w-40 opacity-100' : 'max-w-0 opacity-0'}`}>
+              <select
+                value={cashflowPeriod}
+                onChange={e => setCashflowPeriod(e.target.value as CashflowPeriod)}
+                tabIndex={cashflowVisible ? 0 : -1}
+                className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                aria-label="Periode cash flow"
+              >
+                <option value="today">Hari ini</option>
+                <option value="7days">7 Hari</option>
+                <option value="month">Bulan ini</option>
+              </select>
             </div>
-          ))}
+            <button
+              type="button"
+              onClick={() => setCashflowVisible(visible => !visible)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-gray-600 border border-gray-200 hover:bg-gray-50 transition-colors"
+              aria-expanded={cashflowVisible}
+              aria-label={cashflowVisible ? 'Sembunyikan Cash Flow' : 'Tampilkan Cash Flow'}
+              title={cashflowVisible ? 'Sembunyikan Cash Flow' : 'Tampilkan Cash Flow'}
+            >
+              <span className="transition-transform duration-300 ease-out">{cashflowVisible ? <EyeOff size={15} /> : <Eye size={15} />}</span>
+              <span className="hidden sm:inline">{cashflowVisible ? 'Sembunyikan' : 'Tampilkan'}</span>
+            </button>
+          </div>
+        </div>
+        <div className={`overflow-hidden transition-all duration-300 ease-out ${cashflowVisible ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'}`}>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 p-5 translate-y-0 transition-transform duration-300 ease-out">
+            {cashflowCards.map(({ label, value, icon: Icon, color, bg }) => (
+              <div key={label} className="rounded-xl border border-gray-200 p-4">
+                <div className={`w-8 h-8 ${bg} rounded-lg flex items-center justify-center mb-3`}>
+                  <Icon size={16} className={color} />
+                </div>
+                <p className={`text-lg font-bold ${label === 'Laba Bersih' && cashflow.netProfit < 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                  {formatRupiah(value)}
+                </p>
+                <p className="text-xs text-gray-500 mt-0.5">{label}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
