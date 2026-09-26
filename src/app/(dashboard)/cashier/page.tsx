@@ -85,6 +85,7 @@ export default function CashierPage() {
   const [hydrated, setHydrated] = useState(false)
   const [search, setSearch] = useState('')
   const [activeCategory, setActiveCategory] = useState<string>('all')
+  const [availableOnly, setAvailableOnly] = useState(false)
   const [showScanner, setShowScanner] = useState(false)
   const [showPayment, setShowPayment] = useState(false)
   const [paymentLoading, setPaymentLoading] = useState(false)
@@ -453,10 +454,11 @@ export default function CashierPage() {
           activeCategory === 'all' ||
           p.category?.name === activeCategory ||
           p.category2?.name === activeCategory
-        return matchName && matchCategory
+        const matchAvailability = !availableOnly || p.stock > 0
+        return matchName && matchCategory && matchAvailability
       })
     )
-  }, [search, products, activeCategory])
+  }, [search, products, activeCategory, availableOnly])
 
   // Muat keranjang per-meja yang tersimpan (biar refresh tidak menghilangkan pesanan meja)
   useEffect(() => {
@@ -947,9 +949,8 @@ export default function CashierPage() {
             </button>
           </div>
 
-          {/* Filter kategori */}
-          {categories.length > 0 && (
-            <div className="flex items-center gap-1.5 overflow-x-auto mt-3 -mb-1 pb-1">
+          {/* Filter kategori dan ketersediaan */}
+          <div className="flex items-center gap-1.5 overflow-x-auto mt-3 -mb-1 pb-1">
               <button
                 onClick={() => setActiveCategory('all')}
                 className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
@@ -959,6 +960,20 @@ export default function CashierPage() {
                 }`}
               >
                 Semua
+              </button>
+              <button
+                onClick={() => {
+                  playClickSound()
+                  setAvailableOnly(value => !value)
+                }}
+                aria-pressed={availableOnly}
+                className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
+                  availableOnly
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                Available Only
               </button>
               {categories.map(c => {
                 const isActive = activeCategory === c.name
@@ -980,8 +995,7 @@ export default function CashierPage() {
                   </button>
                 )
               })}
-            </div>
-          )}
+          </div>
         </div>
 
         {successMsg && (
