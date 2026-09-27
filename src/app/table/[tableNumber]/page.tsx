@@ -555,12 +555,12 @@ export default function TableOrderPage() {
 
   return (
     <div className="min-h-screen w-full overflow-x-hidden bg-gray-50">
-      <div className="mx-auto w-full max-w-5xl px-4 py-6">
+      <div className="mx-auto w-full max-w-5xl min-w-0 overflow-x-hidden px-4 py-6">
         <header className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm mb-4">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div>
               <p className="text-xs uppercase tracking-wide text-gray-400 font-medium">Pesanan Meja</p>
-              <h1 className="text-2xl font-bold text-gray-900">{businessName}</h1>
+              <h1 className="max-w-full break-words text-2xl font-bold text-gray-900">{businessName}</h1>
             </div>
             <div className="flex items-center gap-3 flex-wrap">
               <div className="bg-indigo-50 text-indigo-700 rounded-full px-3 py-1.5 text-sm font-semibold">
@@ -662,7 +662,7 @@ export default function TableOrderPage() {
         )}
 
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1.55fr)_minmax(290px,0.95fr)]">
-          <div className="space-y-4">
+          <div className="min-w-0 space-y-4">
             {products.length === 0 ? (
               <div className="bg-white border border-gray-200 rounded-2xl p-8 text-center text-gray-500 text-sm">
                 Menu untuk meja ini belum tersedia.
@@ -731,8 +731,8 @@ export default function TableOrderPage() {
                 const outOfStock = product.stock <= 0
 
                 return (
-                  <div key={product.id} className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
-                    <div className="flex items-center gap-4">
+                  <div key={product.id} className="min-w-0 max-w-full overflow-hidden bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
+                    <div className="flex min-w-0 items-center gap-4">
                       <div className="w-20 h-20 rounded-xl bg-gray-100 border border-gray-200 overflow-hidden flex items-center justify-center">
                         {product.image_url ? (
                           // eslint-disable-next-line @next/next/no-img-element
@@ -792,7 +792,7 @@ export default function TableOrderPage() {
             )}
           </div>
 
-          <aside className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm h-fit sticky top-4">
+          <aside className="min-w-0 max-w-full overflow-hidden bg-white border border-gray-200 rounded-2xl p-4 shadow-sm h-fit sticky top-4">
             <div className="flex items-center gap-2 mb-4 text-gray-800">
               <ShoppingCart size={18} className="text-indigo-600" />
               <h3 className="font-semibold">Ringkasan Order</h3>
