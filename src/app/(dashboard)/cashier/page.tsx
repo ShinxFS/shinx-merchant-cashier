@@ -447,16 +447,19 @@ export default function CashierPage() {
   useEffect(() => {
     const q = search.toLowerCase()
     // eslint-disable-next-line react-hooks/set-state-in-effect
+    const matchingProducts = products.filter(p => {
+      const matchName = p.name.toLowerCase().includes(q)
+      const matchCategory =
+        activeCategory === 'all' ||
+        p.category?.name === activeCategory ||
+        p.category2?.name === activeCategory
+      return matchName && matchCategory
+    })
+
     setFiltered(
-      products.filter(p => {
-        const matchName = p.name.toLowerCase().includes(q)
-        const matchCategory =
-          activeCategory === 'all' ||
-          p.category?.name === activeCategory ||
-          p.category2?.name === activeCategory
-        const matchAvailability = !availableOnly || p.stock > 0
-        return matchName && matchCategory && matchAvailability
-      })
+      availableOnly
+        ? matchingProducts.sort((a, b) => Number(b.stock > 0) - Number(a.stock > 0))
+        : matchingProducts
     )
   }, [search, products, activeCategory, availableOnly])
 

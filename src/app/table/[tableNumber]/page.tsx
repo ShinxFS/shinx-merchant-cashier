@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { formatRupiah } from '@/lib/utils'
-import { Minus, Plus, ShoppingCart, CheckCircle2, AlertCircle, Wallet, X } from 'lucide-react'
+import { Minus, Plus, ShoppingCart, CheckCircle2, AlertCircle, Wallet, X, ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface Product {
   id: string
@@ -26,6 +26,7 @@ export default function TableOrderPage() {
   const ownerId = searchParams.get('owner') ?? ''
 
   const [products, setProducts] = useState<Product[]>([])
+  const [activeCategory, setActiveCategory] = useState('all')
   const [businessName, setBusinessName] = useState('Toko')
   const [cart, setCart] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
@@ -50,6 +51,7 @@ export default function TableOrderPage() {
   const lastOrderIdRef = useRef<string | null>(null)
   const hasUserInteractionRef = useRef(false)
   const orderDetailUserOverrideRef = useRef(false)
+  const categorySliderRef = useRef<HTMLDivElement>(null)
 
   const unlockAudio = async () => {
     if (hasUserInteractionRef.current) return
@@ -327,6 +329,33 @@ export default function TableOrderPage() {
     [cart, products]
   )
   const orderReview = products.filter(product => (cart[product.id] ?? 0) > 0)
+  const categories = useMemo(
+    () => Array.from(
+      new Map(
+        products
+          .flatMap(product => [product.category, product.category2])
+          .filter((category): category is { name: string; color: string } => Boolean(category?.name))
+          .map(category => [category.name, category])
+      ).values()
+    ).sort((a, b) => a.name.localeCompare(b.name)),
+    [products]
+  )
+  const visibleProducts = useMemo(
+    () => products.filter(product =>
+      activeCategory === 'all' ||
+      product.category?.name === activeCategory ||
+      product.category2?.name === activeCategory
+    ),
+    [activeCategory, products]
+  )
+
+  const scrollCategories = (direction: 'left' | 'right') => {
+    categorySliderRef.current?.scrollBy({
+      left: direction === 'left' ? -220 : 220,
+      behavior: 'smooth',
+    })
+  }
+
   const liveOrderStatus = orderStatus ?? (orderId ? 'pending' : null)
   const hasOrderRecord = Boolean(orderId || latestOrderItems.length > 0 || liveOrderStatus)
   const hasActiveOrder = Boolean(orderId || latestOrderItems.length > 0 || (liveOrderStatus && liveOrderStatus !== 'done'))
@@ -525,8 +554,8 @@ export default function TableOrderPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-5xl mx-auto px-4 py-6">
+    <div className="min-h-screen w-full overflow-x-hidden bg-gray-50">
+      <div className="mx-auto w-full max-w-5xl px-4 py-6">
         <header className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm mb-4">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div>
@@ -632,14 +661,72 @@ export default function TableOrderPage() {
           </div>
         )}
 
-        <div className="grid gap-6 lg:grid-cols-[1.7fr_0.9fr]">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.55fr)_minmax(290px,0.95fr)]">
           <div className="space-y-4">
             {products.length === 0 ? (
               <div className="bg-white border border-gray-200 rounded-2xl p-8 text-center text-gray-500 text-sm">
                 Menu untuk meja ini belum tersedia.
               </div>
             ) : (
-              products.map(product => {
+              <>
+                <div className="flex items-center gap-1 pb-1">
+                  <button
+                    type="button"
+                    onClick={() => scrollCategories('left')}
+                    className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-sm hover:bg-gray-50"
+                    aria-label="Geser kategori ke kiri"
+                  >
+                    <ChevronLeft size={15} />
+                  </button>
+                  <div
+                    ref={categorySliderRef}
+                    className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setActiveCategory('all')}
+                      className={`flex-shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                        activeCategory === 'all'
+                          ? 'bg-indigo-600 text-white'
+                          : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100'
+                      }`}
+                    >
+                      Semua
+                    </button>
+                    {categories.map(category => (
+                      <button
+                        type="button"
+                        key={category.name}
+                        onClick={() => setActiveCategory(category.name)}
+                        className={`flex flex-shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                          activeCategory === category.name
+                            ? 'bg-indigo-600 text-white'
+                            : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100'
+                        }`}
+                      >
+                        <span
+                          className="h-2 w-2 rounded-full"
+                          style={{ backgroundColor: category.color || '#9ca3af' }}
+                        />
+                        {category.name}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => scrollCategories('right')}
+                    className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-sm hover:bg-gray-50"
+                    aria-label="Geser kategori ke kanan"
+                  >
+                    <ChevronRight size={15} />
+                  </button>
+                </div>
+
+                {visibleProducts.length === 0 ? (
+                  <div className="bg-white border border-gray-200 rounded-2xl p-8 text-center text-gray-500 text-sm">
+                    Belum ada produk di kategori ini.
+                  </div>
+                ) : visibleProducts.map(product => {
                 const qty = cart[product.id] ?? 0
                 const outOfStock = product.stock <= 0
 
@@ -700,7 +787,8 @@ export default function TableOrderPage() {
                     </div>
                   </div>
                 )
-              })
+                })}
+              </>
             )}
           </div>
 
