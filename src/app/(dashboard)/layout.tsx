@@ -5,7 +5,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import {
-  LayoutDashboard, ShoppingCart, Package, Receipt,
+  LayoutDashboard, ShoppingCart, Package, Receipt, ClipboardList,
   Settings, LogOut, Menu, Store, BarChart2, WalletCards, Users, Calculator,
 } from 'lucide-react'
 
@@ -51,7 +51,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const allNavItems = [
     { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', ownerOnly: false },
     { href: '/cashier', icon: ShoppingCart, label: 'Kasir', ownerOnly: false },
-    { href: '/table-orders', icon: Receipt, label: 'Order Meja', ownerOnly: false },
+    { href: '/table-orders', icon: ClipboardList, label: 'Order Meja', ownerOnly: false },
     { href: '/products', icon: Package, label: 'Produk', ownerOnly: false },
     { href: '/transactions', icon: Receipt, label: 'Transaksi', ownerOnly: false },
     { href: '/hpp', icon: Calculator, label: 'Kalkulator HPP', ownerOnly: true },

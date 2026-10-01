@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatRupiah } from '@/lib/utils'
 import { useRole } from '@/lib/useRole'
-import { Plus, Pencil, Trash2, Package, Search, Download, Upload } from 'lucide-react'
+import { Plus, Pencil, Trash2, Package, PackagePlus, Search, Download, Upload } from 'lucide-react'
 import ProductFormModal from '@/components/products/ProductFormModal'
 
 interface Category {
@@ -40,6 +40,10 @@ export default function ProductsPage() {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editProduct, setEditProduct] = useState<Product | null>(null)
+  const [restockProduct, setRestockProduct] = useState<Product | null>(null)
+  const [restockQuantity, setRestockQuantity] = useState('')
+  const [restockLoading, setRestockLoading] = useState(false)
+  const [restockError, setRestockError] = useState('')
 
   const load = async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -74,6 +78,50 @@ export default function ProductsPage() {
     if (!confirm('Hapus produk ini?')) return
     await supabase.from('products').delete().eq('id', id)
     setProducts(prev => prev.filter(p => p.id !== id))
+  }
+
+  const handleRestock = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    if (!restockProduct) return
+
+    const quantity = Number(restockQuantity)
+    if (!Number.isSafeInteger(quantity) || quantity <= 0) {
+      setRestockError('Masukkan jumlah restok berupa bilangan bulat lebih dari 0.')
+      return
+    }
+
+    setRestockLoading(true)
+    setRestockError('')
+    const { data: currentProduct, error: fetchError } = await supabase
+      .from('products')
+      .select('stock')
+      .eq('id', restockProduct.id)
+      .single()
+
+    if (fetchError || !currentProduct) {
+      setRestockError('Gagal mengambil stok terbaru. Coba lagi.')
+      setRestockLoading(false)
+      return
+    }
+
+    const updatedStock = currentProduct.stock + quantity
+    const { error: updateError } = await supabase
+      .from('products')
+      .update({ stock: updatedStock })
+      .eq('id', restockProduct.id)
+
+    if (updateError) {
+      setRestockError('Gagal menyimpan stok. Coba lagi.')
+      setRestockLoading(false)
+      return
+    }
+
+    setProducts(prev => prev.map(product =>
+      product.id === restockProduct.id ? { ...product, stock: updatedStock } : product
+    ))
+    setRestockProduct(null)
+    setRestockQuantity('')
+    setRestockLoading(false)
   }
 
   const handleEdit = (product: Product) => {
@@ -352,13 +400,29 @@ export default function ProductsPage() {
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
                         <button
+                          onClick={() => {
+                            setRestockProduct(product)
+                            setRestockQuantity('')
+                            setRestockError('')
+                          }}
+                          aria-label={`Restok ${product.name}`}
+                          title="Restok"
+                          className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                        >
+                          <PackagePlus size={15} />
+                        </button>
+                        <button
                           onClick={() => handleEdit(product)}
+                          aria-label={`Edit ${product.name}`}
+                          title="Edit produk"
                           className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
                         >
                           <Pencil size={15} />
                         </button>
                         <button
                           onClick={() => handleDelete(product.id)}
+                          aria-label={`Hapus ${product.name}`}
+                          title="Hapus produk"
                           className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                         >
                           <Trash2 size={15} />
@@ -379,6 +443,67 @@ export default function ProductsPage() {
           categories={categories}
           onClose={handleModalClose}
         />
+      )}
+
+      {restockProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <form
+            onSubmit={handleRestock}
+            aria-label={`Restok ${restockProduct.name}`}
+            className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
+          >
+            <h2 className="text-lg font-bold text-gray-900">Restok Barang</h2>
+            <p className="mt-1 text-sm text-gray-500">{restockProduct.name}</p>
+
+            <div className="mt-5 rounded-lg bg-gray-50 p-3 text-sm">
+              <div className="flex justify-between text-gray-600">
+                <span>Stok saat ini</span>
+                <span>{restockProduct.stock} {restockProduct.unit}</span>
+              </div>
+              <div className="mt-2 flex justify-between font-semibold text-gray-900">
+                <span>Stok setelah restok</span>
+                <span>
+                  {restockProduct.stock + (Number(restockQuantity) || 0)} {restockProduct.unit}
+                </span>
+              </div>
+            </div>
+
+            <label className="mt-4 block text-sm font-medium text-gray-700">
+              Jumlah tambahan
+              <input
+                type="number"
+                min="1"
+                step="1"
+                required
+                autoFocus
+                value={restockQuantity}
+                onChange={e => setRestockQuantity(e.target.value)}
+                placeholder={`Jumlah dalam ${restockProduct.unit}`}
+                className="mt-1.5 w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </label>
+
+            {restockError && <p className="mt-2 text-sm text-red-600">{restockError}</p>}
+
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setRestockProduct(null)}
+                disabled={restockLoading}
+                className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Batal
+              </button>
+              <button
+                type="submit"
+                disabled={restockLoading}
+                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {restockLoading ? 'Menyimpan...' : 'Simpan Restok'}
+              </button>
+            </div>
+          </form>
+        </div>
       )}
     </div>
   )

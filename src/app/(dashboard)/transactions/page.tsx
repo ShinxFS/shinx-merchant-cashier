@@ -36,6 +36,9 @@ export default function TransactionsPage() {
   const supabase = createClient()
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [search, setSearch] = useState('')
+  const now = new Date()
+  const [selectedMonth, setSelectedMonth] = useState(String(now.getMonth() + 1).padStart(2, '0'))
+  const [selectedYear, setSelectedYear] = useState(String(now.getFullYear()))
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [isOwner, setIsOwner] = useState(false)
@@ -78,9 +81,25 @@ export default function TransactionsPage() {
     setTransactions(prev => prev.filter(t => t.id !== id))
   }
 
-  const filtered = transactions.filter(t =>
-    t.invoice_number.toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = transactions.filter(t => {
+    const createdAt = new Date(t.created_at)
+    const matchesPeriod =
+      String(createdAt.getFullYear()) === selectedYear &&
+      String(createdAt.getMonth() + 1).padStart(2, '0') === selectedMonth
+    const matchesSearch = t.invoice_number.toLowerCase().includes(search.toLowerCase())
+    return matchesPeriod && matchesSearch
+  })
+
+  const recentMonths = Array.from({ length: 12 }, (_, index) => {
+    const date = new Date(2000, index, 1)
+    const value = String(index + 1).padStart(2, '0')
+    const label = new Intl.DateTimeFormat('id-ID', { month: 'long' }).format(date)
+    return { value, label }
+  })
+  const availableYears = Array.from(new Set([
+    now.getFullYear(),
+    ...transactions.map(transaction => new Date(transaction.created_at).getFullYear()),
+  ])).sort((a, b) => b - a)
 
   const formatDate = (str: string) =>
     new Date(str).toLocaleDateString('id-ID', {
@@ -119,7 +138,9 @@ export default function TransactionsPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Riwayat Transaksi</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{transactions.length} transaksi total</p>
+          <p className="text-sm text-gray-500 mt-0.5">
+            {filtered.length} ditampilkan dari {transactions.length} transaksi
+          </p>
         </div>
         <div className="text-right">
           <p className="text-xs text-gray-400">Pendapatan Hari Ini</p>
@@ -130,14 +151,42 @@ export default function TransactionsPage() {
         </div>
       </div>
 
-      <div className="relative mb-4">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="Cari nomor invoice..."
-          className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white text-gray-900"
-        />
+      <div className="flex flex-col sm:flex-row gap-3 mb-4">
+        <div className="relative flex-1">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Cari nomor invoice..."
+            className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white text-gray-900"
+          />
+        </div>
+        <div className="flex gap-2">
+          <label className="flex items-center px-3 py-2 border border-gray-200 rounded-xl bg-white text-sm text-gray-500">
+            <select
+              value={selectedMonth}
+              onChange={e => setSelectedMonth(e.target.value)}
+              aria-label="Filter bulan transaksi"
+              className="min-w-0 bg-transparent text-gray-900 focus:outline-none"
+            >
+              {recentMonths.map(month => (
+                <option key={month.value} value={month.value}>{month.label}</option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center px-3 py-2 border border-gray-200 rounded-xl bg-white text-sm text-gray-500">
+            <select
+              value={selectedYear}
+              onChange={e => setSelectedYear(e.target.value)}
+              aria-label="Filter tahun transaksi"
+              className="min-w-0 bg-transparent text-gray-900 focus:outline-none"
+            >
+              {availableYears.map(year => (
+                <option key={year} value={year}>{year}</option>
+              ))}
+            </select>
+          </label>
+        </div>
       </div>
 
       {loading ? (
@@ -146,7 +195,11 @@ export default function TransactionsPage() {
         <div className="text-center py-16">
           <Receipt size={40} className="text-gray-200 mx-auto mb-3" />
           <p className="text-gray-400 text-sm">
-            {transactions.length === 0 ? 'Belum ada transaksi' : 'Transaksi tidak ditemukan'}
+            {transactions.length === 0
+              ? 'Belum ada transaksi'
+              : filtered.length === 0 && !search
+                ? 'Tidak ada transaksi pada bulan yang dipilih'
+                : 'Transaksi tidak ditemukan'}
           </p>
         </div>
       ) : (
