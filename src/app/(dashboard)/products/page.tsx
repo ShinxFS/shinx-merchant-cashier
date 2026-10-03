@@ -38,6 +38,7 @@ export default function ProductsPage() {
   const [categories, setCategories] = useState<Category[]>([])
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [editProduct, setEditProduct] = useState<Product | null>(null)
   const [restockProduct, setRestockProduct] = useState<Product | null>(null)
@@ -47,9 +48,13 @@ export default function ProductsPage() {
 
   const load = async () => {
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    if (!user) {
+      setLoadError('Sesi login tidak ditemukan. Silakan masuk kembali.')
+      setLoading(false)
+      return
+    }
 
-    const [{ data: prods }, { data: cats }] = await Promise.all([
+    const [{ data: prods, error: productsError }, { data: cats }] = await Promise.all([
       supabase
         .from('products')
         .select('*, category:categories!category_id(id, name, color), category2:categories!category_id_2(id, name, color)')
@@ -62,6 +67,13 @@ export default function ProductsPage() {
         .order('name'),
     ])
 
+    if (productsError) {
+      setLoadError(productsError.message)
+      setLoading(false)
+      return
+    }
+
+    setLoadError('')
     setProducts(prods ?? [])
     setCategories(cats ?? [])
     setLoading(false)
@@ -334,6 +346,10 @@ export default function ProductsPage() {
       {/* Tabel */}
       {loading ? (
         <div className="text-center py-16 text-gray-400 text-sm">Memuat produk...</div>
+      ) : loadError ? (
+        <div className="text-center py-16 text-sm text-red-600">
+          Gagal memuat produk: {loadError}
+        </div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-16">
           <Package size={40} className="text-gray-200 mx-auto mb-3" />

@@ -6,8 +6,16 @@ import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import {
   LayoutDashboard, ShoppingCart, Package, Receipt, ClipboardList,
-  Settings, LogOut, Menu, Store, BarChart2, WalletCards, Users, Calculator,
+  Settings, LogOut, Menu, Store, BarChart2, WalletCards, Users, Calculator, Bell, X,
 } from 'lucide-react'
+
+interface NotificationLog {
+  id: string
+  event_type: string
+  title: string
+  message: string
+  created_at: string
+}
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
@@ -16,6 +24,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [businessName, setBusinessName] = useState('Shinx Merchant')
   const [role, setRole] = useState<'owner' | 'staff'>('owner')
+  const [notificationLogOpen, setNotificationLogOpen] = useState(false)
+  const [notificationLogs, setNotificationLogs] = useState<NotificationLog[]>([])
+  const [notificationLoading, setNotificationLoading] = useState(false)
+  const [notificationError, setNotificationError] = useState('')
+  const [notificationShopUserId, setNotificationShopUserId] = useState<string | null>(null)
+  const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false)
 
   useEffect(() => {
     const getProfile = async () => {
@@ -28,6 +42,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         .single()
       if (data?.business_name) setBusinessName(data.business_name)
       if (data?.role) setRole(data.role as 'owner' | 'staff')
+      const shopUserId = data?.role === 'staff' ? data.owner_id : user.id
+      if (shopUserId) setNotificationShopUserId(shopUserId)
 
       // Kalau karyawan, ambil nama bisnis dari owner
       if (data?.role === 'staff' && data?.owner_id) {
@@ -42,10 +58,114 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     getProfile()
   }, [])
 
+  useEffect(() => {
+    if (!notificationShopUserId) return
+
+    const lastSeenKey = `notification-log-last-seen:${notificationShopUserId}`
+    const loadLatestNotification = async () => {
+      const { data } = await supabase
+        .from('notification_logs')
+        .select('created_at')
+        .eq('user_id', notificationShopUserId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (!data) return
+      const lastSeenAt = localStorage.getItem(lastSeenKey)
+      if (!lastSeenAt || Date.parse(data.created_at) > Date.parse(lastSeenAt)) {
+        setHasUnreadNotifications(true)
+      }
+    }
+
+    void loadLatestNotification()
+
+    const channel = supabase
+      .channel(`notification-logs-${notificationShopUserId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notification_logs',
+          filter: `user_id=eq.${notificationShopUserId}`,
+        },
+        payload => {
+          const createdAt = (payload.new as { created_at?: string }).created_at
+          const lastSeenAt = localStorage.getItem(lastSeenKey)
+          if (!lastSeenAt || (createdAt && Date.parse(createdAt) > Date.parse(lastSeenAt))) {
+            setHasUnreadNotifications(true)
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      void supabase.removeChannel(channel)
+    }
+  }, [notificationShopUserId])
+
   const handleLogout = async () => {
     await supabase.auth.signOut()
     router.push('/login')
     router.refresh()
+  }
+
+  const openNotificationLog = async () => {
+    setNotificationLogOpen(true)
+    setNotificationLoading(true)
+    setNotificationError('')
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      setNotificationLogs([])
+      setNotificationError('Silakan masuk kembali untuk melihat log notifikasi.')
+      setNotificationLoading(false)
+      return
+    }
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role, owner_id')
+      .eq('id', user.id)
+      .single()
+    const shopUserId = profile?.role === 'staff' ? profile.owner_id : user.id
+
+    if (!shopUserId) {
+      setNotificationLogs([])
+      setNotificationError('Data toko tidak ditemukan.')
+      setNotificationLoading(false)
+      return
+    }
+
+    const { data, error } = await supabase
+      .from('notification_logs')
+      .select('id, event_type, title, message, created_at')
+      .eq('user_id', shopUserId)
+      .order('created_at', { ascending: false })
+      .limit(50)
+
+    setNotificationLogs(data ?? [])
+    setNotificationError(error ? 'Gagal memuat log notifikasi.' : '')
+    if (!error) {
+      localStorage.setItem(
+        `notification-log-last-seen:${shopUserId}`,
+        data?.[0]?.created_at ?? new Date().toISOString()
+      )
+      setHasUnreadNotifications(false)
+    }
+    setNotificationLoading(false)
+  }
+
+  const formatNotificationDate = (date: string) =>
+    new Date(date).toLocaleString('id-ID', {
+      day: 'numeric', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    })
+
+  const toggleNotificationLog = () => {
+    if (notificationLogOpen) setNotificationLogOpen(false)
+    else void openNotificationLog()
   }
 
   const allNavItems = [
@@ -111,6 +231,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         )}
         <button
+          type="button"
+          onClick={toggleNotificationLog}
+          aria-label={notificationLogOpen ? 'Tutup log notifikasi' : 'Buka log notifikasi'}
+          aria-expanded={notificationLogOpen}
+          title="Log notifikasi"
+          className="relative ml-3 mb-2 flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-600"
+        >
+          <Bell size={17} />
+          {hasUnreadNotifications && (
+            <span className="absolute right-0 top-0 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white" />
+          )}
+        </button>
+        <button
           onClick={handleLogout}
           className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-red-50 hover:text-red-600 transition-colors w-full"
         >
@@ -141,13 +274,48 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <button onClick={() => setSidebarOpen(true)} className="p-1.5 rounded-lg hover:bg-gray-100">
             <Menu size={20} className="text-gray-600" />
           </button>
-          <span className="font-bold text-gray-800 text-sm">{businessName}</span>
+          <span className="flex-1 truncate font-bold text-gray-800 text-sm">{businessName}</span>
         </header>
 
         <main className="flex-1 overflow-y-auto">
           {children}
         </main>
       </div>
+
+      {notificationLogOpen && (
+        <section className="fixed bottom-28 left-4 z-50 w-[calc(100vw-2rem)] max-w-sm overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
+          <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+            <h2 className="text-sm font-semibold text-gray-900">Log Notifikasi</h2>
+            <button
+              type="button"
+              onClick={() => setNotificationLogOpen(false)}
+              aria-label="Tutup log notifikasi"
+              className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            >
+              <X size={16} />
+            </button>
+          </div>
+          <div className="max-h-[60vh] overflow-y-auto">
+            {notificationLoading ? (
+              <p className="px-4 py-8 text-center text-sm text-gray-400">Memuat notifikasi...</p>
+            ) : notificationError ? (
+              <p className="px-4 py-8 text-center text-sm text-red-500">{notificationError}</p>
+            ) : notificationLogs.length === 0 ? (
+              <p className="px-4 py-8 text-center text-sm text-gray-400">Belum ada notifikasi.</p>
+            ) : (
+              notificationLogs.map(notification => (
+                <article key={notification.id} className="border-b border-gray-100 px-4 py-3 last:border-0">
+                  <p className="text-sm font-medium text-gray-800">{notification.title}</p>
+                  <p className="mt-0.5 text-sm text-gray-600">{notification.message}</p>
+                  <p className="mt-1.5 text-xs text-gray-400">
+                    {formatNotificationDate(notification.created_at)}
+                  </p>
+                </article>
+              ))
+            )}
+          </div>
+        </section>
+      )}
     </div>
   )
 }
