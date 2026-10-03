@@ -290,7 +290,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </span>
           </div>
         )}
-        <div className="relative ml-[7px] mt-2 w-fit">
+        <div className="relative ml-[5px] mt-2 w-fit">
           {sidebarMenuOpen && (
             <div ref={sidebarMenuRef} className="absolute bottom-full left-0 z-[60] mb-2 w-48 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
               <button
@@ -332,15 +332,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             type="button"
             ref={sidebarMenuButtonRef}
             onClick={toggleSidebarMenu}
-            aria-label="Menu lainnya"
+            aria-label="Menu"
             aria-expanded={sidebarMenuOpen}
-            title="Menu lainnya"
-            className="relative flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-600"
+            className="group relative flex h-9 w-9 items-center justify-center text-gray-600 transition-colors hover:text-indigo-600"
           >
-            <Grid2X2 size={17} />
-            {hasUnreadNotifications && (
-              <span className="absolute right-0 top-0 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white" />
-            )}
+            <span className="relative inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white shadow-sm transition-colors hover:border-indigo-200 hover:bg-indigo-50">
+              <Grid2X2 size={17} />
+              {hasUnreadNotifications && (
+                <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white" />
+              )}
+            </span>
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 translate-x-1 whitespace-nowrap rounded-md bg-gray-800 px-2 py-1 text-xs font-medium text-white opacity-0 shadow-md transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100"
+            >
+              Menu
+            </span>
           </button>
         </div>
       </div>
