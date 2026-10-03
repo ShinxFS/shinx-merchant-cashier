@@ -98,7 +98,7 @@ export default function ProductsPage() {
 
     const quantity = Number(restockQuantity)
     if (!Number.isSafeInteger(quantity) || quantity <= 0) {
-      setRestockError('Masukkan jumlah restok berupa bilangan bulat lebih dari 0.')
+      setRestockError('Masukkan jumlah restock berupa bilangan bulat lebih dari 0.')
       return
     }
 
@@ -432,8 +432,8 @@ export default function ProductsPage() {
                             setRestockQuantity('')
                             setRestockError('')
                           }}
-                          aria-label={`Restok ${product.name}`}
-                          title="Restok"
+                          aria-label={`Restock ${product.name}`}
+                          title="Restock"
                           className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
                         >
                           <PackagePlus size={15} />
@@ -481,7 +481,7 @@ export default function ProductsPage() {
                 type="button"
                 onClick={closeRestockModal}
                 disabled={restockLoading}
-                aria-label="Tutup restok barang"
+                aria-label="Tutup restock barang"
                 className="text-gray-400 hover:text-gray-600 disabled:opacity-50"
               >
                 <X size={20} />

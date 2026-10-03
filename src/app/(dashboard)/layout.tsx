@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import {
   LayoutDashboard, ShoppingCart, Package, Receipt, ClipboardList,
-  Settings, LogOut, Menu, Store, BarChart2, WalletCards, Users, Calculator, Bell, X,
+  Settings, LogOut, Menu, Store, BarChart2, WalletCards, Users, Calculator, Bell, X, Grid2X2, ScrollText,
 } from 'lucide-react'
 
 interface NotificationLog {
@@ -39,12 +39,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [businessName, setBusinessName] = useState('Shinx Merchant')
   const [role, setRole] = useState<'owner' | 'staff'>('owner')
+  const [sidebarMenuOpen, setSidebarMenuOpen] = useState(false)
+  const [changelogOpen, setChangelogOpen] = useState(false)
   const [notificationLogOpen, setNotificationLogOpen] = useState(false)
   const [notificationLogs, setNotificationLogs] = useState<NotificationLog[]>([])
   const [notificationLoading, setNotificationLoading] = useState(false)
   const [notificationError, setNotificationError] = useState('')
   const [notificationShopUserId, setNotificationShopUserId] = useState<string | null>(null)
   const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false)
+  const sidebarMenuRef = useRef<HTMLDivElement>(null)
+  const sidebarMenuButtonRef = useRef<HTMLButtonElement>(null)
+  const changelogPanelRef = useRef<HTMLElement>(null)
+  const changelogButtonRef = useRef<HTMLButtonElement>(null)
+  const notificationPanelRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
     const getProfile = async () => {
@@ -120,13 +127,38 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [notificationShopUserId])
 
+  useEffect(() => {
+    if (!notificationLogOpen && !sidebarMenuOpen && !changelogOpen) return
+
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      const target = event.target
+      if (!(target instanceof Node)) return
+      if (notificationPanelRef.current?.contains(target)) return
+      if (sidebarMenuRef.current?.contains(target)) return
+      if (sidebarMenuButtonRef.current?.contains(target)) return
+      if (changelogPanelRef.current?.contains(target)) return
+      if (changelogButtonRef.current?.contains(target)) return
+      setNotificationLogOpen(false)
+      setSidebarMenuOpen(false)
+      setChangelogOpen(false)
+    }
+
+    document.addEventListener('click', closeOnOutsideClick, true)
+    return () => document.removeEventListener('click', closeOnOutsideClick, true)
+  }, [notificationLogOpen, sidebarMenuOpen, changelogOpen])
+
   const handleLogout = async () => {
+    setNotificationLogOpen(false)
+    setSidebarMenuOpen(false)
+    setChangelogOpen(false)
     await supabase.auth.signOut()
     router.push('/login')
     router.refresh()
   }
 
   const openNotificationLog = async () => {
+    setSidebarMenuOpen(false)
+    setChangelogOpen(false)
     setNotificationLogOpen(true)
     setNotificationLoading(true)
     setNotificationError('')
@@ -185,9 +217,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       hour: '2-digit', minute: '2-digit',
     })
 
-  const toggleNotificationLog = () => {
-    if (notificationLogOpen) setNotificationLogOpen(false)
-    else void openNotificationLog()
+  const toggleSidebarMenu = () => {
+    setNotificationLogOpen(false)
+    setChangelogOpen(false)
+    setSidebarMenuOpen(prev => !prev)
   }
 
   const allNavItems = [
@@ -230,7 +263,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <Link
               key={href}
               href={href}
-              onClick={() => setSidebarOpen(false)}
+              onClick={() => {
+                setSidebarOpen(false)
+                setNotificationLogOpen(false)
+                setSidebarMenuOpen(false)
+                setChangelogOpen(false)
+              }}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                 active
                   ? 'bg-indigo-50 text-indigo-600'
@@ -252,26 +290,59 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </span>
           </div>
         )}
-        <button
-          type="button"
-          onClick={toggleNotificationLog}
-          aria-label={notificationLogOpen ? 'Tutup log notifikasi' : 'Buka log notifikasi'}
-          aria-expanded={notificationLogOpen}
-          title="Log notifikasi"
-          className="relative ml-3 mb-2 flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-600"
-        >
-          <Bell size={17} />
-          {hasUnreadNotifications && (
-            <span className="absolute right-0 top-0 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white" />
+        <div className="relative ml-[7px] mt-2 w-fit">
+          {sidebarMenuOpen && (
+            <div ref={sidebarMenuRef} className="absolute bottom-full left-0 z-[60] mb-2 w-48 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+              <button
+                type="button"
+                onClick={() => void openNotificationLog()}
+                className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+              >
+                <span className="relative">
+                  <Bell size={16} className="text-gray-500" />
+                  {hasUnreadNotifications && <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-red-500" />}
+                </span>
+                Notifikasi
+              </button>
+              <button
+                type="button"
+                ref={changelogButtonRef}
+                onClick={() => {
+                  setSidebarMenuOpen(false)
+                  setNotificationLogOpen(false)
+                  setChangelogOpen(true)
+                }}
+                className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+              >
+                <ScrollText size={16} className="text-gray-500" />
+                Changelog
+              </button>
+              <div className="my-1 border-t border-gray-100" />
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+              >
+                <LogOut size={16} />
+                Keluar
+              </button>
+            </div>
           )}
-        </button>
-        <button
-          onClick={handleLogout}
-          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-red-50 hover:text-red-600 transition-colors w-full"
-        >
-          <LogOut size={18} />
-          Keluar
-        </button>
+          <button
+            type="button"
+            ref={sidebarMenuButtonRef}
+            onClick={toggleSidebarMenu}
+            aria-label="Menu lainnya"
+            aria-expanded={sidebarMenuOpen}
+            title="Menu lainnya"
+            className="relative flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-600"
+          >
+            <Grid2X2 size={17} />
+            {hasUnreadNotifications && (
+              <span className="absolute right-0 top-0 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white" />
+            )}
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -305,7 +376,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </div>
 
       {notificationLogOpen && (
-        <section className="fixed bottom-28 left-4 z-50 w-[calc(100vw-2rem)] max-w-sm overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
+        <section ref={notificationPanelRef} className="fixed bottom-28 left-4 z-50 w-[calc(100vw-2rem)] max-w-sm overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
           <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
             <h2 className="text-sm font-semibold text-gray-900">Log Notifikasi</h2>
             <button
@@ -335,6 +406,40 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </article>
               ))
             )}
+          </div>
+        </section>
+      )}
+
+      {changelogOpen && (
+        <section ref={changelogPanelRef} className="fixed bottom-28 left-4 z-50 w-[calc(100vw-2rem)] max-w-sm overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
+          <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+            <h2 className="text-sm font-semibold text-gray-900">Changelog</h2>
+            <button
+              type="button"
+              onClick={() => setChangelogOpen(false)}
+              aria-label="Tutup changelog"
+              className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            >
+              <X size={16} />
+            </button>
+          </div>
+          <div className="max-h-[60vh] divide-y divide-gray-100 overflow-y-auto px-4">
+            <article className="py-3">
+              <p className="text-sm font-medium text-gray-800">Restock produk</p>
+              <p className="mt-0.5 text-sm text-gray-600">Tambah stok langsung dari daftar produk.</p>
+            </article>
+            <article className="py-3">
+              <p className="text-sm font-medium text-gray-800">Status produk</p>
+              <p className="mt-0.5 text-sm text-gray-600">Badge Aktif dan Nonaktif terlihat di daftar produk.</p>
+            </article>
+            <article className="py-3">
+              <p className="text-sm font-medium text-gray-800">Riwayat transaksi</p>
+              <p className="mt-0.5 text-sm text-gray-600">Filter transaksi menurut bulan dan tahun.</p>
+            </article>
+            <article className="py-3">
+              <p className="text-sm font-medium text-gray-800">Log notifikasi</p>
+              <p className="mt-0.5 text-sm text-gray-600">Catatan produk baru, stok menipis, dan perubahan nama toko.</p>
+            </article>
           </div>
         </section>
       )}
