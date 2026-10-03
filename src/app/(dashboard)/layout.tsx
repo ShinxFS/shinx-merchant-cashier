@@ -17,6 +17,21 @@ interface NotificationLog {
   created_at: string
 }
 
+const getLastSeenAt = (key: string) => {
+  try {
+    return window.localStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
+const setLastSeenAt = (key: string, value: string) => {
+  try {
+    window.localStorage.setItem(key, value)
+  } catch {
+  }
+}
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -72,7 +87,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         .maybeSingle()
 
       if (!data) return
-      const lastSeenAt = localStorage.getItem(lastSeenKey)
+      const lastSeenAt = getLastSeenAt(lastSeenKey)
       if (!lastSeenAt || Date.parse(data.created_at) > Date.parse(lastSeenAt)) {
         setHasUnreadNotifications(true)
       }
@@ -92,7 +107,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         },
         payload => {
           const createdAt = (payload.new as { created_at?: string }).created_at
-          const lastSeenAt = localStorage.getItem(lastSeenKey)
+          const lastSeenAt = getLastSeenAt(lastSeenKey)
           if (!lastSeenAt || (createdAt && Date.parse(createdAt) > Date.parse(lastSeenAt))) {
             setHasUnreadNotifications(true)
           }
@@ -123,36 +138,43 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       return
     }
 
-    const controller = new AbortController()
-    const timeoutId = window.setTimeout(() => controller.abort(), 12000)
+    const controller = typeof AbortController === 'undefined' ? null : new AbortController()
+    let timeoutId = 0
 
     try {
-      const { data, error } = await supabase
+      const request = supabase
         .from('notification_logs')
         .select('id, event_type, title, message, created_at')
         .eq('user_id', notificationShopUserId)
         .order('created_at', { ascending: false })
         .limit(50)
-        .abortSignal(controller.signal)
+      const timedRequest = controller ? request.abortSignal(controller.signal) : request
+      const timeout = new Promise<never>((_, reject) => {
+        timeoutId = window.setTimeout(() => {
+          controller?.abort()
+          reject(new Error('notification-timeout'))
+        }, 12000)
+      })
+      const { data, error } = await Promise.race([timedRequest, timeout])
 
       if (error) throw error
 
       setNotificationLogs(data ?? [])
       setNotificationError('')
-      localStorage.setItem(
+      setLastSeenAt(
         `notification-log-last-seen:${notificationShopUserId}`,
         data?.[0]?.created_at ?? new Date().toISOString()
       )
       setHasUnreadNotifications(false)
-    } catch {
+    } catch (error) {
       setNotificationLogs([])
       setNotificationError(
-        controller.signal.aborted
+        error instanceof Error && error.message === 'notification-timeout'
           ? 'Permintaan terlalu lama. Periksa koneksi lalu coba lagi.'
           : 'Gagal memuat log notifikasi. Periksa koneksi atau konfigurasi database.'
       )
     } finally {
-      window.clearTimeout(timeoutId)
+      if (timeoutId) window.clearTimeout(timeoutId)
       setNotificationLoading(false)
     }
   }
