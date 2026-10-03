@@ -383,7 +383,12 @@ export default function ProductsPage() {
                         }
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-gray-800">{product.name}</p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-medium text-gray-800">{product.name}</p>
+                          <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${product.is_active ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                            {product.is_active ? 'Aktif' : 'Nonaktif'}
+                          </span>
+                        </div>
                         {product.sku && <p className="text-xs text-gray-400">{product.sku}</p>}
                       </div>
                     </div>

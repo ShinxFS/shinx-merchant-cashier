@@ -116,45 +116,45 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     setNotificationLoading(true)
     setNotificationError('')
 
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
+    if (!notificationShopUserId) {
       setNotificationLogs([])
-      setNotificationError('Silakan masuk kembali untuk melihat log notifikasi.')
+      setNotificationError('Data toko belum siap. Tutup lalu coba buka lagi.')
       setNotificationLoading(false)
       return
     }
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role, owner_id')
-      .eq('id', user.id)
-      .single()
-    const shopUserId = profile?.role === 'staff' ? profile.owner_id : user.id
+    const controller = new AbortController()
+    const timeoutId = window.setTimeout(() => controller.abort(), 12000)
 
-    if (!shopUserId) {
-      setNotificationLogs([])
-      setNotificationError('Data toko tidak ditemukan.')
-      setNotificationLoading(false)
-      return
-    }
+    try {
+      const { data, error } = await supabase
+        .from('notification_logs')
+        .select('id, event_type, title, message, created_at')
+        .eq('user_id', notificationShopUserId)
+        .order('created_at', { ascending: false })
+        .limit(50)
+        .abortSignal(controller.signal)
 
-    const { data, error } = await supabase
-      .from('notification_logs')
-      .select('id, event_type, title, message, created_at')
-      .eq('user_id', shopUserId)
-      .order('created_at', { ascending: false })
-      .limit(50)
+      if (error) throw error
 
-    setNotificationLogs(data ?? [])
-    setNotificationError(error ? 'Gagal memuat log notifikasi.' : '')
-    if (!error) {
+      setNotificationLogs(data ?? [])
+      setNotificationError('')
       localStorage.setItem(
-        `notification-log-last-seen:${shopUserId}`,
+        `notification-log-last-seen:${notificationShopUserId}`,
         data?.[0]?.created_at ?? new Date().toISOString()
       )
       setHasUnreadNotifications(false)
+    } catch {
+      setNotificationLogs([])
+      setNotificationError(
+        controller.signal.aborted
+          ? 'Permintaan terlalu lama. Periksa koneksi lalu coba lagi.'
+          : 'Gagal memuat log notifikasi. Periksa koneksi atau konfigurasi database.'
+      )
+    } finally {
+      window.clearTimeout(timeoutId)
+      setNotificationLoading(false)
     }
-    setNotificationLoading(false)
   }
 
   const formatNotificationDate = (date: string) =>
