@@ -602,17 +602,25 @@ export default function CashierPage() {
     flash(`✅ ${product.name} ditambahkan ke keranjang`)
   }
 
-  const increase = (id: string) => {
+  const increase = (id: string, isRepeat = false) => {
     setActiveCart(prev =>
       prev.map(i => i.id === id && i.quantity < i.stock ? { ...i, quantity: i.quantity + 1 } : i)
     )
-    playClickSound()
+    if (!isRepeat) playClickSound()
   }
-  const decrease = (id: string) => {
+  const decrease = (id: string, isRepeat = false) => {
     setActiveCart(prev =>
       prev.map(i => i.id === id && i.quantity > 1 ? { ...i, quantity: i.quantity - 1 } : i)
         .filter(i => i.quantity > 0)
     )
+    if (!isRepeat) playClickSound()
+  }
+  const setQuantity = (id: string, quantity: number) => {
+    setActiveCart(prev => prev.map(item => {
+      if (item.id !== id) return item
+      const maxQuantity = Math.max(1, item.stock)
+      return { ...item, quantity: Math.min(Math.max(1, Math.trunc(quantity)), maxQuantity) }
+    }))
     playClickSound()
   }
   const remove = (id: string) => {
@@ -1217,6 +1225,7 @@ export default function CashierPage() {
                     item={item}
                     onIncrease={increase}
                     onDecrease={decrease}
+                    onSetQuantity={setQuantity}
                     onRemove={remove}
                   />
                 ))}
