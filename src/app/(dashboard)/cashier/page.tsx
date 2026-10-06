@@ -961,7 +961,7 @@ export default function CashierPage() {
           </div>
 
           {/* Filter kategori dan ketersediaan */}
-          <div className="flex items-center gap-1.5 overflow-x-auto mt-3 -mb-1 pb-1">
+          <div className="scrollbar-thin flex items-center gap-1.5 overflow-x-auto mt-3 -mb-1 pb-1">
               <button
                 onClick={() => setActiveCategory('all')}
                 className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
@@ -1022,7 +1022,7 @@ export default function CashierPage() {
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="scrollbar-thin flex-1 overflow-y-auto p-4">
           {filtered.length === 0 ? (
             <div className="text-center py-16 text-gray-400 text-sm">
               {products.length === 0
@@ -1210,7 +1210,7 @@ export default function CashierPage() {
             </div>
           )}
 
-          <div className="flex-1 overflow-y-auto px-4">
+          <div className="scrollbar-thin flex-1 overflow-y-auto px-4">
             {cart.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-gray-800">
                 <ShoppingCart size={40} />

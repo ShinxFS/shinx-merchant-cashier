@@ -290,7 +290,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </span>
           </div>
         )}
-        <div className="relative ml-[5 px] mt-2 w-fit">
+        <div className="relative ml-[5px] mt-2 w-fit">
           {sidebarMenuOpen && (
             <div ref={sidebarMenuRef} className="absolute bottom-full left-0 z-[60] mb-2 w-48 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
               <button
