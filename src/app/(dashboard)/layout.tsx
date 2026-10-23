@@ -432,19 +432,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
           <div className="max-h-[60vh] divide-y divide-gray-100 overflow-y-auto px-4">
             <article className="py-3">
-              <p className="text-sm font-medium text-gray-800">Restock produk</p>
+              <p className="text-sm font-medium text-gray-800">Mode Compact</p>
+              <p className="mt-0.5 text-sm text-gray-600">Sembunyikan gambar produk agar lebih banyak item terlihat di layar kasir.</p>
+            </article>
+            <article className="py-3">
+              <p className="text-sm font-medium text-gray-800">Restock Produk</p>
               <p className="mt-0.5 text-sm text-gray-600">Tambah stok langsung dari daftar produk.</p>
             </article>
             <article className="py-3">
-              <p className="text-sm font-medium text-gray-800">Status produk</p>
+              <p className="text-sm font-medium text-gray-800">Status Produk</p>
               <p className="mt-0.5 text-sm text-gray-600">Badge Aktif dan Nonaktif terlihat di daftar produk.</p>
             </article>
             <article className="py-3">
-              <p className="text-sm font-medium text-gray-800">Riwayat transaksi</p>
+              <p className="text-sm font-medium text-gray-800">Riwayat Transaksi</p>
               <p className="mt-0.5 text-sm text-gray-600">Filter transaksi menurut bulan dan tahun.</p>
             </article>
             <article className="py-3">
-              <p className="text-sm font-medium text-gray-800">Log notifikasi</p>
+              <p className="text-sm font-medium text-gray-800">Log Notifikasi</p>
               <p className="mt-0.5 text-sm text-gray-600">Catatan produk baru, stok menipis, dan perubahan nama toko.</p>
             </article>
           </div>

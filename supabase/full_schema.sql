@@ -15,6 +15,7 @@ create table if not exists public.profiles (
   role text not null default 'owner' check (role in ('owner', 'staff')),
   owner_id uuid references public.profiles(id) on delete cascade,
   qris_image_url text,
+  cashier_compact_mode boolean not null default false,
   created_at timestamptz not null default now()
 );
 

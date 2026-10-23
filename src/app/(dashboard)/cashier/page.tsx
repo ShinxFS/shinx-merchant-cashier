@@ -86,6 +86,8 @@ export default function CashierPage() {
   const [search, setSearch] = useState('')
   const [activeCategory, setActiveCategory] = useState<string>('all')
   const [availableOnly, setAvailableOnly] = useState(false)
+  const [compactMode, setCompactMode] = useState(false)
+  const [compactModeError, setCompactModeError] = useState('')
   const [showScanner, setShowScanner] = useState(false)
   const [showPayment, setShowPayment] = useState(false)
   const [paymentLoading, setPaymentLoading] = useState(false)
@@ -270,11 +272,18 @@ export default function CashierPage() {
       setProducts(data ?? [])
       setFiltered(data ?? [])
 
-      const { data: prof } = await supabase
-        .from('profiles')
-        .select('business_name, address, phone, qris_image_url, cashier_sound_url, cashier_tone')
-        .eq('id', targetUserId)
-        .single()
+      const [{ data: prof }, { data: compactSetting, error: compactSettingError }] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select('business_name, address, phone, qris_image_url, cashier_sound_url, cashier_tone')
+          .eq('id', targetUserId)
+          .single(),
+        supabase
+          .from('profiles')
+          .select('cashier_compact_mode')
+          .eq('id', targetUserId)
+          .single(),
+      ])
       if (prof) {
         setBusinessProfile({
           business_name: prof.business_name ?? 'Toko',
@@ -284,6 +293,12 @@ export default function CashierPage() {
         setQrisImageUrl(prof.qris_image_url ?? null)
         setCashierSoundUrl(prof.cashier_sound_url ?? null)
         setCashierTone(prof.cashier_tone ?? 'classic')
+      }
+      if (compactSettingError) {
+        setCompactModeError(`Gagal memuat mode tanpa gambar: ${compactSettingError.message}`)
+      } else {
+        setCompactMode(compactSetting?.cashier_compact_mode === true)
+        setCompactModeError('')
       }
 
       const { data: accounts } = await supabase
@@ -1022,6 +1037,12 @@ export default function CashierPage() {
           </div>
         )}
 
+        {compactModeError && (
+          <div className="mx-4 mt-3 bg-amber-50 text-amber-800 text-sm px-4 py-2.5 rounded-lg border border-amber-200">
+            {compactModeError}
+          </div>
+        )}
+
         <div className="scrollbar-thin flex-1 overflow-y-auto p-4">
           {filtered.length === 0 ? (
             <div className="text-center py-16 text-gray-400 text-sm">
@@ -1031,12 +1052,14 @@ export default function CashierPage() {
             </div>
           ) : (
             <div className={`grid gap-3 ${
-              cartVisible
-                ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4'
-                : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6'
+              compactMode
+                ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4'
+                : cartVisible
+                  ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4'
+                  : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6'
             }`}>
               {filtered.map(p => (
-                <ProductCard key={p.id} product={p} onAdd={addToCart} />
+                <ProductCard key={p.id} product={p} onAdd={addToCart} compactMode={compactMode} />
               ))}
             </div>
           )}

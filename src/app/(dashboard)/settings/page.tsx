@@ -54,6 +54,10 @@ export default function SettingsPage() {
   const [customerSoundUrl, setCustomerSoundUrl] = useState<string | null>(null)
   const [cashierTone, setCashierTone] = useState('classic')
   const [customerTone, setCustomerTone] = useState('classic')
+  const [cashierCompactMode, setCashierCompactMode] = useState(false)
+  const [cashierCompactModeReady, setCashierCompactModeReady] = useState(false)
+  const [cashierCompactModeSaving, setCashierCompactModeSaving] = useState(false)
+  const [cashierCompactModeError, setCashierCompactModeError] = useState('')
   const [soundUploading, setSoundUploading] = useState<'cashier' | 'customer' | null>(null)
   const [tableQrLinks, setTableQrLinks] = useState<Record<number, string>>({})
   const [qrReady, setQrReady] = useState(false)
@@ -72,6 +76,14 @@ export default function SettingsPage() {
         supabase.from('payment_accounts').select('id, bank_name, account_number, account_name').eq('user_id', user.id).order('created_at'),
       ])
       if (prof) {
+        const hasCompactModeSetting = Object.prototype.hasOwnProperty.call(prof, 'cashier_compact_mode')
+        setCashierCompactModeReady(hasCompactModeSetting)
+        setCashierCompactMode(prof.cashier_compact_mode === true)
+        if (!hasCompactModeSetting) {
+          setCashierCompactModeError(
+            'Pengaturan ini memerlukan pembaruan database. Jalankan supabase/add_cashier_compact_mode.sql di Supabase SQL Editor.'
+          )
+        }
         setProfile({
           business_name: prof.business_name ?? '',
           owner_name: prof.owner_name ?? '',
@@ -98,6 +110,32 @@ export default function SettingsPage() {
     }
     load()
   }, [])
+
+  const handleCashierCompactModeChange = async () => {
+    if (!cashierCompactModeReady || cashierCompactModeSaving) return
+    setCashierCompactModeSaving(true)
+    setCashierCompactModeError('')
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      setCashierCompactModeError('Sesi pengguna tidak ditemukan. Muat ulang halaman lalu coba lagi.')
+      setCashierCompactModeSaving(false)
+      return
+    }
+
+    const nextValue = !cashierCompactMode
+    const { error } = await supabase
+      .from('profiles')
+      .update({ cashier_compact_mode: nextValue })
+      .eq('id', user.id)
+
+    if (error) {
+      setCashierCompactModeError(`Gagal menyimpan pengaturan: ${error.message}`)
+    } else {
+      setCashierCompactMode(nextValue)
+    }
+    setCashierCompactModeSaving(false)
+  }
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -346,6 +384,48 @@ export default function SettingsPage() {
             {loading ? 'Menyimpan...' : 'Simpan Perubahan'}
           </button>
         </form>
+      </div>
+
+      {/* Tampilan Kasir */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <h2 className="font-semibold text-gray-800 mb-1">Tampilan Kasir</h2>
+        <p className="text-sm text-gray-400 mb-4">
+          Sembunyikan gambar produk agar lebih banyak item terlihat di layar kasir.
+        </p>
+
+        <div className="flex items-center justify-between gap-4 rounded-xl border border-gray-200 bg-gray-0 p-4">
+          <div>
+            <p className="text-sm font-medium text-gray-800">Mode tanpa gambar</p>
+            <p className="text-xs text-gray-500">
+              {cashierCompactMode ? 'Aktif — daftar produk lebih padat' : 'Nonaktif — gambar produk ditampilkan'}
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={cashierCompactMode}
+            aria-label="Mode tanpa gambar"
+            disabled={!cashierCompactModeReady || cashierCompactModeSaving}
+            onClick={() => void handleCashierCompactModeChange()}
+            className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+              cashierCompactMode ? 'bg-indigo-600' : 'bg-gray-300'
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                cashierCompactMode ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
+        </div>
+        {cashierCompactModeError && (
+          <p role="alert" className="mt-3 text-sm text-amber-700">
+            {cashierCompactModeError}
+          </p>
+        )}
+        {cashierCompactModeSaving && (
+          <p className="mt-2 text-xs text-gray-400">Menyimpan pengaturan...</p>
+        )}
       </div>
 
       {/* Rekening Transfer */}
