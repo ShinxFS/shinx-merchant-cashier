@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Save, Plus, Trash2, QrCode, Upload } from 'lucide-react'
 
@@ -33,7 +33,7 @@ const toneOptions = [
 const inputClass = "w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
 
 export default function SettingsPage() {
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
   const [profile, setProfile] = useState({
     business_name: '',
     owner_name: '',
@@ -61,10 +61,6 @@ export default function SettingsPage() {
   const [soundUploading, setSoundUploading] = useState<'cashier' | 'customer' | null>(null)
   const [tableQrLinks, setTableQrLinks] = useState<Record<number, string>>({})
   const [qrReady, setQrReady] = useState(false)
-
-  useEffect(() => {
-    setQrReady(true)
-  }, [])
 
   useEffect(() => {
     const load = async () => {
@@ -107,9 +103,10 @@ export default function SettingsPage() {
       ) as Record<number, string>
 
       setTableQrLinks(links)
+      setQrReady(true)
     }
     load()
-  }, [])
+  }, [supabase])
 
   const handleCashierCompactModeChange = async () => {
     if (!cashierCompactModeReady || cashierCompactModeSaving) return
@@ -274,7 +271,7 @@ export default function SettingsPage() {
     }
 
     const tone = kind === 'cashier' ? cashierTone : customerTone
-    const AudioCtor = window.AudioContext || (window as any).webkitAudioContext
+    const AudioCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
     if (!AudioCtor) return
 
     const context = new AudioCtor()
@@ -393,11 +390,11 @@ export default function SettingsPage() {
           Sembunyikan gambar produk agar lebih banyak item terlihat di layar kasir.
         </p>
 
-        <div className="flex items-center justify-between gap-4 rounded-xl border border-gray-200 bg-gray-0 p-4">
+        <div className="flex items-center justify-between gap-4 rounded-xl border border-gray-200 bg-gray-25 p-4">
           <div>
-            <p className="text-sm font-medium text-gray-800">Mode tanpa gambar</p>
+            <p className="text-sm font-medium text-gray-800">Mode Compact</p>
             <p className="text-xs text-gray-500">
-              {cashierCompactMode ? 'Aktif — daftar produk lebih padat' : 'Nonaktif — gambar produk ditampilkan'}
+              {cashierCompactMode ? 'Aktif — gambar produk nonaktif' : 'Nonaktif — gambar produk aktif'}
             </p>
           </div>
           <button
@@ -405,9 +402,11 @@ export default function SettingsPage() {
             role="switch"
             aria-checked={cashierCompactMode}
             aria-label="Mode tanpa gambar"
-            disabled={!cashierCompactModeReady || cashierCompactModeSaving}
+            aria-disabled={!cashierCompactModeReady || cashierCompactModeSaving}
             onClick={() => void handleCashierCompactModeChange()}
-            className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+            className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
+              !cashierCompactModeReady || cashierCompactModeSaving ? 'cursor-not-allowed opacity-50' : ''
+            } ${
               cashierCompactMode ? 'bg-indigo-600' : 'bg-gray-300'
             }`}
           >
@@ -469,7 +468,7 @@ export default function SettingsPage() {
         {paymentAccounts.length > 0 && (
           <div className="space-y-2">
             {paymentAccounts.map(account => (
-              <div key={account.id} className="flex items-center justify-between gap-3 rounded-lg bg-gray-50 border border-gray-200 px-3 py-2.5">
+              <div key={account.id} className="flex items-center justify-between gap-3 rounded-lg bg-gray-0 border border-gray-200 px-3 py-2.5">
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-gray-800">{account.bank_name} · {account.account_number}</p>
                   <p className="text-xs text-gray-500">a.n. {account.account_name}</p>
@@ -538,7 +537,7 @@ export default function SettingsPage() {
         <h2 className="font-semibold text-gray-800 mb-4">Suara Notifikasi</h2>
 
         <div className="space-y-5">
-          <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+          <div className="rounded-xl border border-gray-200 bg-gray-0 p-4">
             <div className="flex items-center justify-between gap-3 mb-2">
               <div>
                 <p className="text-sm font-semibold text-gray-800">Suara Kasir</p>
@@ -578,7 +577,7 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+          <div className="rounded-xl border border-gray-200 bg-gray-0 p-4">
             <div className="flex items-center justify-between gap-3 mb-2">
               <div>
                 <p className="text-sm font-semibold text-gray-800">Suara Pelanggan</p>

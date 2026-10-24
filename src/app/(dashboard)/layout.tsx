@@ -1,13 +1,14 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useSyncExternalStore } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import {
   LayoutDashboard, ShoppingCart, Package, Receipt, ClipboardList,
-  Settings, LogOut, Menu, Store, BarChart2, WalletCards, Users, Calculator, Bell, X, Grid2X2, ScrollText,
+  Settings, LogOut, Menu, Store, BarChart2, WalletCards, Users, Calculator, Bell, X, Grid2X2, ScrollText, Moon, Sun,
 } from 'lucide-react'
+import { getServerThemeSnapshot, getThemeSnapshot, setDarkTheme, subscribeToTheme } from '@/lib/theme'
 
 interface NotificationLog {
   id: string
@@ -36,6 +37,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter()
   const pathname = usePathname()
   const supabase = createClient()
+  const darkMode = useSyncExternalStore(subscribeToTheme, getThemeSnapshot, getServerThemeSnapshot)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [businessName, setBusinessName] = useState('Shinx Merchant')
   const [role, setRole] = useState<'owner' | 'staff'>('owner')
@@ -223,6 +225,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     setSidebarMenuOpen(prev => !prev)
   }
 
+  const toggleDarkMode = () => {
+    try {
+      setDarkTheme(!darkMode)
+    } catch {
+      window.alert('Mode gelap tidak dapat disimpan di browser ini.')
+    }
+  }
+
   const allNavItems = [
     { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', ownerOnly: false },
     { href: '/cashier', icon: ShoppingCart, label: 'Kasir', ownerOnly: false },
@@ -238,7 +248,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const navItems = allNavItems.filter(item => !item.ownerOnly || role === 'owner')
 
-  const Sidebar = () => (
+  const renderSidebar = () => (
     <div className="flex flex-col h-full bg-white border-r border-gray-200">
       <div className="px-6 py-5 border-b border-gray-100">
         <div className="flex items-center gap-3">
@@ -290,6 +300,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </span>
           </div>
         )}
+        <div className="relative ml-[5px] mb-2 w-fit">
+          <button
+            type="button"
+            onClick={toggleDarkMode}
+            aria-label={darkMode ? 'Aktifkan mode terang' : 'Aktifkan mode gelap'}
+            aria-pressed={darkMode}
+            className="group relative flex h-9 w-9 items-center justify-center text-gray-600 transition-colors hover:text-indigo-600"
+          >
+            <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white shadow-sm transition-colors hover:border-indigo-200 hover:bg-indigo-50">
+              {darkMode ? <Sun size={17} /> : <Moon size={17} />}
+            </span>
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 translate-x-1 whitespace-nowrap rounded-md bg-gray-800 px-2 py-1 text-xs font-medium text-white opacity-0 shadow-md transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100"
+            >
+              {darkMode ? 'Mode Terang' : 'Mode Gelap'}
+            </span>
+          </button>
+        </div>
         <div className="relative ml-[5px] mt-2 w-fit">
           {sidebarMenuOpen && (
             <div ref={sidebarMenuRef} className="absolute bottom-full left-0 z-[60] mb-2 w-48 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
@@ -357,14 +386,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
       <aside className="hidden md:flex w-60 flex-shrink-0 flex-col">
-        <Sidebar />
+        {renderSidebar()}
       </aside>
 
       {sidebarOpen && (
         <div className="fixed inset-0 z-40 md:hidden">
           <div className="absolute inset-0 bg-black/40" onClick={() => setSidebarOpen(false)} />
           <aside className="relative z-50 w-60 h-full">
-            <Sidebar />
+            {renderSidebar()}
           </aside>
         </div>
       )}
@@ -431,6 +460,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </button>
           </div>
           <div className="max-h-[60vh] divide-y divide-gray-100 overflow-y-auto px-4">
+             <article className="py-3">
+              <p className="text-sm font-medium text-gray-800">Dark Mode</p>
+              <p className="mt-0.5 text-sm text-gray-600">Menambahkan tampilan gelap untuk mengurangi kelelahan mata.</p>
+            </article>
             <article className="py-3">
               <p className="text-sm font-medium text-gray-800">Mode Compact</p>
               <p className="mt-0.5 text-sm text-gray-600">Sembunyikan gambar produk agar lebih banyak item terlihat di layar kasir.</p>

@@ -5,6 +5,12 @@
   --foreground: #171717;
 }
 
+html.dark {
+  color-scheme: dark;
+  --background: #0b1120;
+  --foreground: #e5e7eb;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -12,18 +18,158 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
   overflow-x: hidden;
+}
+
+html.dark :is([class~="bg-white"], [class~="bg-gray-0"]) {
+  background-color: #111827 !important;
+}
+
+html.dark :is([class~="bg-gray-25"], [class~="bg-gray-50"]) {
+  background-color: #0f172a !important;
+}
+
+html.dark :is([class~="bg-gray-100"], [class~="bg-gray-200"]) {
+  background-color: #1f2937 !important;
+}
+
+html.dark :is([class~="text-gray-900"], [class~="text-gray-800"]) {
+  color: #f3f4f6 !important;
+}
+
+html.dark :is([class~="text-gray-700"], [class~="text-gray-600"]) {
+  color: #d1d5db !important;
+}
+
+html.dark :is([class~="text-gray-500"], [class~="text-gray-400"]) {
+  color: #9ca3af !important;
+}
+
+html.dark :is([class~="border-gray-100"], [class~="border-gray-200"]) {
+  border-color: #293548 !important;
+}
+
+html.dark :is([class~="border-gray-300"], [class~="border-gray-400"]) {
+  border-color: #475569 !important;
+}
+
+html.dark :is([class~="divide-gray-100"], [class~="divide-gray-200"]) > :not(:first-child) {
+  border-color: #293548 !important;
+}
+
+html.dark :is(input, textarea, select) {
+  color-scheme: dark;
+}
+
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #9ca3af;
+}
+
+html.dark :is([class~="hover:bg-gray-50"]:hover, [class~="hover:bg-gray-100"]:hover) {
+  background-color: #1f2937 !important;
+}
+
+html.dark :is([class~="hover:bg-gray-200"]:hover) {
+  background-color: #374151 !important;
+}
+
+html.dark [class~="bg-indigo-50"] {
+  background-color: #252044 !important;
+}
+
+html.dark [class~="bg-indigo-100"] {
+  background-color: #30285e !important;
+}
+
+html.dark [class~="text-indigo-600"] {
+  color: #a5b4fc !important;
+}
+
+html.dark [class~="hover:text-indigo-600"]:hover {
+  color: #c7d2fe !important;
+}
+
+html.dark [class~="bg-red-50"] {
+  background-color: #3b1c28 !important;
+}
+
+html.dark [class~="bg-red-100"] {
+  background-color: #4a202d !important;
+}
+
+html.dark .stock-out-alert {
+  border-color: #6b2b3a !important;
+}
+
+html.dark :is([class~="text-red-600"], [class~="text-red-700"], [class~="text-red-800"]) {
+  color: #fca5a5 !important;
+}
+
+html.dark [class~="bg-amber-50"] {
+  background-color: #3b2d17 !important;
+}
+
+html.dark [class~="bg-orange-50"] {
+  background-color: #3b2d17 !important;
+}
+
+html.dark [class~="bg-amber-100"] {
+  background-color: #473718 !important;
+}
+
+html.dark [class~="bg-orange-100"] {
+  background-color: #473718 !important;
+}
+
+html.dark :is([class~="text-amber-700"], [class~="text-amber-800"]) {
+  color: #fcd34d !important;
+}
+
+html.dark [class~="text-orange-700"] {
+  color: #fcd34d !important;
+}
+
+html.dark [class~="border-orange-200"] {
+  border-color: #62451f !important;
+}
+
+html.dark [class~="bg-green-50"],
+html.dark [class~="bg-emerald-50"] {
+  background-color: #14352e !important;
+}
+
+html.dark [class~="bg-green-100"],
+html.dark [class~="bg-emerald-100"] {
+  background-color: #19453a !important;
+}
+
+html.dark :is([class~="text-green-700"], [class~="text-emerald-700"]) {
+  color: #6ee7b7 !important;
+}
+
+html.dark [class~="bg-blue-50"] {
+  background-color: #172d48 !important;
+}
+
+html.dark [class~="bg-blue-100"] {
+  background-color: #1c3654 !important;
+}
+
+html.dark [class~="text-blue-700"] {
+  color: #93c5fd !important;
+}
+
+html.dark [class~="text-orange-600"] {
+  color: #fdba74 !important;
+}
+
+html.dark button[role="switch"] > span[class~="bg-white"] {
+  background-color: #ffffff !important;
 }
 
 .scrollbar-thin {
@@ -43,4 +189,12 @@ body {
 .scrollbar-thin::-webkit-scrollbar-thumb {
   border-radius: 9999px;
   background-color: #cbd5e1;
+}
+
+html.dark .scrollbar-thin {
+  scrollbar-color: #475569 transparent;
+}
+
+html.dark .scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: #475569;
 }

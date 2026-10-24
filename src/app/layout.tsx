@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { Geist } from 'next/font/google'
+import Script from 'next/script'
 import './globals.css'
 
 const geist = Geist({ subsets: ['latin'] })
@@ -15,7 +16,16 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="id">
+    <html lang="id" suppressHydrationWarning>
+      <head>
+        <Script id="theme-init" strategy="beforeInteractive">
+          {`try {
+            if (localStorage.getItem('shinx-theme') === 'dark') {
+              document.documentElement.classList.add('dark')
+            }
+          } catch {}`}
+        </Script>
+      </head>
       <body className={geist.className}>{children}</body>
     </html>
   )

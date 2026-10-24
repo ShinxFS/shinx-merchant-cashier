@@ -331,7 +331,7 @@ export default function ProductsPage() {
 
       {/* Notifikasi stok habis */}
       {products.filter(p => p.stock === 0).length > 0 && (
-        <div className="mb-4 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+        <div className="stock-out-alert mb-4 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
           <p className="text-sm font-semibold text-red-700 mb-1">🚫 Stok Habis</p>
           <div className="flex flex-wrap gap-2">
             {products.filter(p => p.stock === 0).map(p => (
