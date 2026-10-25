@@ -25,6 +25,43 @@ body {
   overflow-x: hidden;
 }
 
+::view-transition-group(root) {
+  animation: none !important;
+}
+
+::view-transition-image-pair(root) {
+  isolation: isolate;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  mix-blend-mode: normal;
+}
+
+::view-transition-old(root) {
+  animation: none;
+  z-index: 1;
+}
+
+::view-transition-new(root) {
+  animation: theme-bubble-reveal 600ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+  clip-path: circle(0 at var(--theme-reveal-x, 50%) var(--theme-reveal-y, 50%));
+  z-index: 2;
+}
+
+@keyframes theme-bubble-reveal {
+  to {
+    clip-path: circle(var(--theme-reveal-radius, 150vmax) at var(--theme-reveal-x, 50%) var(--theme-reveal-y, 50%));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+}
+
 html.dark :is([class~="bg-white"], [class~="bg-gray-0"]) {
   background-color: #111827 !important;
 }
@@ -49,15 +86,23 @@ html.dark :is([class~="text-gray-500"], [class~="text-gray-400"]) {
   color: #9ca3af !important;
 }
 
-html.dark :is([class~="border-gray-100"], [class~="border-gray-200"]) {
+html.dark :is([class~="border-gray-50"], [class~="border-gray-100"], [class~="border-gray-200"]) {
   border-color: #293548 !important;
+}
+
+html.dark .changelog-header-divider[class~="border-b"] {
+  border-color: #1f2937 !important;
 }
 
 html.dark :is([class~="border-gray-300"], [class~="border-gray-400"]) {
   border-color: #475569 !important;
 }
 
-html.dark :is([class~="divide-gray-100"], [class~="divide-gray-200"]) > :not(:first-child) {
+html.dark :is([class~="divide-gray-100"], [class~="divide-gray-200"]) > :not(:last-child) {
+  border-color: #293548 !important;
+}
+
+html.dark tbody.divide-gray-50 > tr:not(:last-child) {
   border-color: #293548 !important;
 }
 
@@ -138,6 +183,10 @@ html.dark [class~="border-orange-200"] {
   border-color: #62451f !important;
 }
 
+html.dark [class~="border-amber-200"] {
+  border-color: #62451f !important;
+}
+
 html.dark [class~="bg-green-50"],
 html.dark [class~="bg-emerald-50"] {
   background-color: #14352e !important;
@@ -152,6 +201,10 @@ html.dark :is([class~="text-green-700"], [class~="text-emerald-700"]) {
   color: #6ee7b7 !important;
 }
 
+html.dark [class~="border-emerald-200"] {
+  border-color: #245d4e !important;
+}
+
 html.dark [class~="bg-blue-50"] {
   background-color: #172d48 !important;
 }
@@ -162,6 +215,22 @@ html.dark [class~="bg-blue-100"] {
 
 html.dark [class~="text-blue-700"] {
   color: #93c5fd !important;
+}
+
+html.dark [class~="border-blue-200"] {
+  border-color: #315982 !important;
+}
+
+html.dark [class~="bg-slate-200"] {
+  background-color: #1f2937 !important;
+}
+
+html.dark [class~="text-slate-700"] {
+  color: #cbd5e1 !important;
+}
+
+html.dark [class~="border-slate-300"] {
+  border-color: #475569 !important;
 }
 
 html.dark [class~="text-orange-600"] {

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Save, Plus, Trash2, QrCode, Upload } from 'lucide-react'
+import { Save, Plus, Trash2, QrCode, Upload, Pencil, Check, X } from 'lucide-react'
 
 interface Category {
   id: string
@@ -46,6 +46,9 @@ export default function SettingsPage() {
   const [accountSaving, setAccountSaving] = useState(false)
   const [newCatName, setNewCatName] = useState('')
   const [newCatColor, setNewCatColor] = useState('#6366f1')
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null)
+  const [editingCategoryName, setEditingCategoryName] = useState('')
+  const [categorySavingId, setCategorySavingId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [saved, setSaved] = useState(false)
   const [qrisUrl, setQrisUrl] = useState<string | null>(null)
@@ -307,6 +310,50 @@ export default function SettingsPage() {
       .select()
       .single()
     if (data) { setCategories(prev => [...prev, data]); setNewCatName('') }
+  }
+
+  const handleUpdateCategory = async (id: string) => {
+    const name = editingCategoryName.trim()
+    if (!name) {
+      alert('Nama kategori tidak boleh kosong.')
+      return
+    }
+
+    setCategorySavingId(id)
+    try {
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (authError || !user) {
+        alert('Sesi berakhir. Silakan masuk kembali.')
+        return
+      }
+
+      const { data, error } = await supabase
+        .from('categories')
+        .update({ name })
+        .eq('id', id)
+        .eq('user_id', user.id)
+        .select()
+        .single()
+
+      if (error) {
+        alert(`Gagal mengubah nama kategori: ${error.message}`)
+        return
+      }
+
+      setCategories(prev => prev.map(category => category.id === id ? data : category))
+      setEditingCategoryId(null)
+      setEditingCategoryName('')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Terjadi kesalahan yang tidak diketahui.'
+      alert(`Gagal mengubah nama kategori: ${message}`)
+    } finally {
+      setCategorySavingId(null)
+    }
+  }
+
+  const cancelCategoryEdit = () => {
+    setEditingCategoryId(null)
+    setEditingCategoryName('')
   }
 
   const handleDeleteCategory = async (id: string) => {
@@ -683,16 +730,71 @@ export default function SettingsPage() {
           <div className="space-y-2">
             {categories.map(cat => (
               <div key={cat.id} className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-gray-50">
-                <div className="flex items-center gap-2.5">
+                <div className="flex min-w-0 flex-1 items-center gap-2.5">
                   <div className="w-3 h-3 rounded-full" style={{ backgroundColor: cat.color }} />
-                  <span className="text-sm text-gray-700">{cat.name}</span>
+                  {editingCategoryId === cat.id ? (
+                    <form
+                      className="flex min-w-0 flex-1 items-center gap-2"
+                      onSubmit={event => {
+                        event.preventDefault()
+                        void handleUpdateCategory(cat.id)
+                      }}
+                    >
+                      <input
+                        autoFocus
+                        aria-label={`Nama kategori ${cat.name}`}
+                        value={editingCategoryName}
+                        onChange={event => setEditingCategoryName(event.target.value)}
+                        onKeyDown={event => {
+                          if (event.key === 'Escape') cancelCategoryEdit()
+                        }}
+                        className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                      <button
+                        type="submit"
+                        aria-label={`Simpan nama kategori ${cat.name}`}
+                        disabled={categorySavingId === cat.id || !editingCategoryName.trim()}
+                        className="text-green-600 transition-colors hover:text-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <Check size={17} />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Batal mengedit kategori ${cat.name}`}
+                        disabled={categorySavingId === cat.id}
+                        onClick={cancelCategoryEdit}
+                        className="text-gray-400 transition-colors hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <X size={17} />
+                      </button>
+                    </form>
+                  ) : (
+                    <span className="truncate text-sm text-gray-700">{cat.name}</span>
+                  )}
                 </div>
-                <button
-                  onClick={() => handleDeleteCategory(cat.id)}
-                  className="text-gray-300 hover:text-red-400 transition-colors"
-                >
-                  <Trash2 size={15} />
-                </button>
+                {editingCategoryId !== cat.id && (
+                  <div className="ml-3 flex items-center gap-3">
+                    <button
+                      type="button"
+                      aria-label={`Edit kategori ${cat.name}`}
+                      onClick={() => {
+                        setEditingCategoryId(cat.id)
+                        setEditingCategoryName(cat.name)
+                      }}
+                      className="text-gray-400 transition-colors hover:text-indigo-600"
+                    >
+                      <Pencil size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Hapus kategori ${cat.name}`}
+                      onClick={() => handleDeleteCategory(cat.id)}
+                      className="text-gray-300 transition-colors hover:text-red-400"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>

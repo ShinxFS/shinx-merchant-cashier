@@ -225,9 +225,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     setSidebarMenuOpen(prev => !prev)
   }
 
-  const toggleDarkMode = () => {
+  const toggleDarkMode = (event: React.MouseEvent<HTMLButtonElement>) => {
     try {
-      setDarkTheme(!darkMode)
+      setDarkTheme(!darkMode, event.currentTarget)
     } catch {
       window.alert('Mode gelap tidak dapat disimpan di browser ini.')
     }
@@ -448,7 +448,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {changelogOpen && (
         <section ref={changelogPanelRef} className="fixed bottom-28 left-4 z-50 w-[calc(100vw-2rem)] max-w-sm overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
-          <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+          <div className="changelog-header-divider flex items-center justify-between border-b border-gray-100 px-4 py-3">
             <h2 className="text-sm font-semibold text-gray-900">Changelog</h2>
             <button
               type="button"
