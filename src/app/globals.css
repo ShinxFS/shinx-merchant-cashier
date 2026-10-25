@@ -98,7 +98,7 @@ html.dark :is([class~="border-gray-300"], [class~="border-gray-400"]) {
   border-color: #475569 !important;
 }
 
-html.dark :is([class~="divide-gray-100"], [class~="divide-gray-200"]) > :not(:last-child) {
+html.dark :is([class~="divide-gray-50"], [class~="divide-gray-100"], [class~="divide-gray-200"]) > :not(:last-child) {
   border-color: #293548 !important;
 }
 
@@ -192,9 +192,17 @@ html.dark [class~="bg-emerald-50"] {
   background-color: #14352e !important;
 }
 
+html.dark [class~="bg-purple-50"] {
+  background-color: #32214f !important;
+}
+
 html.dark [class~="bg-green-100"],
 html.dark [class~="bg-emerald-100"] {
   background-color: #19453a !important;
+}
+
+html.dark [class~="text-purple-600"] {
+  color: #c4b5fd !important;
 }
 
 html.dark :is([class~="text-green-700"], [class~="text-emerald-700"]) {
