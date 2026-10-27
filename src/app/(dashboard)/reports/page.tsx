@@ -7,160 +7,180 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, LineChart, Line, Legend
 } from 'recharts'
-import { TrendingUp, ShoppingCart, Package, TrendingDown, Wallet } from 'lucide-react'
+import { TrendingUp, Package, TrendingDown, Wallet } from 'lucide-react'
 
 type ViewType = 'weekly' | 'monthly15' | 'monthly30' | 'monthly6'
 
+interface ReportDataPoint {
+  label: string
+  revenue: number
+  cogs: number
+  grossProfit: number
+  expenses: number
+  profit: number
+  transactions: number
+}
+
+interface ReportTransaction {
+  id: string
+  total: number
+  created_at: string
+  transaction_items: { cost_price: number | null; quantity: number }[] | null
+}
+
+interface ReportExpense {
+  amount: number
+  date: string
+}
+
+interface TopProduct {
+  name: string
+  qty: number
+  revenue: number
+}
+
+function toDateKey(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function toMonthKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+}
+
 export default function ReportsPage() {
   const supabase = createClient()
-  const [weeklyData, setWeeklyData] = useState<any[]>([])
-  const [monthly15Data, setMonthly15Data] = useState<any[]>([])
-  const [monthly30Data, setMonthly30Data] = useState<any[]>([])
-  const [monthly6Data, setMonthly6Data] = useState<any[]>([])
-  const [topProducts, setTopProducts] = useState<any[]>([])
+  const [weeklyData, setWeeklyData] = useState<ReportDataPoint[]>([])
+  const [monthly15Data, setMonthly15Data] = useState<ReportDataPoint[]>([])
+  const [monthly30Data, setMonthly30Data] = useState<ReportDataPoint[]>([])
+  const [monthly6Data, setMonthly6Data] = useState<ReportDataPoint[]>([])
+  const [topProducts, setTopProducts] = useState<TopProduct[]>([])
   const [view, setView] = useState<ViewType>('weekly')
   const [loading, setLoading] = useState(true)
-  const [summary, setSummary] = useState({ revenue: 0, expenses: 0, cogs: 0, grossProfit: 0, profit: 0 })
+  const [loadError, setLoadError] = useState('')
+  const [topProductsError, setTopProductsError] = useState('')
 
   useEffect(() => {
+    let cancelled = false
+
     const load = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      try {
+        const { data: { user }, error: userError } = await supabase.auth.getUser()
+        if (userError) throw userError
+        if (!user) throw new Error('Sesi login tidak ditemukan.')
 
-      const fetchDays = async (numDays: number) => {
-        const days = Array.from({ length: numDays }, (_, i) => {
-          const d = new Date()
-          d.setDate(d.getDate() - (numDays - 1 - i))
-          return d
-        })
-        return Promise.all(days.map(async (day) => {
-          const start = new Date(day); start.setHours(0, 0, 0, 0)
-          const end = new Date(day); end.setHours(23, 59, 59, 999)
-          const dateStr = day.toISOString().split('T')[0]
+        const now = new Date()
+        const startMonth = new Date(now.getFullYear(), now.getMonth() - 5, 1)
+        const endMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+        const startDate = toDateKey(startMonth)
+        const endDate = toDateKey(endMonth)
 
-          const [{ data: txData }, { data: expData }] = await Promise.all([
-            supabase.from('transactions').select('id, total')
-              .eq('user_id', user.id)
-              .gte('created_at', start.toISOString())
-              .lte('created_at', end.toISOString()),
-            supabase.from('expenses').select('amount')
-              .eq('user_id', user.id)
-              .eq('date', dateStr),
-          ])
-
-          const txIds = txData?.map(t => t.id) ?? []
-          const { data: itemData } = txIds.length > 0
-            ? await supabase.from('transaction_items').select('cost_price, quantity')
-                .in('transaction_id', txIds)
-            : { data: [] }
-
-          const revenue = txData?.reduce((s, t) => s + t.total, 0) ?? 0
-          const expenses = expData?.reduce((s, e) => s + e.amount, 0) ?? 0
-          const cogs = itemData?.reduce((s, i) => s + ((i.cost_price ?? 0) * i.quantity), 0) ?? 0
-          const grossProfit = revenue - cogs
-          return {
-            label: day.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
-            revenue,
-            cogs,
-            grossProfit,
-            expenses,
-            profit: grossProfit - expenses,
-            transactions: txData?.length ?? 0,
-          }
-        }))
-      }
-
-      const months = Array.from({ length: 6 }, (_, i) => {
-        const d = new Date()
-        d.setMonth(d.getMonth() - (5 - i))
-        return d
-      })
-
-      const monthly6Result = await Promise.all(months.map(async (month) => {
-        const start = new Date(month.getFullYear(), month.getMonth(), 1)
-        const end = new Date(month.getFullYear(), month.getMonth() + 1, 0, 23, 59, 59)
-        const startDate = start.toISOString().split('T')[0]
-        const endDate = end.toISOString().split('T')[0]
-
-        const [{ data: txData }, { data: expData }] = await Promise.all([
-          supabase.from('transactions').select('id, total')
+        const [
+          { data: transactions, error: transactionsError },
+          { data: expenses, error: expensesError },
+          { data: top, error: topError },
+        ] = await Promise.all([
+          supabase.from('transactions')
+            .select('id, total, created_at, transaction_items(cost_price, quantity)')
             .eq('user_id', user.id)
-            .gte('created_at', start.toISOString())
-            .lte('created_at', end.toISOString()),
-          supabase.from('expenses').select('amount')
+            .gte('created_at', startMonth.toISOString())
+            .lt('created_at', endMonth.toISOString()),
+          supabase.from('expenses')
+            .select('amount, date')
             .eq('user_id', user.id)
             .gte('date', startDate)
-            .lte('date', endDate),
+            .lt('date', endDate),
+          supabase.rpc('get_top_selling_products'),
         ])
 
-        const txIds = txData?.map(t => t.id) ?? []
-        const { data: itemData } = txIds.length > 0
-          ? await supabase.from('transaction_items').select('cost_price, quantity')
-              .in('transaction_id', txIds)
-          : { data: [] }
+        if (transactionsError) throw transactionsError
+        if (expensesError) throw expensesError
+        const transactionRows: ReportTransaction[] = transactions ?? []
+        const expenseRows: ReportExpense[] = expenses ?? []
 
-        const revenue = txData?.reduce((s, t) => s + t.total, 0) ?? 0
-        const expenses = expData?.reduce((s, e) => s + e.amount, 0) ?? 0
-        const cogs = itemData?.reduce((s, i) => s + ((i.cost_price ?? 0) * i.quantity), 0) ?? 0
-        const grossProfit = revenue - cogs
-        return {
-          label: month.toLocaleDateString('id-ID', { month: 'short', year: '2-digit' }),
-          revenue,
-          cogs,
-          grossProfit,
-          expenses,
-          profit: grossProfit - expenses,
-          transactions: txData?.length ?? 0,
+        const dailyTotals = new Map<string, Omit<ReportDataPoint, 'label' | 'grossProfit' | 'profit'>>()
+        const monthlyTotals = new Map<string, Omit<ReportDataPoint, 'label' | 'grossProfit' | 'profit'>>()
+        const getTotals = (
+          totals: Map<string, Omit<ReportDataPoint, 'label' | 'grossProfit' | 'profit'>>,
+          key: string,
+        ) => {
+          let value = totals.get(key)
+          if (!value) {
+            value = { revenue: 0, cogs: 0, expenses: 0, transactions: 0 }
+            totals.set(key, value)
+          }
+          return value
         }
-      }))
 
-      const { data: items } = await supabase
-        .from('transaction_items')
-        .select('product_name, quantity, subtotal')
+        for (const transaction of transactionRows) {
+          const transactionDate = new Date(transaction.created_at)
+          const cogs = transaction.transaction_items?.reduce(
+            (total, item) => total + (item.cost_price ?? 0) * item.quantity,
+            0,
+          ) ?? 0
+          const dayTotals = getTotals(dailyTotals, toDateKey(transactionDate))
+          dayTotals.revenue += transaction.total
+          dayTotals.cogs += cogs
+          dayTotals.transactions += 1
 
-      const productMap: Record<string, { qty: number; revenue: number }> = {}
-      items?.forEach(item => {
-        if (!productMap[item.product_name]) productMap[item.product_name] = { qty: 0, revenue: 0 }
-        productMap[item.product_name].qty += item.quantity
-        productMap[item.product_name].revenue += item.subtotal
-      })
+          const monthTotals = getTotals(monthlyTotals, toMonthKey(transactionDate))
+          monthTotals.revenue += transaction.total
+          monthTotals.cogs += cogs
+          monthTotals.transactions += 1
+        }
 
-      const top = Object.entries(productMap)
-        .map(([name, val]) => ({ name, ...val }))
-        .sort((a, b) => b.qty - a.qty)
-        .slice(0, 10)
+        for (const expense of expenseRows) {
+          const expenseDate = new Date(`${expense.date}T00:00:00`)
+          getTotals(dailyTotals, expense.date).expenses += expense.amount
+          getTotals(monthlyTotals, toMonthKey(expenseDate)).expenses += expense.amount
+        }
 
-      // Summary bulan ini
-      const startMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
-      const [{ data: monthTx }, { data: monthExp }] = await Promise.all([
-        supabase.from('transactions').select('id, total')
-          .eq('user_id', user.id).gte('created_at', startMonth.toISOString()),
-        supabase.from('expenses').select('amount')
-          .eq('user_id', user.id).gte('date', startMonth.toISOString().split('T')[0]),
-      ])
+        const days = Array.from({ length: 30 }, (_, index) => {
+          const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29 + index)
+          const totals = getTotals(dailyTotals, toDateKey(day))
+          const grossProfit = totals.revenue - totals.cogs
+          return {
+            label: day.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
+            ...totals,
+            grossProfit,
+            profit: grossProfit - totals.expenses,
+          }
+        })
 
-      const monthTxIds = monthTx?.map(t => t.id) ?? []
-      const { data: monthItems } = monthTxIds.length > 0
-        ? await supabase.from('transaction_items').select('cost_price, quantity')
-            .in('transaction_id', monthTxIds)
-        : { data: [] }
+        const months = Array.from({ length: 6 }, (_, index) => {
+          const month = new Date(now.getFullYear(), now.getMonth() - 5 + index, 1)
+          const totals = getTotals(monthlyTotals, toMonthKey(month))
+          const grossProfit = totals.revenue - totals.cogs
+          return {
+            label: month.toLocaleDateString('id-ID', { month: 'short', year: '2-digit' }),
+            ...totals,
+            grossProfit,
+            profit: grossProfit - totals.expenses,
+          }
+        })
 
-      const totalRevenue = monthTx?.reduce((s, t) => s + t.total, 0) ?? 0
-      const totalExpenses = monthExp?.reduce((s, e) => s + e.amount, 0) ?? 0
-      const totalCogs = monthItems?.reduce((s, i) => s + ((i.cost_price ?? 0) * i.quantity), 0) ?? 0
-      const totalGrossProfit = totalRevenue - totalCogs
-      setSummary({ revenue: totalRevenue, cogs: totalCogs, grossProfit: totalGrossProfit, expenses: totalExpenses, profit: totalGrossProfit - totalExpenses })
-
-      const [w, d15, d30] = await Promise.all([fetchDays(7), fetchDays(15), fetchDays(30)])
-      setWeeklyData(w)
-      setMonthly15Data(d15)
-      setMonthly30Data(d30)
-      setMonthly6Data(monthly6Result)
-      setTopProducts(top)
-      setLoading(false)
+        if (cancelled) return
+        setWeeklyData(days.slice(-7))
+        setMonthly15Data(days.slice(-15))
+        setMonthly30Data(days)
+        setMonthly6Data(months)
+        if (topError) {
+          setTopProductsError(topError.message)
+        } else {
+          setTopProducts((top ?? []) as TopProduct[])
+        }
+      } catch (error) {
+        if (cancelled) return
+        setLoadError(error instanceof Error ? error.message : 'Terjadi kesalahan saat memuat laporan.')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
     }
     load()
-  }, [])
+    return () => { cancelled = true }
+  }, [supabase])
 
   const chartData =
     view === 'weekly' ? weeklyData :
@@ -173,8 +193,6 @@ export default function ReportsPage() {
   const totalGrossProfit = chartData.reduce((s, d) => s + d.grossProfit, 0)
   const totalExpenses = chartData.reduce((s, d) => s + d.expenses, 0)
   const totalProfit = chartData.reduce((s, d) => s + d.profit, 0)
-  const totalTransactions = chartData.reduce((s, d) => s + d.transactions, 0)
-
   const tabs: { key: ViewType; label: string }[] = [
     { key: 'weekly', label: '7 Hari' },
     { key: 'monthly15', label: '15 Hari' },
@@ -195,6 +213,11 @@ export default function ReportsPage() {
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
       <h1 className="text-xl font-bold text-gray-900">Laporan Penjualan</h1>
+      {loadError && (
+        <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">
+          Gagal memuat laporan: {loadError}
+        </p>
+      )}
 
       {/* Toggle */}
       <div className="flex gap-2 flex-wrap">
@@ -267,9 +290,9 @@ export default function ReportsPage() {
               tick={{ fontSize: isMultiDay ? 9 : 11, fill: '#9ca3af' }}
               interval={view === 'monthly30' ? 4 : view === 'monthly15' ? 2 : 0}
             />
-            <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={(v: any) => `${Number(v) / 1000}k`} />
+            <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={v => `${Number(v) / 1000}k`} />
             <Tooltip
-              formatter={(v: any, name: any) => [
+              formatter={(v, name) => [
               formatRupiah(Number(v)),
               name === 'revenue' ? 'Pendapatan' : name === 'expenses' ? 'Pengeluaran' : 'Laba'
               ]}
@@ -293,9 +316,9 @@ export default function ReportsPage() {
               tick={{ fontSize: isMultiDay ? 9 : 11, fill: '#9ca3af' }}
               interval={view === 'monthly30' ? 4 : view === 'monthly15' ? 2 : 0}
             />
-            <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={(v: any) => `${Number(v) / 1000}k`} />
+            <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={v => `${Number(v) / 1000}k`} />
             <Tooltip
-              formatter={(v: any, name: any) => [
+              formatter={(v, name) => [
               formatRupiah(Number(v)),
               name === 'revenue' ? 'Pendapatan' : name === 'cogs' ? 'HPP' : 'Laba Kotor'
               ]}
@@ -320,9 +343,9 @@ export default function ReportsPage() {
               tick={{ fontSize: isMultiDay ? 9 : 11, fill: '#9ca3af' }}
               interval={view === 'monthly30' ? 4 : view === 'monthly15' ? 2 : 0}
             />
-            <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={(v: any) => `${Number(v) / 1000}k`} />
+            <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={v => `${Number(v) / 1000}k`} />
             <Tooltip
-              formatter={(v: any) => [formatRupiah(Number(v)), 'Laba Bersih']}
+              formatter={v => [formatRupiah(Number(v)), 'Laba Bersih']}
               contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '12px' }}
             />
             <Line type="monotone" dataKey="profit" stroke="#22c55e" strokeWidth={2} dot={{ r: isMultiDay ? 2 : 4, fill: '#22c55e' }} />
@@ -343,7 +366,7 @@ export default function ReportsPage() {
             />
             <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} allowDecimals={false} />
             <Tooltip
-              formatter={(v: any) => [v, 'Transaksi']}
+              formatter={v => [v, 'Transaksi']}
               contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '12px' }}
             />
             <Line type="monotone" dataKey="transactions" stroke="#3b82f6" strokeWidth={2} dot={{ r: isMultiDay ? 2 : 4, fill: '#3b82f6' }} />
@@ -357,7 +380,11 @@ export default function ReportsPage() {
           <Package size={16} className="text-purple-500" />
           <h2 className="font-semibold text-gray-800">Produk Terlaris</h2>
         </div>
-        {topProducts.length === 0 ? (
+        {topProductsError ? (
+          <p role="alert" className="text-sm text-red-500 text-center py-6">
+            Gagal memuat produk terlaris: {topProductsError}
+          </p>
+        ) : topProducts.length === 0 ? (
           <p className="text-sm text-gray-400 text-center py-6">Belum ada data</p>
         ) : (
           <div className="space-y-3">

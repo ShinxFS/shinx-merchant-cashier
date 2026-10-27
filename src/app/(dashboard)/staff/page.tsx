@@ -18,6 +18,13 @@ interface StaffStats {
   totalProfit: number
 }
 
+interface StaffTransactionStatsRow {
+  staff_id: string
+  total_transactions: number
+  total_revenue: number
+  total_profit: number
+}
+
 const inputClass = "w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
 
 export default function StaffPage() {
@@ -25,6 +32,7 @@ export default function StaffPage() {
   const [staffList, setStaffList] = useState<Staff[]>([])
   const [staffStats, setStaffStats] = useState<Record<string, StaffStats>>({})
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [formLoading, setFormLoading] = useState(false)
   const [error, setError] = useState('')
@@ -38,34 +46,36 @@ export default function StaffPage() {
     if (!user) return
     setCurrentUser(user)
 
-    const { data: staff } = await supabase
+    const { data: staff, error: staffError } = await supabase
       .from('profiles')
       .select('*')
       .eq('owner_id', user.id)
       .eq('role', 'staff')
 
+    if (staffError) {
+      setLoadError(staffError.message)
+      setLoading(false)
+      return
+    }
+
     setStaffList(staff ?? [])
 
-    // Load stats per karyawan berdasarkan created_by
+    const { data: statsData, error: statsError } = await supabase.rpc('get_staff_transaction_stats')
+    if (statsError) {
+      setLoadError(statsError.message)
+      setLoading(false)
+      return
+    }
+
+    const statsRows: StaffTransactionStatsRow[] = statsData ?? []
     const stats: Record<string, StaffStats> = {}
-    for (const s of staff ?? []) {
-      const { data: txData } = await supabase
-        .from('transactions')
-        .select('total, transaction_items(quantity, unit_price, cost_price)')
-        .eq('created_by', s.id)  // ← pakai created_by
-
-      const totalTransactions = txData?.length ?? 0
-      const totalRevenue = txData?.reduce((sum, tx) => sum + tx.total, 0) ?? 0
-
-      let totalModal = 0
-      txData?.forEach(tx => {
-        tx.transaction_items?.forEach((item: any) => {
-          totalModal += (item.cost_price ?? 0) * item.quantity
-        })
-      })
-      const totalProfit = totalRevenue - totalModal
-
-      stats[s.id] = { totalTransactions, totalRevenue, totalProfit }
+    for (const employee of staff ?? []) {
+      const employeeStats = statsRows.find(row => row.staff_id === employee.id)
+      stats[employee.id] = {
+        totalTransactions: Number(employeeStats?.total_transactions ?? 0),
+        totalRevenue: Number(employeeStats?.total_revenue ?? 0),
+        totalProfit: Number(employeeStats?.total_profit ?? 0),
+      }
     }
 
     setStaffStats(stats)
@@ -148,6 +158,12 @@ export default function StaffPage() {
           <p className="text-xs text-red-500">❌ Tidak bisa kelola karyawan</p>
         </div>
       </div>
+
+      {loadError && (
+        <div role="alert" className="mb-4 bg-red-50 text-red-600 text-sm px-4 py-3 rounded-xl">
+          Gagal memuat data karyawan: {loadError}
+        </div>
+      )}
 
       {loading ? (
         <div className="text-center py-16 text-gray-400 text-sm">Memuat data...</div>

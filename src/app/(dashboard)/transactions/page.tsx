@@ -1,9 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatRupiah } from '@/lib/utils'
-import { Receipt, Search, ChevronDown, ChevronUp, TrendingUp, Trash2 } from 'lucide-react'
+import { Receipt, Search, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, TrendingUp, Trash2 } from 'lucide-react'
+
+const PAGE_SIZE = 20
 
 interface TransactionItem {
   id: string
@@ -32,63 +34,193 @@ interface Transaction {
   transaction_items?: TransactionItem[]
 }
 
+interface TransactionScope {
+  userId: string
+  isStaff: boolean
+}
+
 export default function TransactionsPage() {
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [search, setSearch] = useState('')
-  const now = new Date()
+  const now = useMemo(() => new Date(), [])
   const [selectedMonth, setSelectedMonth] = useState(String(now.getMonth() + 1).padStart(2, '0'))
   const [selectedYear, setSelectedYear] = useState(String(now.getFullYear()))
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [isOwner, setIsOwner] = useState(false)
+  const [scope, setScope] = useState<TransactionScope | null>(null)
+  const [availableYears, setAvailableYears] = useState<number[]>([now.getFullYear()])
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [page, setPage] = useState(0)
+  const [totalCount, setTotalCount] = useState(0)
+  const [todayTotal, setTodayTotal] = useState(0)
+  const [todayLabaBersih, setTodayLabaBersih] = useState(0)
+  const [error, setError] = useState('')
 
-  const load = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+  useEffect(() => {
+    let active = true
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single()
+    const initialize = async () => {
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError || !user) {
+        if (active) {
+          setError(userError?.message ?? 'Sesi login tidak ditemukan. Silakan login kembali.')
+          setLoading(false)
+        }
+        return
+      }
 
-    const isStaff = profile?.role === 'staff'
-    setIsOwner(!isStaff)
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single()
 
-    let query = supabase
-      .from('transactions')
-      .select('*, transaction_items(*)')
-      .order('created_at', { ascending: false })
+      if (profileError) {
+        if (active) {
+          setError(profileError.message)
+          setLoading(false)
+        }
+        return
+      }
 
-    if (isStaff) {
-      query = query.eq('created_by', user.id)
-    } else {
-      query = query.eq('user_id', user.id)
+      const isStaff = profile.role === 'staff'
+      const todayStart = new Date()
+      todayStart.setHours(0, 0, 0, 0)
+      const tomorrowStart = new Date(todayStart)
+      tomorrowStart.setDate(tomorrowStart.getDate() + 1)
+
+      let oldestQuery = supabase
+        .from('transactions')
+        .select('created_at')
+        .order('created_at', { ascending: true })
+        .limit(1)
+
+      let todayQuery = supabase
+        .from('transactions')
+        .select('total, subtotal, transaction_items(cost_price, quantity)')
+        .gte('created_at', todayStart.toISOString())
+        .lt('created_at', tomorrowStart.toISOString())
+
+      if (isStaff) {
+        oldestQuery = oldestQuery.eq('created_by', user.id)
+        todayQuery = todayQuery.eq('created_by', user.id)
+      } else {
+        oldestQuery = oldestQuery.eq('user_id', user.id)
+        todayQuery = todayQuery.eq('user_id', user.id)
+      }
+
+      const [{ data: oldestTransaction, error: oldestError }, { data: todayTransactions, error: todayError }] =
+        await Promise.all([oldestQuery.maybeSingle(), todayQuery])
+
+      if (oldestError || todayError) {
+        if (active) {
+          setError(oldestError?.message ?? todayError?.message ?? 'Gagal memuat ringkasan transaksi.')
+          setLoading(false)
+        }
+        return
+      }
+
+      if (!active) return
+
+      const oldestYear = oldestTransaction
+        ? new Date(oldestTransaction.created_at).getFullYear()
+        : now.getFullYear()
+      setAvailableYears(Array.from(
+        { length: Math.max(1, now.getFullYear() - oldestYear + 1) },
+        (_, index) => now.getFullYear() - index,
+      ))
+      setIsOwner(!isStaff)
+      setScope({ userId: user.id, isStaff })
+
+      const dailyTotal = todayTransactions.reduce((sum, transaction) => sum + transaction.total, 0)
+      const dailyProfit = todayTransactions.reduce((sum, transaction) => {
+        const totalModal = transaction.transaction_items.reduce(
+          (itemSum, item) => itemSum + (item.cost_price ?? 0) * item.quantity,
+          0,
+        )
+        return sum + transaction.total - totalModal
+      }, 0)
+      setTodayTotal(dailyTotal)
+      setTodayLabaBersih(dailyProfit)
     }
 
-    const { data } = await query
-    setTransactions(data ?? [])
-    setLoading(false)
-  }
+    void initialize()
+    return () => { active = false }
+  }, [now, supabase])
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => setDebouncedSearch(search.trim()), 250)
+    return () => window.clearTimeout(timeoutId)
+  }, [search])
+
+  useEffect(() => {
+    if (!scope) return
+
+    let active = true
+
+    const load = async () => {
+      setLoading(true)
+      setError('')
+      const monthStart = new Date(Number(selectedYear), Number(selectedMonth) - 1, 1)
+      const monthEnd = new Date(Number(selectedYear), Number(selectedMonth), 1)
+      let query = supabase
+        .from('transactions')
+        .select('*, transaction_items(*)', { count: 'exact' })
+        .gte('created_at', monthStart.toISOString())
+        .lt('created_at', monthEnd.toISOString())
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
+
+      if (scope.isStaff) {
+        query = query.eq('created_by', scope.userId)
+      } else {
+        query = query.eq('user_id', scope.userId)
+      }
+
+      if (debouncedSearch) {
+        query = query.ilike('invoice_number', `%${debouncedSearch}%`)
+      }
+
+      const { data, error: queryError, count } = await query
+      if (!active) return
+
+      if (queryError) {
+        setError(queryError.message)
+        setTransactions([])
+        setTotalCount(0)
+      } else {
+        setTransactions(data ?? [])
+        setTotalCount(count ?? 0)
+      }
+      setLoading(false)
+    }
+
+    void load()
+    return () => { active = false }
+  }, [scope, selectedMonth, selectedYear, debouncedSearch, page, supabase])
 
   const handleDelete = async (id: string, invoiceNumber: string) => {
     if (!confirm(`Hapus invoice ${invoiceNumber}? Aksi ini tidak bisa dibatalkan.`)) return
-    await supabase.from('transaction_items').delete().eq('transaction_id', id)
-    await supabase.from('transactions').delete().eq('id', id)
-    setTransactions(prev => prev.filter(t => t.id !== id))
-  }
 
-  const filtered = transactions.filter(t => {
-    const createdAt = new Date(t.created_at)
-    const matchesPeriod =
-      String(createdAt.getFullYear()) === selectedYear &&
-      String(createdAt.getMonth() + 1).padStart(2, '0') === selectedMonth
-    const matchesSearch = t.invoice_number.toLowerCase().includes(search.toLowerCase())
-    return matchesPeriod && matchesSearch
-  })
+    const { error: itemsError } = await supabase.from('transaction_items').delete().eq('transaction_id', id)
+    if (itemsError) {
+      setError(itemsError.message)
+      return
+    }
+
+    const { error: transactionError } = await supabase.from('transactions').delete().eq('id', id)
+    if (transactionError) {
+      setError(transactionError.message)
+      return
+    }
+
+    setTransactions(prev => prev.filter(t => t.id !== id))
+    setTotalCount(prev => Math.max(0, prev - 1))
+    if (transactions.length === 1 && page > 0) setPage(prev => prev - 1)
+  }
 
   const recentMonths = Array.from({ length: 12 }, (_, index) => {
     const date = new Date(2000, index, 1)
@@ -96,10 +228,6 @@ export default function TransactionsPage() {
     const label = new Intl.DateTimeFormat('id-ID', { month: 'long' }).format(date)
     return { value, label }
   })
-  const availableYears = Array.from(new Set([
-    now.getFullYear(),
-    ...transactions.map(transaction => new Date(transaction.created_at).getFullYear()),
-  ])).sort((a, b) => b - a)
 
   const formatDate = (str: string) =>
     new Date(str).toLocaleDateString('id-ID', {
@@ -117,11 +245,6 @@ export default function TransactionsPage() {
   const toggleExpand = (id: string) =>
     setExpanded(prev => prev === id ? null : id)
 
-  const today = new Date().toDateString()
-  const todayTotal = transactions
-    .filter(t => new Date(t.created_at).toDateString() === today)
-    .reduce((s, t) => s + t.total, 0)
-
   const calcProfit = (tx: Transaction) => {
     const items = tx.transaction_items ?? []
     const totalModal = items.reduce((s, i) => s + (i.cost_price ?? 0) * i.quantity, 0)
@@ -130,8 +253,7 @@ export default function TransactionsPage() {
     return { totalModal, labaKotor, labaBersih }
   }
 
-  const todayTx = transactions.filter(t => new Date(t.created_at).toDateString() === today)
-  const todayLabaBersih = todayTx.reduce((s, t) => s + calcProfit(t).labaBersih, 0)
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE)
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
@@ -139,7 +261,7 @@ export default function TransactionsPage() {
         <div>
           <h1 className="text-xl font-bold text-gray-900">Riwayat Transaksi</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            {filtered.length} ditampilkan dari {transactions.length} transaksi
+            {transactions.length} ditampilkan dari {totalCount} transaksi
           </p>
         </div>
         <div className="text-right">
@@ -156,7 +278,10 @@ export default function TransactionsPage() {
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => {
+              setSearch(e.target.value)
+              setPage(0)
+            }}
             placeholder="Cari nomor invoice..."
             className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white text-gray-900"
           />
@@ -165,7 +290,10 @@ export default function TransactionsPage() {
           <label className="flex items-center px-3 py-2 border border-gray-200 rounded-xl bg-white text-sm text-gray-500">
             <select
               value={selectedMonth}
-              onChange={e => setSelectedMonth(e.target.value)}
+              onChange={e => {
+                setSelectedMonth(e.target.value)
+                setPage(0)
+              }}
               aria-label="Filter bulan transaksi"
               className="min-w-0 bg-transparent text-gray-900 focus:outline-none"
             >
@@ -177,7 +305,10 @@ export default function TransactionsPage() {
           <label className="flex items-center px-3 py-2 border border-gray-200 rounded-xl bg-white text-sm text-gray-500">
             <select
               value={selectedYear}
-              onChange={e => setSelectedYear(e.target.value)}
+              onChange={e => {
+                setSelectedYear(e.target.value)
+                setPage(0)
+              }}
               aria-label="Filter tahun transaksi"
               className="min-w-0 bg-transparent text-gray-900 focus:outline-none"
             >
@@ -191,20 +322,22 @@ export default function TransactionsPage() {
 
       {loading ? (
         <div className="text-center py-16 text-gray-400 text-sm">Memuat transaksi...</div>
-      ) : filtered.length === 0 ? (
+      ) : error ? (
+        <div role="alert" className="text-center py-16 text-red-500 text-sm">
+          Gagal memuat transaksi: {error}
+        </div>
+      ) : transactions.length === 0 ? (
         <div className="text-center py-16">
           <Receipt size={40} className="text-gray-200 mx-auto mb-3" />
           <p className="text-gray-400 text-sm">
-            {transactions.length === 0
-              ? 'Belum ada transaksi'
-              : filtered.length === 0 && !search
-                ? 'Tidak ada transaksi pada bulan yang dipilih'
-                : 'Transaksi tidak ditemukan'}
+            {debouncedSearch
+              ? 'Transaksi tidak ditemukan'
+              : 'Tidak ada transaksi pada bulan yang dipilih'}
           </p>
         </div>
       ) : (
         <div className="space-y-3">
-          {filtered.map(tx => {
+          {transactions.map(tx => {
             const { labaKotor, labaBersih } = calcProfit(tx)
             return (
               <div key={tx.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -352,6 +485,34 @@ export default function TransactionsPage() {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {!loading && !error && totalCount > PAGE_SIZE && (
+        <div className="mt-5 flex items-center justify-between gap-3">
+          <p className="text-sm text-gray-500">
+            Halaman {page + 1} dari {totalPages}
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setPage(current => Math.max(0, current - 1))}
+              disabled={page === 0}
+              className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <ChevronLeft size={16} />
+              Sebelumnya
+            </button>
+            <button
+              type="button"
+              onClick={() => setPage(current => Math.min(totalPages - 1, current + 1))}
+              disabled={page >= totalPages - 1}
+              className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Berikutnya
+              <ChevronRight size={16} />
+            </button>
+          </div>
         </div>
       )}
     </div>
