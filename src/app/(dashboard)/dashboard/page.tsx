@@ -32,6 +32,15 @@ interface RecentTransaction {
   created_at: string
 }
 
+interface DashboardTransaction extends RecentTransaction {
+  transaction_items: { cost_price: number | null; quantity: number }[] | null
+}
+
+interface DashboardExpense {
+  amount: number
+  date: string
+}
+
 interface CashflowStats {
   revenue: number
   expenses: number
@@ -50,123 +59,140 @@ export default function DashboardPage() {
   const [recent, setRecent] = useState<RecentTransaction[]>([])
   const [businessName, setBusinessName] = useState('')
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [cashflowPeriod, setCashflowPeriod] = useState<CashflowPeriod>('month')
   const [cashflow, setCashflow] = useState<CashflowStats>({ revenue: 0, expenses: 0, cogs: 0, netProfit: 0 })
   const [cashflowVisible, setCashflowVisible] = useState(false)
 
   useEffect(() => {
+    let cancelled = false
+
     const load = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      try {
+        const { data: { user }, error: userError } = await supabase.auth.getUser()
+        if (userError) throw userError
+        if (!user) throw new Error('Sesi login tidak ditemukan.')
 
-      // Profile
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('business_name')
-        .eq('id', user.id)
-        .single()
-      if (profile) setBusinessName(profile.business_name)
+        const now = new Date()
+        const todayStart = new Date(now)
+        todayStart.setHours(0, 0, 0, 0)
+        const tomorrowStart = new Date(todayStart)
+        tomorrowStart.setDate(tomorrowStart.getDate() + 1)
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+        const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1)
 
-      // Tanggal hari ini
-      const today = new Date()
-      today.setHours(0, 0, 0, 0)
-      const todayStr = today.toISOString()
+        const cashflowStart = new Date(now)
+        if (cashflowPeriod === 'today') {
+          cashflowStart.setHours(0, 0, 0, 0)
+        } else if (cashflowPeriod === '7days') {
+          cashflowStart.setDate(cashflowStart.getDate() - 6)
+          cashflowStart.setHours(0, 0, 0, 0)
+        } else {
+          cashflowStart.setDate(1)
+          cashflowStart.setHours(0, 0, 0, 0)
+        }
 
-      // Bulan ini
-      const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString()
+        const cashflowEnd = new Date(now)
+        if (cashflowPeriod === 'month') {
+          cashflowEnd.setMonth(cashflowEnd.getMonth() + 1, 1)
+        } else {
+          cashflowEnd.setDate(cashflowEnd.getDate() + 1)
+        }
+        cashflowEnd.setHours(0, 0, 0, 0)
 
-      // Transaksi hari ini
-      const { data: todayTx } = await supabase
-        .from('transactions')
-        .select('total')
-        .eq('user_id', user.id)
-        .gte('created_at', todayStr)
+        const queryStart = new Date(Math.min(monthStart.getTime(), cashflowStart.getTime()))
+        const queryEnd = new Date(Math.max(nextMonthStart.getTime(), cashflowEnd.getTime()))
+        const formatLocalDate = (date: Date) => {
+          const year = date.getFullYear()
+          const month = String(date.getMonth() + 1).padStart(2, '0')
+          const day = String(date.getDate()).padStart(2, '0')
+          return `${year}-${month}-${day}`
+        }
 
-      // Transaksi bulan ini
-      const { data: monthTx } = await supabase
-        .from('transactions')
-        .select('total')
-        .eq('user_id', user.id)
-        .gte('created_at', startOfMonth)
+        const [
+          { data: profile, error: profileError },
+          { data: transactions, error: transactionsError },
+          { data: expenses, error: expensesError },
+          { count: productCount, error: productsError },
+        ] = await Promise.all([
+          supabase.from('profiles')
+            .select('business_name')
+            .eq('id', user.id)
+            .single(),
+          supabase.from('transactions')
+            .select('id, invoice_number, total, payment_method, created_at, transaction_items(cost_price, quantity)')
+            .eq('user_id', user.id)
+            .gte('created_at', queryStart.toISOString())
+            .lt('created_at', queryEnd.toISOString())
+            .order('created_at', { ascending: false }),
+          supabase.from('expenses')
+            .select('amount, date')
+            .eq('user_id', user.id)
+            .gte('date', formatLocalDate(queryStart))
+            .lt('date', formatLocalDate(queryEnd)),
+          supabase.from('products')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', user.id)
+            .eq('is_active', true),
+        ])
 
-      // Total produk
-      const { count: productCount } = await supabase
-        .from('products')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .eq('is_active', true)
+        if (profileError) throw profileError
+        if (transactionsError) throw transactionsError
+        if (expensesError) throw expensesError
+        if (productsError) throw productsError
 
-      // Transaksi terbaru
-      const { data: recentTx } = await supabase
-        .from('transactions')
-        .select('id, invoice_number, total, payment_method, created_at')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(5)
+        const transactionRows: DashboardTransaction[] = transactions ?? []
+        const expenseRows: DashboardExpense[] = expenses ?? []
+        const inRangeTransactions = transactionRows.filter(transaction => {
+          const createdAt = new Date(transaction.created_at).getTime()
+          return createdAt >= cashflowStart.getTime() && createdAt < cashflowEnd.getTime()
+        })
+        const inRangeExpenses = expenseRows.filter(expense => (
+          expense.date >= formatLocalDate(cashflowStart)
+          && expense.date < formatLocalDate(cashflowEnd)
+        ))
 
-      const cashflowStart = new Date()
-      if (cashflowPeriod === 'today') {
-        cashflowStart.setHours(0, 0, 0, 0)
-      } else if (cashflowPeriod === '7days') {
-        cashflowStart.setDate(cashflowStart.getDate() - 6)
-        cashflowStart.setHours(0, 0, 0, 0)
-      } else {
-        cashflowStart.setDate(1)
-        cashflowStart.setHours(0, 0, 0, 0)
+        const revenue = inRangeTransactions.reduce((sum, transaction) => sum + transaction.total, 0)
+        const expensesTotal = inRangeExpenses.reduce((sum, expense) => sum + expense.amount, 0)
+        const cogs = inRangeTransactions.reduce((sum, transaction) => (
+          sum + (transaction.transaction_items?.reduce(
+            (itemTotal, item) => itemTotal + (item.cost_price ?? 0) * item.quantity,
+            0,
+          ) ?? 0)
+        ), 0)
+        const todayTransactions = transactionRows.filter(transaction => {
+          const createdAt = new Date(transaction.created_at).getTime()
+          return createdAt >= todayStart.getTime() && createdAt < tomorrowStart.getTime()
+        })
+        const monthRevenue = transactionRows.reduce((sum, transaction) => {
+          const createdAt = new Date(transaction.created_at).getTime()
+          return createdAt >= monthStart.getTime() && createdAt < nextMonthStart.getTime()
+            ? sum + transaction.total
+            : sum
+        }, 0)
+
+        if (cancelled) return
+        setBusinessName(profile.business_name)
+        setStats({
+          todayRevenue: todayTransactions.reduce((sum, transaction) => sum + transaction.total, 0),
+          todayTransactions: todayTransactions.length,
+          totalProducts: productCount ?? 0,
+          monthRevenue,
+        })
+        setCashflow({ revenue, expenses: expensesTotal, cogs, netProfit: revenue - cogs - expensesTotal })
+        setRecent(transactionRows.slice(0, 5))
+        setLoadError('')
+      } catch (error) {
+        if (!cancelled) {
+          setLoadError(error instanceof Error ? error.message : 'Terjadi kesalahan saat memuat dashboard.')
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
       }
-
-      const cashflowEnd = new Date()
-      if (cashflowPeriod === 'month') {
-        cashflowEnd.setMonth(cashflowEnd.getMonth() + 1, 1)
-      } else {
-        cashflowEnd.setDate(cashflowEnd.getDate() + 1)
-      }
-      cashflowEnd.setHours(0, 0, 0, 0)
-      const formatLocalDate = (date: Date) => {
-        const year = date.getFullYear()
-        const month = String(date.getMonth() + 1).padStart(2, '0')
-        const day = String(date.getDate()).padStart(2, '0')
-        return `${year}-${month}-${day}`
-      }
-
-      const [{ data: cashflowTx }, { data: cashflowExpenses }] = await Promise.all([
-        supabase
-          .from('transactions')
-          .select('id, total')
-          .eq('user_id', user.id)
-          .gte('created_at', cashflowStart.toISOString()),
-        supabase
-          .from('expenses')
-          .select('amount')
-          .eq('user_id', user.id)
-          .gte('date', formatLocalDate(cashflowStart))
-          .lt('date', formatLocalDate(cashflowEnd)),
-      ])
-
-      const transactionIds = cashflowTx?.map(transaction => transaction.id) ?? []
-      const { data: cashflowItems } = transactionIds.length > 0
-        ? await supabase
-            .from('transaction_items')
-            .select('cost_price, quantity')
-            .in('transaction_id', transactionIds)
-        : { data: [] }
-
-      const revenue = cashflowTx?.reduce((sum, transaction) => sum + transaction.total, 0) ?? 0
-      const expenses = cashflowExpenses?.reduce((sum, expense) => sum + expense.amount, 0) ?? 0
-      const cogs = cashflowItems?.reduce((sum, item) => sum + (item.cost_price ?? 0) * item.quantity, 0) ?? 0
-      setCashflow({ revenue, expenses, cogs, netProfit: revenue - cogs - expenses })
-
-      setStats({
-        todayRevenue: todayTx?.reduce((s, t) => s + t.total, 0) ?? 0,
-        todayTransactions: todayTx?.length ?? 0,
-        totalProducts: productCount ?? 0,
-        monthRevenue: monthTx?.reduce((s, t) => s + t.total, 0) ?? 0,
-      })
-      setRecent(recentTx ?? [])
-      setLoading(false)
     }
     load()
-  }, [cashflowPeriod])
+    return () => { cancelled = true }
+  }, [cashflowPeriod, supabase])
 
   const formatRupiah = (n: number) =>
     new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n)
@@ -205,6 +231,11 @@ export default function DashboardPage() {
           Selamat datang kembali, <span className="font-medium text-gray-700">{businessName}</span>
         </p>
       </div>
+      {loadError && (
+        <p role="alert" className="mb-6 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">
+          Gagal memuat dashboard: {loadError}
+        </p>
+      )}
 
       {/* Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
