@@ -1,15 +1,17 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatRupiah } from '@/lib/utils'
+import * as XLSX from 'xlsx'
+import { saveAs } from 'file-saver'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, LineChart, Line, Legend
 } from 'recharts'
-import { TrendingUp, Package, TrendingDown, Wallet } from 'lucide-react'
+import { TrendingUp, Package, TrendingDown, Wallet, FileSpreadsheet, CalendarDays } from 'lucide-react'
 
-type ViewType = 'weekly' | 'monthly15' | 'monthly30' | 'monthly6'
+type ViewType = 'weekly' | 'monthly15' | 'monthly30' | 'customMonth'
 
 interface ReportDataPoint {
   label: string
@@ -52,15 +54,20 @@ function toMonthKey(date: Date) {
 
 export default function ReportsPage() {
   const supabase = createClient()
+  const monthInputRef = useRef<HTMLInputElement>(null)
   const [weeklyData, setWeeklyData] = useState<ReportDataPoint[]>([])
   const [monthly15Data, setMonthly15Data] = useState<ReportDataPoint[]>([])
   const [monthly30Data, setMonthly30Data] = useState<ReportDataPoint[]>([])
-  const [monthly6Data, setMonthly6Data] = useState<ReportDataPoint[]>([])
+  const [selectedMonthData, setSelectedMonthData] = useState<ReportDataPoint[]>([])
   const [topProducts, setTopProducts] = useState<TopProduct[]>([])
-  const [view, setView] = useState<ViewType>('weekly')
+  const [view, setView] = useState<ViewType>('customMonth')
+  const [selectedMonth, setSelectedMonth] = useState(() => toMonthKey(new Date()))
   const [loading, setLoading] = useState(true)
+  const [monthLoading, setMonthLoading] = useState(false)
   const [loadError, setLoadError] = useState('')
+  const [monthError, setMonthError] = useState('')
   const [topProductsError, setTopProductsError] = useState('')
+  const [exportError, setExportError] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -72,10 +79,10 @@ export default function ReportsPage() {
         if (!user) throw new Error('Sesi login tidak ditemukan.')
 
         const now = new Date()
-        const startMonth = new Date(now.getFullYear(), now.getMonth() - 5, 1)
-        const endMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
-        const startDate = toDateKey(startMonth)
-        const endDate = toDateKey(endMonth)
+        const startDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29)
+        const endDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
+        const startDate = toDateKey(startDay)
+        const endDate = toDateKey(endDay)
 
         const [
           { data: transactions, error: transactionsError },
@@ -85,8 +92,8 @@ export default function ReportsPage() {
           supabase.from('transactions')
             .select('id, total, created_at, transaction_items(cost_price, quantity)')
             .eq('user_id', user.id)
-            .gte('created_at', startMonth.toISOString())
-            .lt('created_at', endMonth.toISOString()),
+            .gte('created_at', startDay.toISOString())
+            .lt('created_at', endDay.toISOString()),
           supabase.from('expenses')
             .select('amount, date')
             .eq('user_id', user.id)
@@ -99,9 +106,7 @@ export default function ReportsPage() {
         if (expensesError) throw expensesError
         const transactionRows: ReportTransaction[] = transactions ?? []
         const expenseRows: ReportExpense[] = expenses ?? []
-
         const dailyTotals = new Map<string, Omit<ReportDataPoint, 'label' | 'grossProfit' | 'profit'>>()
-        const monthlyTotals = new Map<string, Omit<ReportDataPoint, 'label' | 'grossProfit' | 'profit'>>()
         const getTotals = (
           totals: Map<string, Omit<ReportDataPoint, 'label' | 'grossProfit' | 'profit'>>,
           key: string,
@@ -124,17 +129,10 @@ export default function ReportsPage() {
           dayTotals.revenue += transaction.total
           dayTotals.cogs += cogs
           dayTotals.transactions += 1
-
-          const monthTotals = getTotals(monthlyTotals, toMonthKey(transactionDate))
-          monthTotals.revenue += transaction.total
-          monthTotals.cogs += cogs
-          monthTotals.transactions += 1
         }
 
         for (const expense of expenseRows) {
-          const expenseDate = new Date(`${expense.date}T00:00:00`)
           getTotals(dailyTotals, expense.date).expenses += expense.amount
-          getTotals(monthlyTotals, toMonthKey(expenseDate)).expenses += expense.amount
         }
 
         const days = Array.from({ length: 30 }, (_, index) => {
@@ -149,23 +147,10 @@ export default function ReportsPage() {
           }
         })
 
-        const months = Array.from({ length: 6 }, (_, index) => {
-          const month = new Date(now.getFullYear(), now.getMonth() - 5 + index, 1)
-          const totals = getTotals(monthlyTotals, toMonthKey(month))
-          const grossProfit = totals.revenue - totals.cogs
-          return {
-            label: month.toLocaleDateString('id-ID', { month: 'short', year: '2-digit' }),
-            ...totals,
-            grossProfit,
-            profit: grossProfit - totals.expenses,
-          }
-        })
-
         if (cancelled) return
         setWeeklyData(days.slice(-7))
         setMonthly15Data(days.slice(-15))
         setMonthly30Data(days)
-        setMonthly6Data(months)
         if (topError) {
           setTopProductsError(topError.message)
         } else {
@@ -182,12 +167,116 @@ export default function ReportsPage() {
     return () => { cancelled = true }
   }, [supabase])
 
+  useEffect(() => {
+    if (view !== 'customMonth') return
+
+    let cancelled = false
+
+    const loadSelectedMonth = async () => {
+      setMonthLoading(true)
+      setMonthError('')
+      setSelectedMonthData([])
+
+      try {
+        const { data: { user }, error: userError } = await supabase.auth.getUser()
+        if (userError) throw userError
+        if (!user) throw new Error('Sesi login tidak ditemukan.')
+
+        const [year, month] = selectedMonth.split('-').map(Number)
+        const startMonth = new Date(year, month - 1, 1)
+        const endMonth = new Date(year, month, 1)
+        const [
+          { data: transactions, error: transactionsError },
+          { data: expenses, error: expensesError },
+        ] = await Promise.all([
+          supabase.from('transactions')
+            .select('id, total, created_at, transaction_items(cost_price, quantity)')
+            .eq('user_id', user.id)
+            .gte('created_at', startMonth.toISOString())
+            .lt('created_at', endMonth.toISOString()),
+          supabase.from('expenses')
+            .select('amount, date')
+            .eq('user_id', user.id)
+            .gte('date', toDateKey(startMonth))
+            .lt('date', toDateKey(endMonth)),
+        ])
+
+        if (transactionsError) throw transactionsError
+        if (expensesError) throw expensesError
+
+        const dailyTotals = new Map<string, {
+          revenue: number
+          cogs: number
+          expenses: number
+          transactions: number
+        }>()
+        const getDayTotals = (key: string) => {
+          let totals = dailyTotals.get(key)
+          if (!totals) {
+            totals = { revenue: 0, cogs: 0, expenses: 0, transactions: 0 }
+            dailyTotals.set(key, totals)
+          }
+          return totals
+        }
+
+        for (const transaction of (transactions ?? []) as ReportTransaction[]) {
+          const date = toDateKey(new Date(transaction.created_at))
+          const totals = getDayTotals(date)
+          totals.revenue += transaction.total
+          totals.cogs += transaction.transaction_items?.reduce(
+            (sum, item) => sum + (item.cost_price ?? 0) * item.quantity,
+            0,
+          ) ?? 0
+          totals.transactions += 1
+        }
+
+        for (const expense of (expenses ?? []) as ReportExpense[]) {
+          getDayTotals(expense.date).expenses += expense.amount
+        }
+
+        const daysInMonth = new Date(year, month, 0).getDate()
+        const days = Array.from({ length: daysInMonth }, (_, index) => {
+          const date = new Date(year, month - 1, index + 1)
+          const totals = dailyTotals.get(toDateKey(date)) ?? {
+            revenue: 0,
+            cogs: 0,
+            expenses: 0,
+            transactions: 0,
+          }
+          const grossProfit = totals.revenue - totals.cogs
+          return {
+            label: date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
+            ...totals,
+            grossProfit,
+            profit: grossProfit - totals.expenses,
+          }
+        })
+
+        if (!cancelled) setSelectedMonthData(days)
+      } catch (error) {
+        if (!cancelled) {
+          setMonthError(error instanceof Error ? error.message : 'Terjadi kesalahan saat memuat laporan bulanan.')
+        }
+      } finally {
+        if (!cancelled) setMonthLoading(false)
+      }
+    }
+
+    loadSelectedMonth()
+    return () => { cancelled = true }
+  }, [selectedMonth, supabase, view])
+
   const chartData =
     view === 'weekly' ? weeklyData :
     view === 'monthly15' ? monthly15Data :
     view === 'monthly30' ? monthly30Data :
-    monthly6Data
+    selectedMonthData
 
+  const selectedMonthLabel = new Date(
+    Number(selectedMonth.slice(0, 4)),
+    Number(selectedMonth.slice(5, 7)) - 1,
+    1,
+  ).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
   const totalRevenue = chartData.reduce((s, d) => s + d.revenue, 0)
   const totalCogs = chartData.reduce((s, d) => s + d.cogs, 0)
   const totalGrossProfit = chartData.reduce((s, d) => s + d.grossProfit, 0)
@@ -197,12 +286,66 @@ export default function ReportsPage() {
     { key: 'weekly', label: '7 Hari' },
     { key: 'monthly15', label: '15 Hari' },
     { key: 'monthly30', label: '30 Hari' },
-    { key: 'monthly6', label: '6 Bulan' },
   ]
 
-  const isMultiDay = view === 'monthly15' || view === 'monthly30'
+  const exportExcel = () => {
+    try {
+      const selectedPeriod = view === 'customMonth'
+        ? selectedMonthLabel
+        : tabs.find(tab => tab.key === view)?.label ?? view
+      const periodFilename = view === 'customMonth' ? selectedMonth : view
+      const workbook = XLSX.utils.book_new()
+      const summarySheet = XLSX.utils.json_to_sheet([
+        { Informasi: 'Periode', Nilai: selectedPeriod },
+        { Informasi: 'Tanggal Ekspor', Nilai: new Date().toLocaleDateString('id-ID') },
+        { Informasi: 'Pendapatan', Nilai: totalRevenue },
+        { Informasi: 'HPP', Nilai: totalCogs },
+        { Informasi: 'Laba Kotor', Nilai: totalGrossProfit },
+        { Informasi: 'Pengeluaran', Nilai: totalExpenses },
+        { Informasi: 'Laba Bersih', Nilai: totalProfit },
+        { Informasi: 'Jumlah Transaksi', Nilai: chartData.reduce((sum, item) => sum + item.transactions, 0) },
+      ])
+      summarySheet['!cols'] = [{ wch: 24 }, { wch: 24 }]
+      XLSX.utils.book_append_sheet(workbook, summarySheet, 'Ringkasan')
 
-  if (loading) {
+      const detailsSheet = XLSX.utils.json_to_sheet(chartData.map(item => ({
+        Periode: item.label,
+        Pendapatan: item.revenue,
+        HPP: item.cogs,
+        'Laba Kotor': item.grossProfit,
+        Pengeluaran: item.expenses,
+        'Laba Bersih': item.profit,
+        Transaksi: item.transactions,
+      })))
+      detailsSheet['!cols'] = [
+        { wch: 18 }, { wch: 16 }, { wch: 16 }, { wch: 16 },
+        { wch: 16 }, { wch: 16 }, { wch: 12 },
+      ]
+      XLSX.utils.book_append_sheet(workbook, detailsSheet, 'Rincian Periode')
+
+      const productsSheet = XLSX.utils.json_to_sheet(topProducts.map((product, index) => ({
+        Peringkat: index + 1,
+        Produk: product.name,
+        'Jumlah Terjual': product.qty,
+        Pendapatan: product.revenue,
+      })))
+      productsSheet['!cols'] = [{ wch: 12 }, { wch: 40 }, { wch: 18 }, { wch: 18 }]
+      XLSX.utils.book_append_sheet(workbook, productsSheet, 'Produk Terlaris')
+
+      const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
+      saveAs(
+        new Blob([buffer], { type: 'application/octet-stream' }),
+        `laporan-penjualan-${periodFilename}-${toDateKey(new Date())}.xlsx`,
+      )
+      setExportError('')
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : 'Terjadi kesalahan saat mengekspor laporan.')
+    }
+  }
+
+  const isMultiDay = view === 'monthly15' || view === 'monthly30' || view === 'customMonth'
+
+  if (loading || (view === 'customMonth' && monthLoading)) {
     return (
       <div className="flex items-center justify-center h-full text-gray-400 text-sm">
         Memuat laporan...
@@ -212,15 +355,61 @@ export default function ReportsPage() {
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
-      <h1 className="text-xl font-bold text-gray-900">Laporan Penjualan</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-xl font-bold text-gray-900">Laporan Penjualan</h1>
+        <button
+          type="button"
+          onClick={exportExcel}
+          disabled={!!loadError}
+          className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <FileSpreadsheet size={16} />
+          Export Excel
+        </button>
+      </div>
       {loadError && (
         <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">
           Gagal memuat laporan: {loadError}
         </p>
       )}
+      {exportError && (
+        <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">
+          Gagal mengekspor laporan: {exportError}
+        </p>
+      )}
 
       {/* Toggle */}
       <div className="flex gap-2 flex-wrap">
+        <button
+          type="button"
+          onClick={() => {
+            setView('customMonth')
+            const input = monthInputRef.current
+            if (!input) return
+            if (typeof input.showPicker === 'function') input.showPicker()
+            else input.click()
+          }}
+          className={`flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-colors ${
+            view === 'customMonth'
+              ? 'border-indigo-600 bg-indigo-600 text-white'
+              : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+          }`}
+        >
+          <CalendarDays size={16} />
+          Pilih Bulan: {selectedMonthLabel}
+        </button>
+        <input
+          ref={monthInputRef}
+          type="month"
+          aria-label="Pilih bulan laporan"
+          value={selectedMonth}
+          max={toMonthKey(new Date())}
+          onChange={event => {
+            setSelectedMonth(event.target.value)
+            setView('customMonth')
+          }}
+          className="sr-only"
+        />
         {tabs.map(({ key, label }) => (
           <button
             key={key}
@@ -236,7 +425,13 @@ export default function ReportsPage() {
         ))}
       </div>
 
-      {/* Stat bulan ini */}
+      {view === 'customMonth' && monthError && (
+        <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">
+          Gagal memuat laporan bulanan: {monthError}
+        </p>
+      )}
+
+      {/* Ringkasan periode */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <div className="flex items-center gap-2 mb-1">
@@ -288,7 +483,7 @@ export default function ReportsPage() {
             <XAxis
               dataKey="label"
               tick={{ fontSize: isMultiDay ? 9 : 11, fill: '#9ca3af' }}
-              interval={view === 'monthly30' ? 4 : view === 'monthly15' ? 2 : 0}
+              interval={view === 'monthly30' || view === 'customMonth' ? 4 : view === 'monthly15' ? 2 : 0}
             />
             <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={v => `${Number(v) / 1000}k`} />
             <Tooltip
@@ -314,7 +509,7 @@ export default function ReportsPage() {
             <XAxis
               dataKey="label"
               tick={{ fontSize: isMultiDay ? 9 : 11, fill: '#9ca3af' }}
-              interval={view === 'monthly30' ? 4 : view === 'monthly15' ? 2 : 0}
+              interval={view === 'monthly30' || view === 'customMonth' ? 4 : view === 'monthly15' ? 2 : 0}
             />
             <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={v => `${Number(v) / 1000}k`} />
             <Tooltip
@@ -341,7 +536,7 @@ export default function ReportsPage() {
             <XAxis
               dataKey="label"
               tick={{ fontSize: isMultiDay ? 9 : 11, fill: '#9ca3af' }}
-              interval={view === 'monthly30' ? 4 : view === 'monthly15' ? 2 : 0}
+              interval={view === 'monthly30' || view === 'customMonth' ? 4 : view === 'monthly15' ? 2 : 0}
             />
             <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={v => `${Number(v) / 1000}k`} />
             <Tooltip
@@ -362,7 +557,7 @@ export default function ReportsPage() {
             <XAxis
               dataKey="label"
               tick={{ fontSize: isMultiDay ? 9 : 11, fill: '#9ca3af' }}
-              interval={view === 'monthly30' ? 4 : view === 'monthly15' ? 2 : 0}
+              interval={view === 'monthly30' || view === 'customMonth' ? 4 : view === 'monthly15' ? 2 : 0}
             />
             <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} allowDecimals={false} />
             <Tooltip
