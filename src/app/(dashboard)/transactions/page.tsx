@@ -1,8 +1,10 @@
 'use client'
+import { LocalizedText, translateText, useLanguage } from '@/lib/language'
+
 
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { formatRupiah } from '@/lib/utils'
+import { useCurrency } from '@/lib/currency'
 import { Receipt, Search, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, TrendingUp, Trash2 } from 'lucide-react'
 
 const PAGE_SIZE = 20
@@ -40,7 +42,10 @@ interface TransactionScope {
 }
 
 export default function TransactionsPage() {
+  const localizedLanguage = useLanguage().language
+
   const supabase = useMemo(() => createClient(), [])
+  const { formatCurrency } = useCurrency()
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [search, setSearch] = useState('')
   const now = useMemo(() => new Date(), [])
@@ -203,7 +208,7 @@ export default function TransactionsPage() {
   }, [scope, selectedMonth, selectedYear, debouncedSearch, page, supabase])
 
   const handleDelete = async (id: string, invoiceNumber: string) => {
-    if (!confirm(`Hapus invoice ${invoiceNumber}? Aksi ini tidak bisa dibatalkan.`)) return
+    if (!confirm(`${translateText("Hapus invoice ", localizedLanguage)}${invoiceNumber}${translateText("? Aksi ini tidak bisa dibatalkan.", localizedLanguage)}`)) return
 
     const { error: itemsError } = await supabase.from('transaction_items').delete().eq('transaction_id', id)
     if (itemsError) {
@@ -225,18 +230,18 @@ export default function TransactionsPage() {
   const recentMonths = Array.from({ length: 12 }, (_, index) => {
     const date = new Date(2000, index, 1)
     const value = String(index + 1).padStart(2, '0')
-    const label = new Intl.DateTimeFormat('id-ID', { month: 'long' }).format(date)
+    const label = new Intl.DateTimeFormat(localizedLanguage === 'en' ? 'en-US' : 'id-ID', { month: 'long' }).format(date)
     return { value, label }
   })
 
   const formatDate = (str: string) =>
-    new Date(str).toLocaleDateString('id-ID', {
+    new Date(str).toLocaleDateString(localizedLanguage === 'en' ? 'en-US' : 'id-ID', {
       day: 'numeric', month: 'short', year: 'numeric',
       hour: '2-digit', minute: '2-digit',
     })
 
   const paymentLabel: Record<string, string> = {
-    cash: '💵 Tunai',
+    cash: `💵 ${translateText('Tunai', localizedLanguage)}`,
     transfer: '🏦 Transfer',
     ewallet: '📱 E-Wallet',
     qris: '📲 QRIS',
@@ -259,16 +264,15 @@ export default function TransactionsPage() {
     <div className="p-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Riwayat Transaksi</h1>
+          <h1 className="text-xl font-bold text-gray-900">{<LocalizedText text={"Riwayat Transaksi"} />}</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            {transactions.length} ditampilkan dari {totalCount} transaksi
-          </p>
+            {transactions.length} {<LocalizedText text={" ditampilkan dari "} />}{totalCount} {<LocalizedText text={" transaksi\r\n          "} />}</p>
         </div>
         <div className="text-right">
-          <p className="text-xs text-gray-400">Pendapatan Hari Ini</p>
-          <p className="text-lg font-bold text-indigo-600">{formatRupiah(todayTotal)}</p>
+          <p className="text-xs text-gray-400">{<LocalizedText text={"Pendapatan Hari Ini"} />}</p>
+          <p className="text-lg font-bold text-indigo-600">{formatCurrency(todayTotal)}</p>
           {isOwner && (
-            <p className="text-xs text-green-500 mt-0.5">Laba bersih: {formatRupiah(todayLabaBersih)}</p>
+            <p className="text-xs text-green-500 mt-0.5">{<LocalizedText text={"Laba bersih: "} />}{formatCurrency(todayLabaBersih)}</p>
           )}
         </div>
       </div>
@@ -282,7 +286,7 @@ export default function TransactionsPage() {
               setSearch(e.target.value)
               setPage(0)
             }}
-            placeholder="Cari nomor invoice..."
+            placeholder={translateText("Cari nomor invoice...", localizedLanguage)}
             className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white text-gray-900"
           />
         </div>
@@ -294,11 +298,11 @@ export default function TransactionsPage() {
                 setSelectedMonth(e.target.value)
                 setPage(0)
               }}
-              aria-label="Filter bulan transaksi"
+              aria-label={translateText("Filter bulan transaksi", localizedLanguage)}
               className="min-w-0 bg-transparent text-gray-900 focus:outline-none"
             >
               {recentMonths.map(month => (
-                <option key={month.value} value={month.value}>{month.label}</option>
+                <option key={month.value} value={month.value}><LocalizedText text={month.label} /></option>
               ))}
             </select>
           </label>
@@ -309,7 +313,7 @@ export default function TransactionsPage() {
                 setSelectedYear(e.target.value)
                 setPage(0)
               }}
-              aria-label="Filter tahun transaksi"
+              aria-label={translateText("Filter tahun transaksi", localizedLanguage)}
               className="min-w-0 bg-transparent text-gray-900 focus:outline-none"
             >
               {availableYears.map(year => (
@@ -321,18 +325,18 @@ export default function TransactionsPage() {
       </div>
 
       {loading ? (
-        <div className="text-center py-16 text-gray-400 text-sm">Memuat transaksi...</div>
+        <div className="text-center py-16 text-gray-400 text-sm">{<LocalizedText text={"Memuat transaksi..."} />}</div>
       ) : error ? (
         <div role="alert" className="text-center py-16 text-red-500 text-sm">
-          Gagal memuat transaksi: {error}
+          {<LocalizedText text={"\r\n          Gagal memuat transaksi: "} />}<LocalizedText text={error} />
         </div>
       ) : transactions.length === 0 ? (
         <div className="text-center py-16">
           <Receipt size={40} className="text-gray-200 mx-auto mb-3" />
           <p className="text-gray-400 text-sm">
             {debouncedSearch
-              ? 'Transaksi tidak ditemukan'
-              : 'Tidak ada transaksi pada bulan yang dipilih'}
+              ? <LocalizedText text={"Transaksi tidak ditemukan"} />
+              : <LocalizedText text={"Tidak ada transaksi pada bulan yang dipilih"} />}
           </p>
         </div>
       ) : (
@@ -353,7 +357,7 @@ export default function TransactionsPage() {
                         <p className="text-sm font-semibold text-gray-800">{tx.invoice_number}</p>
                         {tx.table_number != null && (
                           <span className="text-[10px] font-medium bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded">
-                            Meja {tx.table_number}
+                            {<LocalizedText text={"\r\n                            Meja "} />}{tx.table_number}
                           </span>
                         )}
                       </div>
@@ -363,9 +367,9 @@ export default function TransactionsPage() {
                       {paymentLabel[tx.payment_method] ?? tx.payment_method}
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-bold text-gray-900">{formatRupiah(tx.total)}</p>
+                      <p className="text-sm font-bold text-gray-900">{formatCurrency(tx.total)}</p>
                       {isOwner && (
-                        <p className="text-xs text-green-500 mt-0.5">+{formatRupiah(labaBersih)}</p>
+                        <p className="text-xs text-green-500 mt-0.5">{<LocalizedText text={"+"} />}{formatCurrency(labaBersih)}</p>
                       )}
                     </div>
                     <div className="text-gray-400">
@@ -390,25 +394,25 @@ export default function TransactionsPage() {
                     <table className="w-full text-sm mb-4">
                       <thead>
                         <tr className="text-xs text-gray-400 uppercase">
-                          <th className="text-left pb-2 font-medium">Produk</th>
-                          <th className="text-center pb-2 font-medium">Qty</th>
-                          {isOwner && <th className="text-right pb-2 font-medium">Modal</th>}
-                          <th className="text-right pb-2 font-medium">Harga</th>
-                          <th className="text-right pb-2 font-medium">Subtotal</th>
+                          <th className="text-left pb-2 font-medium">{<LocalizedText text={"Produk"} />}</th>
+                          <th className="text-center pb-2 font-medium">{<LocalizedText text={"Qty"} />}</th>
+                          {isOwner && <th className="text-right pb-2 font-medium">{<LocalizedText text={"Modal"} />}</th>}
+                          <th className="text-right pb-2 font-medium">{<LocalizedText text={"Harga"} />}</th>
+                          <th className="text-right pb-2 font-medium">{<LocalizedText text={"Subtotal"} />}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
                         {tx.transaction_items?.map(item => (
                           <tr key={item.id}>
                             <td className="py-2 text-gray-700">{item.product_name}</td>
-                            <td className="py-2 text-center text-gray-500">{item.quantity}x</td>
+                            <td className="py-2 text-center text-gray-500">{item.quantity}{<LocalizedText text={"x"} />}</td>
                             {isOwner && (
                               <td className="py-2 text-right text-gray-400 text-xs">
-                                {formatRupiah(item.cost_price ?? 0)}
+                                {formatCurrency(item.cost_price ?? 0)}
                               </td>
                             )}
-                            <td className="py-2 text-right text-gray-500">{formatRupiah(item.unit_price)}</td>
-                            <td className="py-2 text-right font-medium text-gray-800">{formatRupiah(item.subtotal)}</td>
+                            <td className="py-2 text-right text-gray-500">{formatCurrency(item.unit_price)}</td>
+                            <td className="py-2 text-right font-medium text-gray-800">{formatCurrency(item.subtotal)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -416,44 +420,44 @@ export default function TransactionsPage() {
 
                     <div className="border-t border-gray-200 pt-3 space-y-1.5">
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">Subtotal</span>
-                        <span className="text-gray-700">{formatRupiah(tx.subtotal)}</span>
+                        <span className="text-gray-500">{<LocalizedText text={"Subtotal"} />}</span>
+                        <span className="text-gray-700">{formatCurrency(tx.subtotal)}</span>
                       </div>
                       {tx.discount > 0 && (
                         <div className="flex justify-between text-sm">
-                          <span className="text-gray-500">Diskon</span>
-                          <span className="text-red-500">- {formatRupiah(tx.discount)}</span>
+                          <span className="text-gray-500">{<LocalizedText text={"Diskon"} />}</span>
+                          <span className="text-red-500">{<LocalizedText text={"- "} />}{formatCurrency(tx.discount)}</span>
                         </div>
                       )}
                       {tx.tax > 0 && (
                         <div className="flex justify-between text-sm">
-                          <span className="text-gray-500">Pajak</span>
-                          <span className="text-orange-500">+ {formatRupiah(tx.tax)}</span>
+                          <span className="text-gray-500">{<LocalizedText text={"Pajak"} />}</span>
+                          <span className="text-orange-500">{<LocalizedText text={"+ "} />}{formatCurrency(tx.tax)}</span>
                         </div>
                       )}
                       <div className="flex justify-between text-sm font-bold border-t border-gray-200 pt-1.5">
-                        <span className="text-gray-800">Total</span>
-                        <span className="text-gray-900">{formatRupiah(tx.total)}</span>
+                        <span className="text-gray-800">{<LocalizedText text={"Total"} />}</span>
+                        <span className="text-gray-900">{formatCurrency(tx.total)}</span>
                       </div>
                       {tx.payment_method === 'cash' && (
                         <>
                           <div className="flex justify-between text-sm">
-                            <span className="text-gray-500">Bayar</span>
-                            <span className="text-gray-700">{formatRupiah(tx.amount_paid)}</span>
+                            <span className="text-gray-500">{<LocalizedText text={"Jumlah Dibayar"} />}</span>
+                            <span className="text-gray-700">{formatCurrency(tx.amount_paid)}</span>
                           </div>
                           <div className="flex justify-between text-sm">
-                            <span className="text-gray-500">Kembalian</span>
-                            <span className="text-green-600 font-medium">{formatRupiah(tx.change_amount)}</span>
+                            <span className="text-gray-500">{<LocalizedText text={"Kembalian"} />}</span>
+                            <span className="text-green-600 font-medium">{formatCurrency(tx.change_amount)}</span>
                           </div>
                         </>
                       )}
                       <div className="flex justify-between text-sm pt-1">
-                        <span className="text-gray-500">Metode</span>
+                        <span className="text-gray-500">{<LocalizedText text={"Metode"} />}</span>
                         <span className="text-gray-700">{paymentLabel[tx.payment_method] ?? tx.payment_method}</span>
                       </div>
                       {tx.payment_method === 'transfer' && tx.payment_account && (
                         <div className="flex justify-between gap-4 text-sm">
-                          <span className="text-gray-500">Rekening</span>
+                          <span className="text-gray-500">{<LocalizedText text={"Rekening"} />}</span>
                           <span className="text-gray-700 text-right">{tx.payment_account}</span>
                         </div>
                       )}
@@ -463,18 +467,18 @@ export default function TransactionsPage() {
                         <div className="border-t border-gray-200 pt-3 mt-2 space-y-1.5">
                           <div className="flex items-center gap-1.5 mb-2">
                             <TrendingUp size={14} className="text-green-500" />
-                            <span className="text-xs font-semibold text-gray-500 uppercase">Analisis Laba</span>
+                            <span className="text-xs font-semibold text-gray-500 uppercase">{<LocalizedText text={"Analisis Laba"} />}</span>
                           </div>
                           <div className="flex justify-between text-sm">
-                            <span className="text-gray-500">Laba Kotor</span>
+                            <span className="text-gray-500">{<LocalizedText text={"Laba Kotor"} />}</span>
                             <span className={`font-medium ${labaKotor >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                              {formatRupiah(labaKotor)}
+                              {formatCurrency(labaKotor)}
                             </span>
                           </div>
                           <div className="flex justify-between text-sm">
-                            <span className="text-gray-500">Laba Bersih <span className="text-xs text-gray-400">(setelah diskon/pajak)</span></span>
-                            <span className={`font-bold ${labaBersih >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                              {formatRupiah(labaBersih)}
+                            <span className="text-gray-500">{<LocalizedText text={"Laba Bersih "} />}<span className="text-xs text-gray-400">{<LocalizedText text={"(setelah diskon/pajak)"} />}</span></span>
+                            <span className={`font-bold ${labaBersih >= 0 ? "text-green-600" : "text-red-500"}`}>
+                              {formatCurrency(labaBersih)}
                             </span>
                           </div>
                         </div>
@@ -491,7 +495,7 @@ export default function TransactionsPage() {
       {!loading && !error && totalCount > PAGE_SIZE && (
         <div className="mt-5 flex items-center justify-between gap-3">
           <p className="text-sm text-gray-500">
-            Halaman {page + 1} dari {totalPages}
+            {<LocalizedText text={"\r\n            Halaman "} />}{page + 1} {<LocalizedText text={" dari "} />}{totalPages}
           </p>
           <div className="flex gap-2">
             <button
@@ -501,16 +505,14 @@ export default function TransactionsPage() {
               className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <ChevronLeft size={16} />
-              Sebelumnya
-            </button>
+              {<LocalizedText text={"\r\n              Sebelumnya\r\n            "} />}</button>
             <button
               type="button"
               onClick={() => setPage(current => Math.min(totalPages - 1, current + 1))}
               disabled={page >= totalPages - 1}
               className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Berikutnya
-              <ChevronRight size={16} />
+              {<LocalizedText text={"\r\n              Berikutnya\r\n              "} />}<ChevronRight size={16} />
             </button>
           </div>
         </div>

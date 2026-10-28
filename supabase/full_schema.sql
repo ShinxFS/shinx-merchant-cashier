@@ -14,6 +14,10 @@ create table if not exists public.profiles (
   address text,
   role text not null default 'owner' check (role in ('owner', 'staff')),
   owner_id uuid references public.profiles(id) on delete cascade,
+  language_code text not null default 'id'
+    check (language_code in ('id', 'en')),
+  currency_code text not null default 'IDR'
+    check (currency_code in ('IDR', 'USD', 'SGD', 'MYR', 'THB', 'PHP', 'JPY', 'CNY', 'KRW', 'VND', 'EUR', 'GBP', 'AUD', 'CAD', 'KWD')),
   qris_image_url text,
   cashier_compact_mode boolean not null default false,
   created_at timestamptz not null default now()

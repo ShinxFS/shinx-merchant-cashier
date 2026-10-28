@@ -1,8 +1,10 @@
 'use client'
+import { LocalizedText, translateText, useLanguage } from '@/lib/language'
+
 
 import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { formatRupiah } from '@/lib/utils'
+import { useCurrency } from '@/lib/currency'
 import * as XLSX from 'xlsx'
 import { saveAs } from 'file-saver'
 import {
@@ -53,7 +55,10 @@ function toMonthKey(date: Date) {
 }
 
 export default function ReportsPage() {
+  const localizedLanguage = useLanguage().language
+
   const supabase = createClient()
+  const { formatCurrency, currency } = useCurrency()
   const monthInputRef = useRef<HTMLInputElement>(null)
   const [weeklyData, setWeeklyData] = useState<ReportDataPoint[]>([])
   const [monthly15Data, setMonthly15Data] = useState<ReportDataPoint[]>([])
@@ -140,7 +145,7 @@ export default function ReportsPage() {
           const totals = getTotals(dailyTotals, toDateKey(day))
           const grossProfit = totals.revenue - totals.cogs
           return {
-            label: day.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
+            label: day.toLocaleDateString(localizedLanguage === 'en' ? 'en-US' : 'id-ID', { day: 'numeric', month: 'short' }),
             ...totals,
             grossProfit,
             profit: grossProfit - totals.expenses,
@@ -158,14 +163,14 @@ export default function ReportsPage() {
         }
       } catch (error) {
         if (cancelled) return
-        setLoadError(error instanceof Error ? error.message : 'Terjadi kesalahan saat memuat laporan.')
+        setLoadError(error instanceof Error ? error.message : translateText('Terjadi kesalahan saat memuat laporan.', localizedLanguage))
       } finally {
         if (!cancelled) setLoading(false)
       }
     }
     load()
     return () => { cancelled = true }
-  }, [supabase])
+  }, [localizedLanguage, supabase])
 
   useEffect(() => {
     if (view !== 'customMonth') return
@@ -245,7 +250,7 @@ export default function ReportsPage() {
           }
           const grossProfit = totals.revenue - totals.cogs
           return {
-            label: date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
+            label: date.toLocaleDateString(localizedLanguage === 'en' ? 'en-US' : 'id-ID', { day: 'numeric', month: 'short' }),
             ...totals,
             grossProfit,
             profit: grossProfit - totals.expenses,
@@ -255,7 +260,7 @@ export default function ReportsPage() {
         if (!cancelled) setSelectedMonthData(days)
       } catch (error) {
         if (!cancelled) {
-          setMonthError(error instanceof Error ? error.message : 'Terjadi kesalahan saat memuat laporan bulanan.')
+          setMonthError(error instanceof Error ? error.message : translateText('Terjadi kesalahan saat memuat laporan bulanan.', localizedLanguage))
         }
       } finally {
         if (!cancelled) setMonthLoading(false)
@@ -264,7 +269,7 @@ export default function ReportsPage() {
 
     loadSelectedMonth()
     return () => { cancelled = true }
-  }, [selectedMonth, supabase, view])
+  }, [localizedLanguage, selectedMonth, supabase, view])
 
   const chartData =
     view === 'weekly' ? weeklyData :
@@ -276,7 +281,7 @@ export default function ReportsPage() {
     Number(selectedMonth.slice(0, 4)),
     Number(selectedMonth.slice(5, 7)) - 1,
     1,
-  ).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
+  ).toLocaleDateString(localizedLanguage === 'en' ? 'en-US' : 'id-ID', { month: 'long', year: 'numeric' })
   const totalRevenue = chartData.reduce((s, d) => s + d.revenue, 0)
   const totalCogs = chartData.reduce((s, d) => s + d.cogs, 0)
   const totalGrossProfit = chartData.reduce((s, d) => s + d.grossProfit, 0)
@@ -292,45 +297,46 @@ export default function ReportsPage() {
     try {
       const selectedPeriod = view === 'customMonth'
         ? selectedMonthLabel
-        : tabs.find(tab => tab.key === view)?.label ?? view
+        : translateText(tabs.find(tab => tab.key === view)?.label ?? view, localizedLanguage)
       const periodFilename = view === 'customMonth' ? selectedMonth : view
       const workbook = XLSX.utils.book_new()
       const summarySheet = XLSX.utils.json_to_sheet([
-        { Informasi: 'Periode', Nilai: selectedPeriod },
-        { Informasi: 'Tanggal Ekspor', Nilai: new Date().toLocaleDateString('id-ID') },
-        { Informasi: 'Pendapatan', Nilai: totalRevenue },
-        { Informasi: 'HPP', Nilai: totalCogs },
-        { Informasi: 'Laba Kotor', Nilai: totalGrossProfit },
-        { Informasi: 'Pengeluaran', Nilai: totalExpenses },
-        { Informasi: 'Laba Bersih', Nilai: totalProfit },
-        { Informasi: 'Jumlah Transaksi', Nilai: chartData.reduce((sum, item) => sum + item.transactions, 0) },
+        { [translateText('Informasi', localizedLanguage)]: translateText('Periode', localizedLanguage), [translateText('Nilai', localizedLanguage)]: selectedPeriod },
+        { [translateText('Informasi', localizedLanguage)]: translateText('Mata Uang', localizedLanguage), [translateText('Nilai', localizedLanguage)]: currency },
+        { [translateText('Informasi', localizedLanguage)]: translateText('Tanggal Ekspor', localizedLanguage), [translateText('Nilai', localizedLanguage)]: new Date().toLocaleDateString(localizedLanguage === 'en' ? 'en-US' : 'id-ID') },
+        { [translateText('Informasi', localizedLanguage)]: translateText('Pendapatan', localizedLanguage), [translateText('Nilai', localizedLanguage)]: totalRevenue },
+        { [translateText('Informasi', localizedLanguage)]: translateText('HPP', localizedLanguage), [translateText('Nilai', localizedLanguage)]: totalCogs },
+        { [translateText('Informasi', localizedLanguage)]: translateText('Laba Kotor', localizedLanguage), [translateText('Nilai', localizedLanguage)]: totalGrossProfit },
+        { [translateText('Informasi', localizedLanguage)]: translateText('Pengeluaran', localizedLanguage), [translateText('Nilai', localizedLanguage)]: totalExpenses },
+        { [translateText('Informasi', localizedLanguage)]: translateText('Laba Bersih', localizedLanguage), [translateText('Nilai', localizedLanguage)]: totalProfit },
+        { [translateText('Informasi', localizedLanguage)]: translateText('Jumlah Transaksi', localizedLanguage), [translateText('Nilai', localizedLanguage)]: chartData.reduce((sum, item) => sum + item.transactions, 0) },
       ])
       summarySheet['!cols'] = [{ wch: 24 }, { wch: 24 }]
-      XLSX.utils.book_append_sheet(workbook, summarySheet, 'Ringkasan')
+      XLSX.utils.book_append_sheet(workbook, summarySheet, translateText('Ringkasan', localizedLanguage))
 
       const detailsSheet = XLSX.utils.json_to_sheet(chartData.map(item => ({
-        Periode: item.label,
-        Pendapatan: item.revenue,
-        HPP: item.cogs,
-        'Laba Kotor': item.grossProfit,
-        Pengeluaran: item.expenses,
-        'Laba Bersih': item.profit,
-        Transaksi: item.transactions,
+        [translateText('Periode', localizedLanguage)]: item.label,
+        [translateText('Pendapatan', localizedLanguage)]: item.revenue,
+        [translateText('HPP', localizedLanguage)]: item.cogs,
+        [translateText('Laba Kotor', localizedLanguage)]: item.grossProfit,
+        [translateText('Pengeluaran', localizedLanguage)]: item.expenses,
+        [translateText('Laba Bersih', localizedLanguage)]: item.profit,
+        [translateText('Transaksi', localizedLanguage)]: item.transactions,
       })))
       detailsSheet['!cols'] = [
         { wch: 18 }, { wch: 16 }, { wch: 16 }, { wch: 16 },
         { wch: 16 }, { wch: 16 }, { wch: 12 },
       ]
-      XLSX.utils.book_append_sheet(workbook, detailsSheet, 'Rincian Periode')
+      XLSX.utils.book_append_sheet(workbook, detailsSheet, translateText('Rincian Periode', localizedLanguage))
 
       const productsSheet = XLSX.utils.json_to_sheet(topProducts.map((product, index) => ({
-        Peringkat: index + 1,
-        Produk: product.name,
-        'Jumlah Terjual': product.qty,
-        Pendapatan: product.revenue,
+        [translateText('Peringkat', localizedLanguage)]: index + 1,
+        [translateText('Produk', localizedLanguage)]: product.name,
+        [translateText('Jumlah Terjual', localizedLanguage)]: product.qty,
+        [translateText('Pendapatan', localizedLanguage)]: product.revenue,
       })))
       productsSheet['!cols'] = [{ wch: 12 }, { wch: 40 }, { wch: 18 }, { wch: 18 }]
-      XLSX.utils.book_append_sheet(workbook, productsSheet, 'Produk Terlaris')
+      XLSX.utils.book_append_sheet(workbook, productsSheet, translateText('Produk Terlaris', localizedLanguage))
 
       const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
       saveAs(
@@ -339,7 +345,7 @@ export default function ReportsPage() {
       )
       setExportError('')
     } catch (error) {
-      setExportError(error instanceof Error ? error.message : 'Terjadi kesalahan saat mengekspor laporan.')
+      setExportError(error instanceof Error ? error.message : translateText('Terjadi kesalahan saat mengekspor laporan.', localizedLanguage))
     }
   }
 
@@ -348,15 +354,14 @@ export default function ReportsPage() {
   if (loading || (view === 'customMonth' && monthLoading)) {
     return (
       <div className="flex items-center justify-center h-full text-gray-400 text-sm">
-        Memuat laporan...
-      </div>
+        {<LocalizedText text={"\r\n        Memuat laporan...\r\n      "} />}</div>
     )
   }
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-bold text-gray-900">Laporan Penjualan</h1>
+        <h1 className="text-xl font-bold text-gray-900">{<LocalizedText text={"Laporan Penjualan"} />}</h1>
         <button
           type="button"
           onClick={exportExcel}
@@ -364,17 +369,16 @@ export default function ReportsPage() {
           className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <FileSpreadsheet size={16} />
-          Export Excel
-        </button>
+          {<LocalizedText text={"\r\n          Export ke Excel\r\n        "} />}</button>
       </div>
       {loadError && (
         <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">
-          Gagal memuat laporan: {loadError}
+          {<LocalizedText text={"\r\n          Gagal memuat laporan: "} />}{loadError}
         </p>
       )}
       {exportError && (
         <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">
-          Gagal mengekspor laporan: {exportError}
+          {<LocalizedText text={"\r\n          Gagal mengekspor laporan: "} />}{exportError}
         </p>
       )}
 
@@ -396,12 +400,12 @@ export default function ReportsPage() {
           }`}
         >
           <CalendarDays size={16} />
-          Pilih Bulan: {selectedMonthLabel}
+          {<LocalizedText text={"\r\n          Pilih Bulan: "} />}{selectedMonthLabel}
         </button>
         <input
           ref={monthInputRef}
           type="month"
-          aria-label="Pilih bulan laporan"
+          aria-label={translateText("Pilih bulan laporan", localizedLanguage)}
           value={selectedMonth}
           max={toMonthKey(new Date())}
           onChange={event => {
@@ -416,8 +420,8 @@ export default function ReportsPage() {
             onClick={() => setView(key)}
             className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
               view === key
-                ? 'bg-indigo-600 text-white'
-                : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+                ? "bg-indigo-600 text-white"
+                : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
             }`}
           >
             {label}
@@ -427,7 +431,7 @@ export default function ReportsPage() {
 
       {view === 'customMonth' && monthError && (
         <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">
-          Gagal memuat laporan bulanan: {monthError}
+          {<LocalizedText text={"\r\n          Gagal memuat laporan bulanan: "} />}{monthError}
         </p>
       )}
 
@@ -436,47 +440,47 @@ export default function ReportsPage() {
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <div className="flex items-center gap-2 mb-1">
             <TrendingUp size={16} className="text-indigo-500" />
-            <p className="text-xs text-gray-500">Pendapatan</p>
+            <p className="text-xs text-gray-500">{<LocalizedText text={"Pendapatan"} />}</p>
           </div>
-          <p className="text-lg font-bold text-gray-900">{formatRupiah(totalRevenue)}</p>
+          <p className="text-lg font-bold text-gray-900">{formatCurrency(totalRevenue)}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <div className="flex items-center gap-2 mb-1">
             <Package size={16} className="text-orange-500" />
-            <p className="text-xs text-gray-500">HPP</p>
+            <p className="text-xs text-gray-500">{<LocalizedText text={"HPP"} />}</p>
           </div>
-          <p className="text-lg font-bold text-gray-900">{formatRupiah(totalCogs)}</p>
+          <p className="text-lg font-bold text-gray-900">{formatCurrency(totalCogs)}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <div className="flex items-center gap-2 mb-1">
             <TrendingUp size={16} className="text-amber-500" />
-            <p className="text-xs text-gray-500">Laba Kotor</p>
+            <p className="text-xs text-gray-500">{<LocalizedText text={"Laba Kotor"} />}</p>
           </div>
           <p className={`text-lg font-bold ${totalGrossProfit >= 0 ? 'text-amber-600' : 'text-red-500'}`}>
-            {formatRupiah(totalGrossProfit)}
+            {formatCurrency(totalGrossProfit)}
           </p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <div className="flex items-center gap-2 mb-1">
             <TrendingDown size={16} className="text-red-500" />
-            <p className="text-xs text-gray-500">Pengeluaran</p>
+            <p className="text-xs text-gray-500">{<LocalizedText text={"Pengeluaran"} />}</p>
           </div>
-          <p className="text-lg font-bold text-red-500">{formatRupiah(totalExpenses)}</p>
+          <p className="text-lg font-bold text-red-500">{formatCurrency(totalExpenses)}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <div className="flex items-center gap-2 mb-1">
             <Wallet size={16} className="text-green-500" />
-            <p className="text-xs text-gray-500">Laba Bersih</p>
+            <p className="text-xs text-gray-500">{<LocalizedText text={"Laba Bersih"} />}</p>
           </div>
           <p className={`text-lg font-bold ${totalProfit >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-            {formatRupiah(totalProfit)}
+            {formatCurrency(totalProfit)}
           </p>
         </div>
       </div>
 
       {/* Grafik Pendapatan / Pengeluaran */}
       <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <h2 className="font-semibold text-gray-800 mb-4">Pendapatan / Pengeluaran</h2>
+        <h2 className="font-semibold text-gray-800 mb-4">{<LocalizedText text={"Pendapatan / Pengeluaran"} />}</h2>
         <ResponsiveContainer width="100%" height={240}>
           <BarChart data={chartData} barSize={isMultiDay ? 17 : 24}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -488,12 +492,12 @@ export default function ReportsPage() {
             <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={v => `${Number(v) / 1000}k`} />
             <Tooltip
               formatter={(v, name) => [
-              formatRupiah(Number(v)),
-              name === 'revenue' ? 'Pendapatan' : name === 'expenses' ? 'Pengeluaran' : 'Laba'
+              formatCurrency(Number(v)),
+              translateText(name === 'revenue' ? 'Pendapatan' : name === 'expenses' ? 'Pengeluaran' : 'Laba', localizedLanguage)
               ]}
               contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '13px' }}
             />
-            <Legend formatter={(v) => v === 'revenue' ? 'Pendapatan' : v === 'expenses' ? 'Pengeluaran' : 'Laba'} />
+            <Legend formatter={(v) => translateText(v === 'revenue' ? 'Pendapatan' : v === 'expenses' ? 'Pengeluaran' : 'Laba', localizedLanguage)} />
             <Bar dataKey="revenue" fill="#6366f1" radius={[4, 4, 0, 0]} />
             <Bar dataKey="expenses" fill="#ef4444" radius={[4, 4, 0, 0]} />
           </BarChart>
@@ -502,7 +506,7 @@ export default function ReportsPage() {
 
       {/* Grafik Laba Kotor (Pendapatan / HPP) */}
       <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <h2 className="font-semibold text-gray-800 mb-4">Laba Kotor (Pendapatan / HPP)</h2>
+        <h2 className="font-semibold text-gray-800 mb-4">{<LocalizedText text={"Laba Kotor (Pendapatan / HPP)"} />}</h2>
         <ResponsiveContainer width="100%" height={240}>
           <BarChart data={chartData} barSize={isMultiDay ? 17 : 24}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -514,12 +518,12 @@ export default function ReportsPage() {
             <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={v => `${Number(v) / 1000}k`} />
             <Tooltip
               formatter={(v, name) => [
-              formatRupiah(Number(v)),
-              name === 'revenue' ? 'Pendapatan' : name === 'cogs' ? 'HPP' : 'Laba Kotor'
+              formatCurrency(Number(v)),
+              translateText(name === 'revenue' ? 'Pendapatan' : name === 'cogs' ? 'HPP' : 'Laba Kotor', localizedLanguage)
               ]}
               contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '13px' }}
             />
-            <Legend formatter={(v) => v === 'revenue' ? 'Pendapatan' : v === 'cogs' ? 'HPP' : 'Laba Kotor'} />
+            <Legend formatter={(v) => translateText(v === 'revenue' ? 'Pendapatan' : v === 'cogs' ? 'HPP' : 'Laba Kotor', localizedLanguage)} />
             <Bar dataKey="revenue" fill="#6366f1" radius={[4, 4, 0, 0]} />
             <Bar dataKey="cogs" fill="#f97316" radius={[4, 4, 0, 0]} />
             <Bar dataKey="grossProfit" fill="#eab308" radius={[4, 4, 0, 0]} />
@@ -529,7 +533,7 @@ export default function ReportsPage() {
 
       {/* Grafik Laba Bersih */}
       <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <h2 className="font-semibold text-gray-800 mb-4">Grafik Laba Bersih</h2>
+        <h2 className="font-semibold text-gray-800 mb-4">{<LocalizedText text={"Grafik Laba Bersih"} />}</h2>
         <ResponsiveContainer width="100%" height={200}>
           <LineChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -540,7 +544,7 @@ export default function ReportsPage() {
             />
             <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={v => `${Number(v) / 1000}k`} />
             <Tooltip
-              formatter={v => [formatRupiah(Number(v)), 'Laba Bersih']}
+              formatter={v => [formatCurrency(Number(v)), translateText('Laba Bersih', localizedLanguage)]}
               contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '12px' }}
             />
             <Line type="monotone" dataKey="profit" stroke="#22c55e" strokeWidth={2} dot={{ r: isMultiDay ? 2 : 4, fill: '#22c55e' }} />
@@ -550,7 +554,7 @@ export default function ReportsPage() {
 
       {/* Grafik Transaksi */}
       <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <h2 className="font-semibold text-gray-800 mb-4">Jumlah Transaksi</h2>
+        <h2 className="font-semibold text-gray-800 mb-4">{<LocalizedText text={"Jumlah Transaksi"} />}</h2>
         <ResponsiveContainer width="100%" height={200}>
           <LineChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -561,7 +565,7 @@ export default function ReportsPage() {
             />
             <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} allowDecimals={false} />
             <Tooltip
-              formatter={v => [v, 'Transaksi']}
+              formatter={v => [v, translateText('Transaksi', localizedLanguage)]}
               contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '12px' }}
             />
             <Line type="monotone" dataKey="transactions" stroke="#3b82f6" strokeWidth={2} dot={{ r: isMultiDay ? 2 : 4, fill: '#3b82f6' }} />
@@ -573,14 +577,14 @@ export default function ReportsPage() {
       <div className="bg-white rounded-xl border border-gray-200 p-5">
         <div className="flex items-center gap-2 mb-4">
           <Package size={16} className="text-purple-500" />
-          <h2 className="font-semibold text-gray-800">Produk Terlaris</h2>
+          <h2 className="font-semibold text-gray-800">{<LocalizedText text={"Produk Terlaris"} />}</h2>
         </div>
         {topProductsError ? (
           <p role="alert" className="text-sm text-red-500 text-center py-6">
-            Gagal memuat produk terlaris: {topProductsError}
+            {<LocalizedText text={"\r\n            Gagal memuat produk terlaris: "} />}{topProductsError}
           </p>
         ) : topProducts.length === 0 ? (
-          <p className="text-sm text-gray-400 text-center py-6">Belum ada data</p>
+          <p className="text-sm text-gray-400 text-center py-6">{<LocalizedText text={"Belum ada data"} />}</p>
         ) : (
           <div className="space-y-3">
             {topProducts.map((p, i) => {
@@ -589,10 +593,10 @@ export default function ReportsPage() {
                 <div key={p.name}>
                   <div className="flex justify-between text-sm mb-1">
                     <span className="text-gray-700 font-medium">
-                      <span className="text-gray-400 mr-2">#{i + 1}</span>
+                      <span className="text-gray-400 mr-2">{<LocalizedText text={"#"} />}{i + 1}</span>
                       {p.name}
                     </span>
-                    <span className="text-gray-500">{p.qty}x · {formatRupiah(p.revenue)}</span>
+                    <span className="text-gray-500">{p.qty}{<LocalizedText text={"x · "} />}{formatCurrency(p.revenue)}</span>
                   </div>
                   <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
                     <div

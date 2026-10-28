@@ -1,5 +1,9 @@
+'use client'
+import { LocalizedText, translateText, useLanguage } from '@/lib/language'
+
+
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { formatRupiah } from '@/lib/utils'
+import { useCurrency } from '@/lib/currency'
 import { Minus, Plus, Trash2 } from 'lucide-react'
 
 export interface CartItemType {
@@ -24,6 +28,8 @@ export default function CartItem({
   onSetQuantity: (id: string, quantity: number) => void
   onRemove: (id: string) => void
 }) {
+  const localizedLanguage = useLanguage().language
+  const { formatCurrency } = useCurrency()
   const [editingQuantity, setEditingQuantity] = useState(false)
   const [quantityDraft, setQuantityDraft] = useState('')
   const holdDelayRef = useRef<number | null>(null)
@@ -124,7 +130,7 @@ export default function CartItem({
         {item.image_url ? (
           <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
         ) : (
-          <span className="text-xl">🛍️</span>
+          <span className="text-xl">{<LocalizedText text={"🛍️"} />}</span>
         )}
       </div>
 
@@ -132,14 +138,14 @@ export default function CartItem({
       <div className="flex-1 min-w-0">
         <p className="text-[12px] font-medium text-gray-800 leading-tight line-clamp-3">{item.name}</p>
         <p className="text-[12px] text-indigo-600 font-semibold mt-0.5">
-          {formatRupiah(item.price)}
+          {formatCurrency(item.price)}
         </p>
       </div>
 
       {/* Qty Control & Total */}
       <div className="flex flex-col items-end gap-1.5">
         <p className="text-[13px] font-bold text-gray-800">
-          {formatRupiah(item.price * item.quantity)}
+          {formatCurrency(item.price * item.quantity)}
         </p>
         <div className="flex items-center gap-1.5">
           <button
@@ -156,7 +162,7 @@ export default function CartItem({
               type="text"
               inputMode="numeric"
               pattern="[0-9]*"
-              aria-label={`Jumlah ${item.name}`}
+              aria-label={`${translateText('Jumlah ', localizedLanguage)}${item.name}`}
               autoFocus
               value={quantityDraft}
               onFocus={event => event.currentTarget.select()}
@@ -174,7 +180,7 @@ export default function CartItem({
           ) : (
             <button
               type="button"
-              aria-label={`Edit jumlah ${item.name}`}
+              aria-label={`${translateText('Edit jumlah ', localizedLanguage)}${item.name}`}
               onClick={() => {
                 setQuantityDraft(String(item.quantity))
                 setEditingQuantity(true)

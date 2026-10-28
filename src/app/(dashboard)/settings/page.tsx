@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Save, Plus, Trash2, QrCode, Upload, Pencil, Check, X } from 'lucide-react'
-
+import { CURRENCY_OPTIONS, isCurrencyCode, useCurrency } from '@/lib/currency'
+import type { CurrencyCode } from '@/lib/currency'
+import { LanguageToggle, useLanguage, LocalizedText, translateText } from '@/lib/language'
 interface Category {
   id: string
   name: string
@@ -33,7 +35,11 @@ const toneOptions = [
 const inputClass = "w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
 
 export default function SettingsPage() {
+  const localizedLanguage = useLanguage().language
+
   const supabase = useMemo(() => createClient(), [])
+  const { currency, setCurrency, currencyError: profileCurrencyError } = useCurrency()
+  const { language, isOwner: languageOwner, error: languageError } = useLanguage()
   const [profile, setProfile] = useState({
     business_name: '',
     owner_name: '',
@@ -64,6 +70,12 @@ export default function SettingsPage() {
   const [soundUploading, setSoundUploading] = useState<'cashier' | 'customer' | null>(null)
   const [tableQrLinks, setTableQrLinks] = useState<Record<number, string>>({})
   const [qrReady, setQrReady] = useState(false)
+  const [isOwner, setIsOwner] = useState(false)
+  const [nextCurrency, setNextCurrency] = useState<CurrencyCode | null>(null)
+  const [currencySaving, setCurrencySaving] = useState(false)
+  const [currencyError, setCurrencyError] = useState('')
+  const [currencySaved, setCurrencySaved] = useState(false)
+  const selectedCurrency = nextCurrency ?? currency
 
   useEffect(() => {
     const load = async () => {
@@ -75,6 +87,7 @@ export default function SettingsPage() {
         supabase.from('payment_accounts').select('id, bank_name, account_number, account_name').eq('user_id', user.id).order('created_at'),
       ])
       if (prof) {
+        setIsOwner(prof.role === 'owner')
         const hasCompactModeSetting = Object.prototype.hasOwnProperty.call(prof, 'cashier_compact_mode')
         setCashierCompactModeReady(hasCompactModeSetting)
         setCashierCompactMode(prof.cashier_compact_mode === true)
@@ -111,6 +124,34 @@ export default function SettingsPage() {
     load()
   }, [supabase])
 
+  const handleCurrencyChange = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!isOwner || currencySaving || selectedCurrency === currency) return
+
+    setCurrencySaving(true)
+    setCurrencyError('')
+    setCurrencySaved(false)
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+
+    if (userError || !user) {
+      setCurrencyError(`${translateText("Gagal menyimpan mata uang: ", localizedLanguage)}${userError?.message ?? translateText('Sesi pengguna tidak ditemukan.', localizedLanguage)}`)
+    } else {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ currency_code: selectedCurrency })
+        .eq('id', user.id)
+
+      if (error) {
+        setCurrencyError(`${translateText("Gagal menyimpan mata uang: ", localizedLanguage)}${error.message}`)
+      } else {
+        setCurrency(selectedCurrency)
+        setNextCurrency(null)
+        setCurrencySaved(true)
+      }
+    }
+    setCurrencySaving(false)
+  }
+
   const handleCashierCompactModeChange = async () => {
     if (!cashierCompactModeReady || cashierCompactModeSaving) return
     setCashierCompactModeSaving(true)
@@ -118,7 +159,7 @@ export default function SettingsPage() {
 
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
-      setCashierCompactModeError('Sesi pengguna tidak ditemukan. Muat ulang halaman lalu coba lagi.')
+      setCashierCompactModeError(translateText("Sesi pengguna tidak ditemukan. Muat ulang halaman lalu coba lagi.", localizedLanguage))
       setCashierCompactModeSaving(false)
       return
     }
@@ -130,7 +171,7 @@ export default function SettingsPage() {
       .eq('id', user.id)
 
     if (error) {
-      setCashierCompactModeError(`Gagal menyimpan pengaturan: ${error.message}`)
+      setCashierCompactModeError(`${translateText("Gagal menyimpan pengaturan: ", localizedLanguage)}${error.message}`)
     } else {
       setCashierCompactMode(nextValue)
     }
@@ -167,7 +208,7 @@ export default function SettingsPage() {
       .single()
 
     if (error) {
-      alert('Gagal menyimpan rekening: ' + error.message)
+      alert(translateText("Gagal menyimpan rekening: ", localizedLanguage) + error.message)
     } else if (data) {
       setPaymentAccounts(prev => [...prev, data])
       setAccountForm({ bank_name: '', account_number: '', account_name: '' })
@@ -176,7 +217,7 @@ export default function SettingsPage() {
   }
 
   const handleDeletePaymentAccount = async (id: string) => {
-    if (!confirm('Hapus rekening ini?')) return
+    if (!confirm(translateText("Hapus rekening ini?", localizedLanguage))) return
     await supabase.from('payment_accounts').delete().eq('id', id)
     setPaymentAccounts(prev => prev.filter(account => account.id !== id))
   }
@@ -185,7 +226,7 @@ export default function SettingsPage() {
     const file = e.target.files?.[0]
     if (!file) return
     if (!file.type.startsWith('image/')) {
-      alert('File harus berupa gambar.')
+      alert(translateText("File harus berupa gambar.", localizedLanguage))
       return
     }
     setQrisUploading(true)
@@ -197,7 +238,7 @@ export default function SettingsPage() {
     const { error: upErr } = await supabase.storage
       .from('product-images')
       .upload(path, file, { upsert: true })
-    if (upErr) { alert('Gagal mengunggah QRIS.'); setQrisUploading(false); return }
+    if (upErr) { alert(translateText("Gagal mengunggah QRIS.", localizedLanguage)); setQrisUploading(false); return }
 
     const { data: pub } = supabase.storage.from('product-images').getPublicUrl(path)
     await supabase.from('profiles').update({ qris_image_url: pub.publicUrl }).eq('id', user.id)
@@ -206,7 +247,7 @@ export default function SettingsPage() {
   }
 
   const handleRemoveQris = async () => {
-    if (!confirm('Hapus gambar QRIS?')) return
+    if (!confirm(translateText("Hapus gambar QRIS?", localizedLanguage))) return
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
     await supabase.from('profiles').update({ qris_image_url: null }).eq('id', user.id)
@@ -217,7 +258,7 @@ export default function SettingsPage() {
     const file = e.target.files?.[0]
     if (!file) return
     if (!file.type.startsWith('audio/')) {
-      alert('File harus berupa audio. Format yang didukung: MP3, WAV, M4A.')
+      alert(translateText("File harus berupa audio. Format yang didukung: MP3, WAV, M4A.", localizedLanguage))
       return
     }
 
@@ -235,7 +276,7 @@ export default function SettingsPage() {
       .upload(path, file, { upsert: true })
 
     if (upErr) {
-      alert('Gagal mengunggah suara notifikasi.')
+      alert(translateText("Gagal mengunggah suara notifikasi.", localizedLanguage))
       setSoundUploading(null)
       return
     }
@@ -251,7 +292,7 @@ export default function SettingsPage() {
   }
 
   const handleRemoveSound = async (kind: 'cashier' | 'customer') => {
-    if (!confirm(`Hapus suara notifikasi ${kind === 'cashier' ? 'kasir' : 'pelanggan'}?`)) return
+    if (!confirm(`${translateText("Hapus suara notifikasi ", localizedLanguage)}${kind === 'cashier' ? translateText("kasir", localizedLanguage) : translateText("pelanggan", localizedLanguage)}${translateText("?", localizedLanguage)}`)) return
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
@@ -268,7 +309,7 @@ export default function SettingsPage() {
       const audio = new Audio(url)
       audio.volume = 1
       void audio.play().catch(() => {
-        alert('Browser memblokir suara otomatis. Klik sekali di halaman ini lalu coba lagi.')
+        alert(translateText("Browser memblokir suara otomatis. Klik sekali di halaman ini lalu coba lagi.", localizedLanguage))
       })
       return
     }
@@ -315,7 +356,7 @@ export default function SettingsPage() {
   const handleUpdateCategory = async (id: string) => {
     const name = editingCategoryName.trim()
     if (!name) {
-      alert('Nama kategori tidak boleh kosong.')
+      alert(translateText("Nama kategori tidak boleh kosong.", localizedLanguage))
       return
     }
 
@@ -323,7 +364,7 @@ export default function SettingsPage() {
     try {
       const { data: { user }, error: authError } = await supabase.auth.getUser()
       if (authError || !user) {
-        alert('Sesi berakhir. Silakan masuk kembali.')
+        alert(translateText("Sesi berakhir. Silakan masuk kembali.", localizedLanguage))
         return
       }
 
@@ -336,7 +377,7 @@ export default function SettingsPage() {
         .single()
 
       if (error) {
-        alert(`Gagal mengubah nama kategori: ${error.message}`)
+        alert(`${translateText("Gagal mengubah nama kategori: ", localizedLanguage)}${error.message}`)
         return
       }
 
@@ -345,7 +386,7 @@ export default function SettingsPage() {
       setEditingCategoryName('')
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Terjadi kesalahan yang tidak diketahui.'
-      alert(`Gagal mengubah nama kategori: ${message}`)
+      alert(`${translateText("Gagal mengubah nama kategori: ", localizedLanguage)}${message}`)
     } finally {
       setCategorySavingId(null)
     }
@@ -357,64 +398,63 @@ export default function SettingsPage() {
   }
 
   const handleDeleteCategory = async (id: string) => {
-    if (!confirm('Hapus kategori ini?')) return
+    if (!confirm(translateText("Hapus kategori ini?", localizedLanguage))) return
     await supabase.from('categories').delete().eq('id', id)
     setCategories(prev => prev.filter(c => c.id !== id))
   }
 
   return (
     <div className="p-6 max-w-2xl mx-auto space-y-8">
-      <h1 className="text-xl font-bold text-gray-900">Pengaturan</h1>
+      <h1 className="text-xl font-bold text-gray-900">{<LocalizedText text={"Pengaturan"} />}</h1>
 
       {/* Profil Toko */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <h2 className="font-semibold text-gray-800 mb-4">Profil Toko</h2>
+        <h2 className="font-semibold text-gray-800 mb-4">{<LocalizedText text={"Profil Toko"} />}</h2>
         <form onSubmit={handleSaveProfile} className="space-y-4">
 
           {saved && (
             <div className="bg-green-50 text-green-700 text-sm px-4 py-2.5 rounded-lg border border-green-200">
-              ✅ Perubahan berhasil disimpan!
-            </div>
+              {<LocalizedText text={"\r\n              ✅ Perubahan berhasil disimpan!\r\n            "} />}</div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nama Bisnis</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{<LocalizedText text={"Nama Bisnis"} />}</label>
             <input
               value={profile.business_name}
               onChange={e => setProfile(p => ({ ...p, business_name: e.target.value }))}
-              placeholder="Toko Shinx"
+              placeholder={translateText("Toko Shinx", localizedLanguage)}
               className={inputClass}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nama Pemilik</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{<LocalizedText text={"Nama Pemilik"} />}</label>
             <input
               value={profile.owner_name}
               onChange={e => setProfile(p => ({ ...p, owner_name: e.target.value }))}
-              placeholder="Nama pemilik toko"
+              placeholder={translateText("Nama pemilik toko", localizedLanguage)}
               className={inputClass}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nomor Telepon</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{<LocalizedText text={"Nomor Telepon"} />}</label>
             <input
               value={profile.phone}
               onChange={e => setProfile(p => ({ ...p, phone: e.target.value }))}
-              placeholder="08xxxxxxxxxx"
+              placeholder={translateText("08xxxxxxxxxx", localizedLanguage)}
               className={inputClass}
             />
           </div>
 
           <div suppressHydrationWarning>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Alamat</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{<LocalizedText text={"Alamat"} />}</label>
             <textarea
               suppressHydrationWarning
               value={profile.address}
               onChange={e => setProfile(p => ({ ...p, address: e.target.value }))}
               rows={3}
-              placeholder="Alamat lengkap toko"
+              placeholder={translateText("Alamat lengkap toko", localizedLanguage)}
               className={`${inputClass} resize-none`}
             />
           </div>
@@ -425,30 +465,119 @@ export default function SettingsPage() {
             className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
           >
             <Save size={15} />
-            {loading ? 'Menyimpan...' : 'Simpan Perubahan'}
+            {loading ? <LocalizedText text={"Menyimpan..."} /> : <LocalizedText text={"Simpan Perubahan"} />}
           </button>
         </form>
       </div>
 
+      {/* Mata Uang Toko */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <h2 className="font-semibold text-gray-800 mb-1">{language === 'id' ? <LocalizedText text={"Bahasa Toko"} /> : <LocalizedText text={"Store Language"} />}</h2>
+        <p className="text-sm text-gray-500 mb-4">
+          {language === 'id'
+            ? <LocalizedText text={"Bahasa ini berlaku untuk seluruh aplikasi dan halaman QR meja, serta tersinkron di semua perangkat."} />
+            : <LocalizedText text={"This language applies to the entire app and table QR pages, and syncs across devices."} />}
+        </p>
+        {languageOwner ? (
+          <LanguageToggle />
+        ) : (
+          <p className="text-sm text-gray-500">
+            {language === 'id' ? <LocalizedText text={"Bahasa mengikuti pengaturan pemilik toko."} /> : <LocalizedText text={"The language follows the store owner’s setting."} />}
+          </p>
+        )}
+        {languageError && (
+          <p role="alert" className="mt-3 text-sm text-red-600">
+            {languageError}
+            {" "}
+            {language === 'id'
+              ? <LocalizedText text={"Pastikan supabase/multi_language.sql sudah dijalankan di Supabase SQL Editor."} />
+              : <LocalizedText text={"Make sure supabase/multi_language.sql has been run in the Supabase SQL Editor."} />}
+          </p>
+        )}
+      </div>
+
+      {/* Mata Uang Toko */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <h2 className="font-semibold text-gray-800 mb-1">{<LocalizedText text={"Mata Uang Toko"} />}</h2>
+        <p className="text-sm text-gray-500 mb-4">
+          {<LocalizedText text={"\r\n          Pilihan ini hanya mengubah format tampilan, bukan angka yang sudah tersimpan. Jika benar-benar berpindah mata uang, sesuaikan angka lama secara manual terlebih dahulu.\r\n        "} />}</p>
+
+        {profileCurrencyError && (
+          <p role="alert" className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800">
+            {<LocalizedText text={"\r\n            Gagal memuat mata uang toko: "} />}<LocalizedText text={profileCurrencyError} />{<LocalizedText text={". Jika kolom atau fungsi mata uang belum ada, jalankan "} />}<code>{<LocalizedText text={"supabase/multi_currency.sql"} />}</code> {<LocalizedText text={" di Supabase SQL Editor.\r\n          "} />}</p>
+        )}
+
+        {!isOwner ? (
+          <p className="text-sm text-gray-500">{<LocalizedText text={"Hanya pemilik toko yang dapat mengganti mata uang."} />}</p>
+        ) : (
+          <form onSubmit={handleCurrencyChange} className="space-y-4">
+            {currencySaved && (
+              <p className="rounded-lg border border-green-200 bg-green-50 px-3 py-2.5 text-sm text-green-700">
+                {<LocalizedText text={"\r\n                Mata uang tampilan berhasil diubah. Nilai yang tersimpan tidak diubah.\r\n              "} />}</p>
+            )}
+            {currencyError && (
+              <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700">
+                <LocalizedText text={currencyError} />
+              </p>
+            )}
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">{<LocalizedText text={"Mata uang saat ini"} />}</label>
+              <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-700">
+                <LocalizedText text={CURRENCY_OPTIONS.find(option => option.code === currency)?.label ?? currency} />
+              </p>
+            </div>
+
+            <div>
+              <label htmlFor="store-currency" className="mb-1 block text-sm font-medium text-gray-700">
+                {<LocalizedText text={"\r\n                Mata uang baru\r\n              "} />}</label>
+              <select
+                id="store-currency"
+                value={selectedCurrency}
+                onChange={event => {
+                  if (isCurrencyCode(event.target.value)) setNextCurrency(event.target.value)
+                  setCurrencyError('')
+                  setCurrencySaved(false)
+                }}
+                className={inputClass}
+                disabled={currencySaving || !!profileCurrencyError}
+              >
+                {CURRENCY_OPTIONS.map(option => (
+                  <option key={option.code} value={option.code}><LocalizedText text={option.label} /></option>
+                ))}
+              </select>
+            </div>
+
+            <button
+              type="submit"
+              disabled={currencySaving || !!profileCurrencyError || selectedCurrency === currency}
+              className="flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Save size={15} />
+              {currencySaving ? <LocalizedText text={"Menyimpan..."} /> : `${translateText('Simpan ', localizedLanguage)}${selectedCurrency}`}
+            </button>
+          </form>
+        )}
+      </div>
+
       {/* Tampilan Kasir */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <h2 className="font-semibold text-gray-800 mb-1">Tampilan Kasir</h2>
+        <h2 className="font-semibold text-gray-800 mb-1">{<LocalizedText text={"Tampilan Kasir"} />}</h2>
         <p className="text-sm text-gray-400 mb-4">
-          Sembunyikan gambar produk agar lebih banyak item terlihat di layar kasir.
-        </p>
+          {<LocalizedText text={"\r\n          Sembunyikan gambar produk agar lebih banyak item terlihat di layar kasir.\r\n        "} />}</p>
 
         <div className="flex items-center justify-between gap-4 rounded-xl border border-gray-200 bg-gray-25 p-4">
           <div>
-            <p className="text-sm font-medium text-gray-800">Mode Compact</p>
+            <p className="text-sm font-medium text-gray-800">{<LocalizedText text={"Mode Compact"} />}</p>
             <p className="text-xs text-gray-500">
-              {cashierCompactMode ? 'Aktif — gambar produk nonaktif' : 'Nonaktif — gambar produk aktif'}
+              {cashierCompactMode ? <LocalizedText text={"Aktif — gambar produk nonaktif"} /> : <LocalizedText text={"Nonaktif — gambar produk aktif"} />}
             </p>
           </div>
           <button
             type="button"
             role="switch"
             aria-checked={cashierCompactMode}
-            aria-label="Mode tanpa gambar"
+            aria-label={translateText("Mode tanpa gambar", localizedLanguage)}
             aria-disabled={!cashierCompactModeReady || cashierCompactModeSaving}
             onClick={() => void handleCashierCompactModeChange()}
             className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
@@ -466,41 +595,40 @@ export default function SettingsPage() {
         </div>
         {cashierCompactModeError && (
           <p role="alert" className="mt-3 text-sm text-amber-700">
-            {cashierCompactModeError}
+            <LocalizedText text={cashierCompactModeError} />
           </p>
         )}
         {cashierCompactModeSaving && (
-          <p className="mt-2 text-xs text-gray-400">Menyimpan pengaturan...</p>
+          <p className="mt-2 text-xs text-gray-400">{<LocalizedText text={"Menyimpan pengaturan..."} />}</p>
         )}
       </div>
 
       {/* Rekening Transfer */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <h2 className="font-semibold text-gray-800 mb-1">Rekening Transfer</h2>
+        <h2 className="font-semibold text-gray-800 mb-1">{<LocalizedText text={"Rekening Transfer"} />}</h2>
         <p className="text-sm text-gray-400 mb-4">
-          Rekening ini akan muncul di kasir saat metode pembayaran Transfer dipilih.
-        </p>
+          {<LocalizedText text={"\r\n          Rekening ini akan muncul di kasir saat metode pembayaran Transfer dipilih.\r\n        "} />}</p>
 
         <form onSubmit={handleAddPaymentAccount} className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
           <input
             required
             value={accountForm.bank_name}
             onChange={e => setAccountForm(prev => ({ ...prev, bank_name: e.target.value }))}
-            placeholder="Nama bank"
+            placeholder={translateText("Nama bank", localizedLanguage)}
             className={inputClass}
           />
           <input
             required
             value={accountForm.account_number}
             onChange={e => setAccountForm(prev => ({ ...prev, account_number: e.target.value }))}
-            placeholder="Nomor rekening"
+            placeholder={translateText("Nomor rekening", localizedLanguage)}
             className={inputClass}
           />
           <input
             required
             value={accountForm.account_name}
             onChange={e => setAccountForm(prev => ({ ...prev, account_name: e.target.value }))}
-            placeholder="Nama pemilik rekening"
+            placeholder={translateText("Nama pemilik rekening", localizedLanguage)}
             className={inputClass}
           />
           <button
@@ -508,7 +636,7 @@ export default function SettingsPage() {
             disabled={accountSaving}
             className="sm:col-span-3 flex items-center justify-center gap-1.5 bg-indigo-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
           >
-            <Plus size={15} /> {accountSaving ? 'Menyimpan...' : 'Tambah Rekening'}
+            <Plus size={15} /> {accountSaving ? <LocalizedText text={"Menyimpan..."} /> : <LocalizedText text={"Tambah Rekening"} />}
           </button>
         </form>
 
@@ -517,14 +645,14 @@ export default function SettingsPage() {
             {paymentAccounts.map(account => (
               <div key={account.id} className="flex items-center justify-between gap-3 rounded-lg bg-gray-0 border border-gray-200 px-3 py-2.5">
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-gray-800">{account.bank_name} · {account.account_number}</p>
-                  <p className="text-xs text-gray-500">a.n. {account.account_name}</p>
+                  <p className="text-sm font-semibold text-gray-800">{account.bank_name} {<LocalizedText text={" · "} />}{account.account_number}</p>
+                  <p className="text-xs text-gray-500">{<LocalizedText text={"a.n. "} />}{account.account_name}</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => void handleDeletePaymentAccount(account.id)}
                   className="text-gray-300 hover:text-red-400 transition-colors"
-                  aria-label={`Hapus rekening ${account.bank_name}`}
+                  aria-label={`${translateText('Hapus rekening ', localizedLanguage)}${account.bank_name}`}
                 >
                   <Trash2 size={15} />
                 </button>
@@ -538,24 +666,23 @@ export default function SettingsPage() {
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <div className="flex items-center gap-2 mb-1">
           <QrCode size={18} className="text-indigo-600" />
-          <h2 className="font-semibold text-gray-800">QRIS Pembayaran</h2>
+          <h2 className="font-semibold text-gray-800">{<LocalizedText text={"QRIS Pembayaran"} />}</h2>
         </div>
         <p className="text-sm text-gray-400 mb-4">
-          Unggah gambar QRIS toko. Akan tampil di kasir saat metode bayar QRIS dipilih.
-        </p>
+          {<LocalizedText text={"\r\n          Unggah gambar QRIS toko. Akan tampil di kasir saat metode bayar QRIS dipilih.\r\n        "} />}</p>
 
         {qrisUrl ? (
           <div className="flex flex-col sm:flex-row sm:items-center gap-4">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={qrisUrl}
-              alt="QRIS Toko"
+              alt={translateText("QRIS Toko", localizedLanguage)}
               className="w-40 h-40 object-contain rounded-lg border border-gray-200 bg-white"
             />
             <div className="flex flex-col gap-2">
               <label className="flex items-center gap-2 bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 cursor-pointer transition-colors w-fit">
                 <Upload size={15} />
-                {qrisUploading ? 'Mengunggah...' : 'Ganti Gambar'}
+                {qrisUploading ? <LocalizedText text={"Mengunggah..."} /> : <LocalizedText text={"Ganti Gambar"} />}
                 <input type="file" accept="image/*" onChange={handleUploadQris} disabled={qrisUploading} className="hidden" />
               </label>
               <button
@@ -563,17 +690,16 @@ export default function SettingsPage() {
                 className="flex items-center gap-2 text-red-500 px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-50 transition-colors w-fit"
               >
                 <Trash2 size={15} />
-                Hapus
-              </button>
+                {<LocalizedText text={"\r\n                Hapus\r\n              "} />}</button>
             </div>
           </div>
         ) : (
           <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-gray-300 rounded-xl py-8 cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/30 transition-colors">
             <Upload size={22} className="text-gray-400" />
             <span className="text-sm text-gray-500 font-medium">
-              {qrisUploading ? 'Mengunggah...' : 'Klik untuk unggah gambar QRIS'}
+              {qrisUploading ? <LocalizedText text={"Mengunggah..."} /> : <LocalizedText text={"Klik untuk unggah gambar QRIS"} />}
             </span>
-            <span className="text-xs text-gray-400">PNG / JPG</span>
+            <span className="text-xs text-gray-400">{<LocalizedText text={"PNG / JPG"} />}</span>
             <input type="file" accept="image/*" onChange={handleUploadQris} disabled={qrisUploading} className="hidden" />
           </label>
         )}
@@ -581,14 +707,14 @@ export default function SettingsPage() {
 
       {/* Suara Notifikasi */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <h2 className="font-semibold text-gray-800 mb-4">Suara Notifikasi</h2>
+        <h2 className="font-semibold text-gray-800 mb-4">{<LocalizedText text={"Suara Notifikasi"} />}</h2>
 
         <div className="space-y-5">
           <div className="rounded-xl border border-gray-200 bg-gray-0 p-4">
             <div className="flex items-center justify-between gap-3 mb-2">
               <div>
-                <p className="text-sm font-semibold text-gray-800">Suara Kasir</p>
-                <p className="text-xs text-gray-500">Diputar saat ada pesanan baru atau meja selesai</p>
+                <p className="text-sm font-semibold text-gray-800">{<LocalizedText text={"Suara Kasir"} />}</p>
+                <p className="text-xs text-gray-500">{<LocalizedText text={"Diputar saat ada pesanan baru atau meja selesai"} />}</p>
               </div>
               {cashierSoundUrl && (
                 <audio controls src={cashierSoundUrl} className="h-8" />
@@ -597,27 +723,25 @@ export default function SettingsPage() {
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-2">
                 <label className="flex items-center justify-center bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm font-medium cursor-pointer hover:bg-indigo-700">
-                  {soundUploading === 'cashier' ? 'Mengunggah...' : 'Upload suara'}
+                  {soundUploading === 'cashier' ? <LocalizedText text={"Mengunggah..."} /> : <LocalizedText text={"Upload suara"} />}
                   <input type="file" accept="audio/*" onChange={e => handleUploadSound('cashier', e)} className="hidden" />
                 </label>
                 <button onClick={() => handleTestSound('cashier')} className="bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-300">
-                  Tes suara
-                </button>
+                  {<LocalizedText text={"\r\n                  Tes suara\r\n                "} />}</button>
                 {cashierSoundUrl && (
                   <button onClick={() => handleRemoveSound('cashier')} className="text-red-500 px-3 py-2 rounded-lg text-sm font-medium hover:bg-red-50">
-                    Hapus
-                  </button>
+                    {<LocalizedText text={"\r\n                    Hapus\r\n                  "} />}</button>
                 )}
               </div>
               <div className="w-full max-w-xs">
-                <label className="block text-xs font-medium text-gray-600 mb-1">Variasi nada default</label>
+                <label className="block text-xs font-medium text-gray-600 mb-1">{<LocalizedText text={"Variasi nada default"} />}</label>
                 <select
                   value={cashierTone}
                   onChange={e => void handleToneChange('cashier', e.target.value)}
                   className={inputClass}
                 >
                   {toneOptions.map(option => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
+                    <option key={option.value} value={option.value}><LocalizedText text={option.label} /></option>
                   ))}
                 </select>
               </div>
@@ -627,8 +751,8 @@ export default function SettingsPage() {
           <div className="rounded-xl border border-gray-200 bg-gray-0 p-4">
             <div className="flex items-center justify-between gap-3 mb-2">
               <div>
-                <p className="text-sm font-semibold text-gray-800">Suara Pelanggan</p>
-                <p className="text-xs text-gray-500">Diputar saat pesanan sudah siap di meja pelanggan</p>
+                <p className="text-sm font-semibold text-gray-800">{<LocalizedText text={"Suara Pelanggan"} />}</p>
+                <p className="text-xs text-gray-500">{<LocalizedText text={"Diputar saat pesanan sudah siap di meja pelanggan"} />}</p>
               </div>
               {customerSoundUrl && (
                 <audio controls src={customerSoundUrl} className="h-8" />
@@ -637,27 +761,25 @@ export default function SettingsPage() {
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-2">
                 <label className="flex items-center justify-center bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm font-medium cursor-pointer hover:bg-indigo-700">
-                  {soundUploading === 'customer' ? 'Mengunggah...' : 'Upload suara'}
+                  {soundUploading === 'customer' ? <LocalizedText text={"Mengunggah..."} /> : <LocalizedText text={"Upload suara"} />}
                   <input type="file" accept="audio/*" onChange={e => handleUploadSound('customer', e)} className="hidden" />
                 </label>
                 <button onClick={() => handleTestSound('customer')} className="bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-300">
-                  Tes suara
-                </button>
+                  {<LocalizedText text={"\r\n                  Tes suara\r\n                "} />}</button>
                 {customerSoundUrl && (
                   <button onClick={() => handleRemoveSound('customer')} className="text-red-500 px-3 py-2 rounded-lg text-sm font-medium hover:bg-red-50">
-                    Hapus
-                  </button>
+                    {<LocalizedText text={"\r\n                    Hapus\r\n                  "} />}</button>
                 )}
               </div>
               <div className="w-full max-w-xs">
-                <label className="block text-xs font-medium text-gray-600 mb-1">Variasi nada default</label>
+                <label className="block text-xs font-medium text-gray-600 mb-1">{<LocalizedText text={"Variasi nada default"} />}</label>
                 <select
                   value={customerTone}
                   onChange={e => void handleToneChange('customer', e.target.value)}
                   className={inputClass}
                 >
                   {toneOptions.map(option => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
+                    <option key={option.value} value={option.value}><LocalizedText text={option.label} /></option>
                   ))}
                 </select>
               </div>
@@ -670,7 +792,7 @@ export default function SettingsPage() {
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <div className="flex items-center gap-2 mb-4">
           <QrCode size={18} className="text-indigo-600" />
-          <h2 className="font-semibold text-gray-800">QR Meja Pelanggan</h2>
+          <h2 className="font-semibold text-gray-800">{<LocalizedText text={"QR Meja Pelanggan"} />}</h2>
         </div>
 
         {qrReady ? (
@@ -680,36 +802,35 @@ export default function SettingsPage() {
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={tableQrLinks[tableNumber]}
-                  alt={`QR Meja ${tableNumber}`}
+                  alt={`${translateText('QR Meja ', localizedLanguage)}${tableNumber}`}
                   className="w-24 h-24 rounded-lg bg-white border border-gray-200"
                 />
-                <span className="text-xs font-medium text-gray-700">Meja {tableNumber}</span>
+                <span className="text-xs font-medium text-gray-700">{<LocalizedText text={"Meja "} />}{tableNumber}</span>
               </div>
             ))}
           </div>
         ) : (
-          <div className="text-sm text-gray-400">Menyiapkan QR meja...</div>
+          <div className="text-sm text-gray-400">{<LocalizedText text={"Menyiapkan QR meja..."} />}</div>
         )}
       </div>
 
       {/* Kategori */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <h2 className="font-semibold text-gray-800 mb-4">Kategori Produk</h2>
+        <h2 className="font-semibold text-gray-800 mb-4">{<LocalizedText text={"Kategori Produk"} />}</h2>
 
         <div className="flex gap-2 mb-4">
           <input
             value={newCatName}
             onChange={e => setNewCatName(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleAddCategory()}
-            placeholder="Nama kategori baru..."
+            placeholder={translateText("Nama kategori baru...", localizedLanguage)}
             className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
           <button
             onClick={handleAddCategory}
             className="flex items-center gap-1.5 bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
           >
-            <Plus size={15} /> Tambah
-          </button>
+            <Plus size={15} /> {<LocalizedText text={" Tambah\r\n          "} />}</button>
         </div>
 
         {/* Pilih warna */}
@@ -718,14 +839,14 @@ export default function SettingsPage() {
             <button
               key={color}
               onClick={() => setNewCatColor(color)}
-              className={`w-7 h-7 rounded-full transition-transform hover:scale-110 ${newCatColor === color ? 'ring-2 ring-offset-2 ring-gray-400 scale-110' : ''}`}
+              className={`w-7 h-7 rounded-full transition-transform hover:scale-110 ${newCatColor === color ? "ring-2 ring-offset-2 ring-gray-400 scale-110" : ""}`}
               style={{ backgroundColor: color }}
             />
           ))}
         </div>
 
         {categories.length === 0 ? (
-          <p className="text-sm text-gray-400 text-center py-4">Belum ada kategori</p>
+          <p className="text-sm text-gray-400 text-center py-4">{<LocalizedText text={"Belum ada kategori"} />}</p>
         ) : (
           <div className="space-y-2">
             {categories.map(cat => (
@@ -742,7 +863,7 @@ export default function SettingsPage() {
                     >
                       <input
                         autoFocus
-                        aria-label={`Nama kategori ${cat.name}`}
+                        aria-label={`${translateText('Nama kategori ', localizedLanguage)}${cat.name}`}
                         value={editingCategoryName}
                         onChange={event => setEditingCategoryName(event.target.value)}
                         onKeyDown={event => {
@@ -752,7 +873,7 @@ export default function SettingsPage() {
                       />
                       <button
                         type="submit"
-                        aria-label={`Simpan nama kategori ${cat.name}`}
+                        aria-label={`${translateText('Simpan nama kategori ', localizedLanguage)}${cat.name}`}
                         disabled={categorySavingId === cat.id || !editingCategoryName.trim()}
                         className="text-green-600 transition-colors hover:text-green-700 disabled:cursor-not-allowed disabled:opacity-50"
                       >
@@ -760,7 +881,7 @@ export default function SettingsPage() {
                       </button>
                       <button
                         type="button"
-                        aria-label={`Batal mengedit kategori ${cat.name}`}
+                        aria-label={`${translateText('Batal mengedit kategori ', localizedLanguage)}${cat.name}`}
                         disabled={categorySavingId === cat.id}
                         onClick={cancelCategoryEdit}
                         className="text-gray-400 transition-colors hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-50"
@@ -776,7 +897,7 @@ export default function SettingsPage() {
                   <div className="ml-3 flex items-center gap-3">
                     <button
                       type="button"
-                      aria-label={`Edit kategori ${cat.name}`}
+                      aria-label={`${translateText('Edit kategori ', localizedLanguage)}${cat.name}`}
                       onClick={() => {
                         setEditingCategoryId(cat.id)
                         setEditingCategoryName(cat.name)
@@ -787,7 +908,7 @@ export default function SettingsPage() {
                     </button>
                     <button
                       type="button"
-                      aria-label={`Hapus kategori ${cat.name}`}
+                      aria-label={`${translateText('Hapus kategori ', localizedLanguage)}${cat.name}`}
                       onClick={() => handleDeleteCategory(cat.id)}
                       className="text-gray-300 transition-colors hover:text-red-400"
                     >

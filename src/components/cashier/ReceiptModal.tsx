@@ -1,8 +1,10 @@
 'use client'
+import { LocalizedText, translateText, useLanguage } from '@/lib/language'
+
 
 import { useRef, useState } from 'react'
 import { toPng } from 'html-to-image'
-import { formatRupiah } from '@/lib/utils'
+import { useCurrency } from '@/lib/currency'
 import { X, Printer, Share2 } from 'lucide-react'
 
 interface ReceiptItem {
@@ -38,19 +40,21 @@ export default function ReceiptModal({
   data: ReceiptData
   onClose: () => void
 }) {
+  const localizedLanguage = useLanguage().language
+  const { formatCurrency } = useCurrency()
   const previewRef = useRef<HTMLDivElement>(null)
   const [sharing, setSharing] = useState(false)
   const [printing, setPrinting] = useState(false)
 
   const formatDate = (str: string) =>
-    new Date(str).toLocaleDateString('id-ID', {
+    new Date(str).toLocaleDateString(localizedLanguage === 'en' ? 'en-US' : 'id-ID', {
       day: 'numeric', month: 'long', year: 'numeric',
       hour: '2-digit', minute: '2-digit',
       timeZone: 'Asia/Jakarta',
     }) + ' WIB'
 
   const paymentLabel: Record<string, string> = {
-    cash: 'Tunai',
+    cash: translateText('Tunai', localizedLanguage),
     transfer: 'Transfer',
     ewallet: 'E-Wallet',
     qris: 'QRIS',
@@ -131,8 +135,8 @@ export default function ReceiptModal({
       if (nav.canShare && nav.share && nav.canShare({ files: [file] })) {
         await nav.share({
           files: [file],
-          title: 'Struk Pembayaran',
-          text: `Struk ${data.invoice_number}`,
+          title: translateText('Struk Pembayaran', localizedLanguage),
+          text: `${translateText('Struk', localizedLanguage)} ${data.invoice_number}`,
         })
       } else {
         // Fallback: download gambar
@@ -156,7 +160,7 @@ export default function ReceiptModal({
         <div className="bg-white rounded-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto">
 
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-            <h3 className="font-bold text-gray-900">Struk Pembayaran</h3>
+            <h3 className="font-bold text-gray-900">{<LocalizedText text={"Struk Pembayaran"} />}</h3>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
               <X size={20} />
             </button>
@@ -169,11 +173,11 @@ export default function ReceiptModal({
               {data.address && <p className="text-center text-gray-500">{data.address}</p>}
               {data.phone && <p className="text-center text-gray-500">{data.phone}</p>}
               <p className="text-center text-gray-300">{'- '.repeat(16)}</p>
-              <p className="text-gray-600">No: {data.invoice_number}</p>
-              <p className="text-gray-600">Tgl: {formatDate(data.created_at)}</p>
+              <p className="text-gray-600">{<LocalizedText text={"No: "} />}{data.invoice_number}</p>
+              <p className="text-gray-600">{<LocalizedText text={"Tgl: "} />}{formatDate(data.created_at)}</p>
               {(data.table_label || data.table_number != null) && (
                 <p className="text-gray-600">
-                  Meja: {data.table_label ?? data.table_number}
+                  {<LocalizedText text={"\r\n                  Meja: "} />}{data.table_label ?? data.table_number}
                 </p>
               )}
               <p className="text-gray-300">{'- '.repeat(16)}</p>
@@ -182,45 +186,45 @@ export default function ReceiptModal({
                 <div key={i}>
                   <p className="text-gray-700">{item.product_name}</p>
                   <div className="flex justify-between text-gray-500 pl-2">
-                    <span>{item.quantity}x {formatRupiah(item.unit_price)}</span>
-                    <span>{formatRupiah(item.subtotal)}</span>
+                    <span>{item.quantity}{<LocalizedText text={"x "} />}{formatCurrency(item.unit_price)}</span>
+                    <span>{formatCurrency(item.subtotal)}</span>
                   </div>
                 </div>
               ))}
 
               <p className="text-gray-300">{'- '.repeat(16)}</p>
               <div className="flex justify-between text-gray-600">
-                <span>Subtotal</span><span>{formatRupiah(data.subtotal)}</span>
+                <span>{<LocalizedText text={"Subtotal"} />}</span><span>{formatCurrency(data.subtotal)}</span>
               </div>
               {data.discount > 0 && (
                 <div className="flex justify-between text-red-400">
-                  <span>Diskon</span><span>-{formatRupiah(data.discount)}</span>
+                  <span>{<LocalizedText text={"Diskon"} />}</span><span>{<LocalizedText text={"-"} />}{formatCurrency(data.discount)}</span>
                 </div>
               )}
               {data.tax > 0 && (
                 <div className="flex justify-between text-orange-400">
-                  <span>Pajak</span><span>+{formatRupiah(data.tax)}</span>
+                  <span>{<LocalizedText text={"Pajak"} />}</span><span>{<LocalizedText text={"+"} />}{formatCurrency(data.tax)}</span>
                 </div>
               )}
               <div className="flex justify-between font-bold text-gray-800 text-sm border-t border-gray-200 pt-1">
-                <span>TOTAL</span><span>{formatRupiah(data.total)}</span>
+                <span>{<LocalizedText text={"TOTAL"} />}</span><span>{formatCurrency(data.total)}</span>
               </div>
               <p className="text-gray-300">{'- '.repeat(16)}</p>
               <div className="flex justify-between text-gray-600">
-                <span>Bayar ({paymentLabel[data.payment_method]})</span>
-                <span>{formatRupiah(data.amount_paid)}</span>
+                <span>{<LocalizedText text={"Bayar ("} />}{paymentLabel[data.payment_method]}{<LocalizedText text={")"} />}</span>
+                <span>{formatCurrency(data.amount_paid)}</span>
               </div>
               {data.payment_method === 'transfer' && data.payment_account && (
                 <div className="text-gray-600">
-                  <span>Rekening: </span><span>{data.payment_account}</span>
+                  <span>{<LocalizedText text={"Rekening: "} />}</span><span>{data.payment_account}</span>
                 </div>
               )}
               {data.payment_method === 'cash' && (
                 <div className="flex justify-between text-green-600 font-medium">
-                  <span>Kembali</span><span>{formatRupiah(data.change_amount)}</span>
+                  <span>{<LocalizedText text={"Kembali"} />}</span><span>{formatCurrency(data.change_amount)}</span>
                 </div>
               )}
-              <p className="text-center text-gray-400 pt-2">— Terima kasih! —</p>
+              <p className="text-center text-gray-400 pt-2">{<LocalizedText text={"— Terima kasih! —"} />}</p>
             </div>
 
             {/* Tombol */}
@@ -232,7 +236,7 @@ export default function ReceiptModal({
                   className="py-2.5 border border-indigo-200 bg-indigo-50 text-indigo-700 rounded-xl text-sm font-medium hover:bg-indigo-100 disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   <Share2 size={15} />
-                  {sharing ? 'Membuat...' : 'Bagikan'}
+                  {sharing ? <LocalizedText text={"Membuat..."} /> : <LocalizedText text={"Bagikan"} />}
                 </button>
                 <button
                   onClick={handlePrint}
@@ -240,15 +244,14 @@ export default function ReceiptModal({
                   className="py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   <Printer size={15} />
-                  {printing ? 'Menyiapkan...' : 'Cetak'}
+                  {printing ? <LocalizedText text={"Menyiapkan..."} /> : <LocalizedText text={"Cetak"} />}
                 </button>
               </div>
               <button
                 onClick={onClose}
                 className="w-full py-2.5 border border-gray-300 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50"
               >
-                Tutup
-              </button>
+                {<LocalizedText text={"\r\n                Tutup\r\n              "} />}</button>
             </div>
           </div>
         </div>

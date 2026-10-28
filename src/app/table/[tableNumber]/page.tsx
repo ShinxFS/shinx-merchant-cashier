@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { formatRupiah } from '@/lib/utils'
+import { CurrencyCode, formatCurrency as formatStoreCurrency, isCurrencyCode } from '@/lib/currency'
+import { isLanguageCode, useLanguage, LocalizedText, translateText } from '@/lib/language'
 import { Minus, Plus, ShoppingCart, CheckCircle2, AlertCircle, Wallet, X, ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface Product {
@@ -18,9 +19,12 @@ interface Product {
 }
 
 export default function TableOrderPage() {
+  const localizedLanguage = useLanguage().language
+
   const params = useParams()
   const searchParams = useSearchParams()
   const supabase = createClient()
+  const { applyProfileLanguage } = useLanguage()
 
   const tableNumber = Number(params.tableNumber)
   const ownerId = searchParams.get('owner') ?? ''
@@ -28,6 +32,7 @@ export default function TableOrderPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [activeCategory, setActiveCategory] = useState('all')
   const [businessName, setBusinessName] = useState('Toko')
+  const [currencyCode, setCurrencyCode] = useState<CurrencyCode>('IDR')
   const [cart, setCart] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -155,7 +160,7 @@ export default function TableOrderPage() {
       }
 
       const [{ data: profile }, { data: items }] = await Promise.all([
-        supabase.from('profiles').select('business_name, qris_image_url, customer_sound_url, customer_tone').eq('id', ownerId).single(),
+        supabase.from('profiles').select('business_name, qris_image_url, customer_sound_url, customer_tone, currency_code, language_code').eq('id', ownerId).single(),
         supabase
           .from('products')
           .select('*, category:categories!category_id(name, color), category2:categories!category_id_2(name, color)')
@@ -165,6 +170,12 @@ export default function TableOrderPage() {
       ])
 
       if (profile?.business_name) setBusinessName(profile.business_name)
+      if (profile?.currency_code && isCurrencyCode(profile.currency_code)) {
+        setCurrencyCode(profile.currency_code)
+      }
+      if (profile?.language_code && isLanguageCode(profile.language_code)) {
+        applyProfileLanguage(profile.language_code)
+      }
       if (profile?.qris_image_url) setQrisImageUrl(profile.qris_image_url)
       if (profile?.customer_sound_url) setCustomerSoundUrl(profile.customer_sound_url)
       setCustomerTone(profile?.customer_tone ?? 'classic')
@@ -174,6 +185,8 @@ export default function TableOrderPage() {
 
     load()
   }, [ownerId])
+
+  const formatCurrency = (amount: number) => formatStoreCurrency(amount, currencyCode)
 
   useEffect(() => {
     if (!ownerId || !tableNumber) return
@@ -409,7 +422,7 @@ export default function TableOrderPage() {
 
   const submitOrder = async () => {
     if (isOrderLocked) {
-      setError('Order yang sedang aktif tidak bisa diubah. Tunggu proses selesai dulu.')
+      setError(translateText("Order yang sedang aktif tidak bisa diubah. Tunggu proses selesai dulu.", localizedLanguage))
       return
     }
 
@@ -470,7 +483,7 @@ export default function TableOrderPage() {
         .single()
 
       if (fallback.error || !fallback.data) {
-        setError('Gagal mengirim order. Coba ulang sebentar lagi.')
+        setError(translateText("Gagal mengirim order. Coba ulang sebentar lagi.", localizedLanguage))
         setSubmitting(false)
         return
       }
@@ -492,20 +505,20 @@ export default function TableOrderPage() {
     setShowOrderDetail(true)
     setSuccess(
       paymentMethod === 'qris'
-        ? `✅ Pesanan meja ${tableNumber} diterima. Bayar via QRIS dulu, lalu tunggu konfirmasi kasir.`
-        : `✅ Pesanan meja ${tableNumber} berhasil dikirim ke kasir.`
+        ? `${translateText("✅ Pesanan meja ", localizedLanguage)}${tableNumber}${translateText(" diterima. Bayar via QRIS dulu, lalu tunggu konfirmasi kasir.", localizedLanguage)}`
+        : `${translateText("✅ Pesanan meja ", localizedLanguage)}${tableNumber}${translateText(" berhasil dikirim ke kasir.", localizedLanguage)}`
     )
     setSubmitting(false)
   }
 
   const cancelOrder = async () => {
     if (!canCancelOrder) {
-      setError('Order sudah diproses oleh kasir, pembatalan tidak tersedia.')
+      setError(translateText("Order sudah diproses oleh kasir, pembatalan tidak tersedia.", localizedLanguage))
       return
     }
 
     if (!ownerId || !tableNumber || !orderId) {
-      setError('Belum ada pesanan yang bisa dibatalkan.')
+      setError(translateText("Belum ada pesanan yang bisa dibatalkan.", localizedLanguage))
       return
     }
 
@@ -515,7 +528,7 @@ export default function TableOrderPage() {
       .eq('id', orderId)
 
     if (error) {
-      setError('Gagal membatalkan pesanan. Coba ulang sebentar lagi.')
+      setError(translateText("Gagal membatalkan pesanan. Coba ulang sebentar lagi.", localizedLanguage))
       return
     }
 
@@ -525,7 +538,7 @@ export default function TableOrderPage() {
     setLatestOrderTotal(0)
     orderDetailUserOverrideRef.current = false
     setShowOrderDetail(false)
-    setSuccess(`✅ Pesanan meja ${tableNumber} berhasil dibatalkan.`)
+    setSuccess(`${translateText("✅ Pesanan meja ", localizedLanguage)}${tableNumber}${translateText(" berhasil dibatalkan.", localizedLanguage)}`)
     setError('')
   }
 
@@ -533,8 +546,7 @@ export default function TableOrderPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
         <div className="bg-white border border-gray-200 rounded-2xl px-6 py-5 text-sm text-gray-600 shadow-sm">
-          Memuat menu meja {tableNumber || ''}...
-        </div>
+          {<LocalizedText text={"\r\n          Memuat menu meja "} />}{tableNumber || ""}{<LocalizedText text={"...\r\n        "} />}</div>
       </div>
     )
   }
@@ -545,9 +557,8 @@ export default function TableOrderPage() {
         <div className="bg-white border border-red-200 rounded-2xl px-6 py-5 max-w-md text-sm text-red-700 shadow-sm">
           <div className="flex items-center gap-2 font-semibold">
             <AlertCircle size={18} />
-            QR meja tidak valid
-          </div>
-          <p className="mt-2">Silakan scan QR dari meja yang benar.</p>
+            {<LocalizedText text={"\r\n            QR meja tidak valid\r\n          "} />}</div>
+          <p className="mt-2">{<LocalizedText text={"Silakan scan QR dari meja yang benar."} />}</p>
         </div>
       </div>
     )
@@ -559,21 +570,20 @@ export default function TableOrderPage() {
         <header className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm mb-4">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div>
-              <p className="text-xs uppercase tracking-wide text-gray-400 font-medium">Pesanan Meja</p>
+              <p className="text-xs uppercase tracking-wide text-gray-400 font-medium">{<LocalizedText text={"Pesanan Meja"} />}</p>
               <h1 className="max-w-full break-words text-2xl font-bold text-gray-900">{businessName}</h1>
             </div>
             <div className="flex items-center gap-3 flex-wrap">
               <div className="bg-indigo-50 text-indigo-700 rounded-full px-3 py-1.5 text-sm font-semibold">
-                Meja {tableNumber}
+                {<LocalizedText text={"\r\n                Meja "} />}{tableNumber}
               </div>
               {liveOrderStatus ? (
                 <div className={`rounded-full px-3 py-1.5 text-xs font-semibold ${orderStatusMeta[liveOrderStatus].className}`}>
-                  {orderStatusMeta[liveOrderStatus].label}
+                  <LocalizedText text={orderStatusMeta[liveOrderStatus].label} />
                 </div>
               ) : (
                 <div className="bg-gray-100 text-gray-600 rounded-full px-3 py-1.5 text-xs font-semibold">
-                  Belum ada pesanan
-                </div>
+                  {<LocalizedText text={"\r\n                  Belum ada pesanan\r\n                "} />}</div>
               )}
               {hasActiveOrder && liveOrderStatus && liveOrderStatus !== 'done' && (
                 <button
@@ -584,7 +594,7 @@ export default function TableOrderPage() {
                   }}
                   className="bg-slate-900 text-white rounded-full px-3 py-1.5 text-xs font-semibold hover:bg-slate-700 transition-colors"
                 >
-                  {showOrderDetail ? 'Sembunyikan Detail' : 'Lihat Detail'}
+                  {showOrderDetail ? <LocalizedText text={"Sembunyikan Detail"} /> : <LocalizedText text={"Lihat Detail"} />}
                 </button>
               )}
             </div>
@@ -593,14 +603,14 @@ export default function TableOrderPage() {
           {hasOrderRecord && liveOrderStatus && showOrderDetail && (
             <div className="mt-4 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4">
               <div className="flex items-center justify-between gap-3 mb-3">
-                <p className="text-sm font-bold tracking-wide text-indigo-900">RINCIAN ORDER</p>
-                <span className="text-xs font-medium text-indigo-600">{orderStatusMeta[liveOrderStatus].label}</span>
+                <p className="text-sm font-bold tracking-wide text-indigo-900">{<LocalizedText text={"RINCIAN ORDER"} />}</p>
+                <span className="text-xs font-medium text-indigo-600"><LocalizedText text={orderStatusMeta[liveOrderStatus].label} /></span>
               </div>
 
               {latestOrderCreatedAt && (
                 <div className="mb-3 rounded-lg border border-indigo-100 bg-white px-3 py-2 text-[11px] text-indigo-800 shadow-sm">
-                  <span className="font-semibold">WAKTU ORDER:</span>{' '}
-                  {new Date(latestOrderCreatedAt).toLocaleString('id-ID', {
+                  <span className="font-semibold">{<LocalizedText text={"WAKTU ORDER:"} />}</span>{" "}
+                  {new Date(latestOrderCreatedAt).toLocaleString(localizedLanguage === 'en' ? 'en-US' : 'id-ID', {
                     day: '2-digit',
                     month: '2-digit',
                     year: 'numeric',
@@ -616,22 +626,22 @@ export default function TableOrderPage() {
                   {summaryItems.map(item => (
                     <div key={`${item.id}-${item.name}`} className="flex items-center justify-between gap-3">
                       <span>
-                        {item.name} <span className="text-indigo-600">x{item.quantity}</span>
+                        {item.name} <span className="text-indigo-600">{<LocalizedText text={"x"} />}{item.quantity}</span>
                       </span>
-                      <span className="font-semibold">{formatRupiah(item.subtotal)}</span>
+                      <span className="font-semibold">{formatCurrency(item.subtotal)}</span>
                     </div>
                   ))}
                 </div>
 
               {latestOrderNote && (
                 <div className="mt-3 border-t border-indigo-100 pt-3 text-xs text-indigo-800 break-words whitespace-pre-wrap">
-                  <span className="font-semibold">Catatan:</span> {latestOrderNote}
+                  <span className="font-semibold">{<LocalizedText text={"Catatan:"} />}</span> {latestOrderNote}
                 </div>
               )}
 
               <div className="mt-3 border-t border-indigo-100 pt-3 flex items-center justify-between text-sm font-bold text-indigo-900">
-                <span>Total</span>
-                <span>{formatRupiah(summaryTotal)}</span>
+                <span>{<LocalizedText text={"Total"} />}</span>
+                <span>{formatCurrency(summaryTotal)}</span>
               </div>
 
               {canCancelOrder && (
@@ -640,8 +650,7 @@ export default function TableOrderPage() {
                   onClick={cancelOrder}
                   className="mt-3 w-full rounded-lg border border-red-200 bg-red-50 py-2 text-xs font-semibold text-red-600 transition-colors hover:bg-red-100"
                 >
-                  Batal Order
-                </button>
+                  {<LocalizedText text={"\r\n                  Batal Order\r\n                "} />}</button>
               )}
               </div>
             </div>
@@ -650,7 +659,7 @@ export default function TableOrderPage() {
 
         {error && (
           <div className="bg-red-50 text-red-700 border border-red-200 rounded-xl px-4 py-3 text-sm mb-4">
-            {error}
+            <LocalizedText text={error} />
           </div>
         )}
 
@@ -665,8 +674,7 @@ export default function TableOrderPage() {
           <div className="min-w-0 space-y-4">
             {products.length === 0 ? (
               <div className="bg-white border border-gray-200 rounded-2xl p-8 text-center text-gray-500 text-sm">
-                Menu untuk meja ini belum tersedia.
-              </div>
+                {<LocalizedText text={"\r\n                Menu untuk meja ini belum tersedia.\r\n              "} />}</div>
             ) : (
               <>
                 <div className="flex items-center gap-1 pb-1">
@@ -674,7 +682,7 @@ export default function TableOrderPage() {
                     type="button"
                     onClick={() => scrollCategories('left')}
                     className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-sm hover:bg-gray-50"
-                    aria-label="Geser kategori ke kiri"
+                    aria-label={translateText("Geser kategori ke kiri", localizedLanguage)}
                   >
                     <ChevronLeft size={15} />
                   </button>
@@ -687,12 +695,11 @@ export default function TableOrderPage() {
                       onClick={() => setActiveCategory('all')}
                       className={`flex-shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
                         activeCategory === 'all'
-                          ? 'bg-indigo-600 text-white'
-                          : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100'
+                          ? "bg-indigo-600 text-white"
+                          : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-100"
                       }`}
                     >
-                      Semua
-                    </button>
+                      {<LocalizedText text={"\r\n                      Semua\r\n                    "} />}</button>
                     {categories.map(category => (
                       <button
                         type="button"
@@ -700,13 +707,13 @@ export default function TableOrderPage() {
                         onClick={() => setActiveCategory(category.name)}
                         className={`flex flex-shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
                           activeCategory === category.name
-                            ? 'bg-indigo-600 text-white'
-                            : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100'
+                            ? "bg-indigo-600 text-white"
+                            : "bg-white text-gray-600 border border-gray-200 hover:bg-gray-100"
                         }`}
                       >
                         <span
                           className="h-2 w-2 rounded-full"
-                          style={{ backgroundColor: category.color || '#9ca3af' }}
+                          style={{ backgroundColor: category.color || "#9ca3af" }}
                         />
                         {category.name}
                       </button>
@@ -716,7 +723,7 @@ export default function TableOrderPage() {
                     type="button"
                     onClick={() => scrollCategories('right')}
                     className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 shadow-sm hover:bg-gray-50"
-                    aria-label="Geser kategori ke kanan"
+                    aria-label={translateText("Geser kategori ke kanan", localizedLanguage)}
                   >
                     <ChevronRight size={15} />
                   </button>
@@ -724,8 +731,7 @@ export default function TableOrderPage() {
 
                 {visibleProducts.length === 0 ? (
                   <div className="bg-white border border-gray-200 rounded-2xl p-8 text-center text-gray-500 text-sm">
-                    Belum ada produk di kategori ini.
-                  </div>
+                    {<LocalizedText text={"\r\n                    Belum ada produk di kategori ini.\r\n                  "} />}</div>
                 ) : visibleProducts.map(product => {
                 const qty = cart[product.id] ?? 0
                 const outOfStock = product.stock <= 0
@@ -738,32 +744,32 @@ export default function TableOrderPage() {
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
                         ) : (
-                          <span className="text-xs text-gray-400">IMG</span>
+                          <span className="text-xs text-gray-400">{<LocalizedText text={"IMG"} />}</span>
                         )}
                       </div>
 
                       <div className="flex-1 min-w-0">
                         <h2 className="font-semibold text-gray-900 text-base">{product.name}</h2>
-                        <p className="text-sm text-gray-500 mt-1">{product.category?.name ?? 'Umum'}</p>
+                        <p className="text-sm text-gray-500 mt-1">{product.category?.name ?? <LocalizedText text={"Umum"} />}</p>
 
                         {outOfStock ? (
                           <div className="mt-3 flex items-center justify-between gap-3">
-                            <span className="font-bold text-indigo-600">{formatRupiah(product.price)}</span>
-                            <span className="text-xs font-medium text-red-500">Stok habis</span>
+                            <span className="font-bold text-indigo-600">{formatCurrency(product.price)}</span>
+                            <span className="text-xs font-medium text-red-500">{<LocalizedText text={"Stok habis"} />}</span>
                           </div>
                         ) : (
                           <div className="mt-2 flex items-center justify-between gap-3">
-                            <span className="font-bold text-indigo-600">{formatRupiah(product.price)}</span>
+                            <span className="font-bold text-indigo-600">{formatCurrency(product.price)}</span>
                             <div className="flex items-center gap-2">
                               <button
                                 onClick={() => removeItem(product)}
                                 disabled={isOrderLocked}
                                 className={`w-8 h-8 rounded-lg flex items-center justify-center ${
                                   isOrderLocked
-                                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                    ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                                 }`}
-                                aria-label={`Kurangi ${product.name}`}
+                                aria-label={`${translateText('Kurangi ', localizedLanguage)}${product.name}`}
                               >
                                 <Minus size={15} />
                               </button>
@@ -773,10 +779,10 @@ export default function TableOrderPage() {
                                 disabled={isOrderLocked}
                                 className={`w-8 h-8 rounded-lg flex items-center justify-center ${
                                   isOrderLocked
-                                    ? 'bg-indigo-300 text-white cursor-not-allowed'
-                                    : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                                    ? "bg-indigo-300 text-white cursor-not-allowed"
+                                    : "bg-indigo-600 text-white hover:bg-indigo-700"
                                 }`}
-                                aria-label={`Tambah ${product.name}`}
+                                aria-label={`${translateText('Tambah ', localizedLanguage)}${product.name}`}
                               >
                                 <Plus size={15} />
                               </button>
@@ -795,54 +801,52 @@ export default function TableOrderPage() {
           <aside className="min-w-0 max-w-full overflow-hidden bg-white border border-gray-200 rounded-2xl p-4 shadow-sm h-fit sticky top-4">
             <div className="flex items-center gap-2 mb-4 text-gray-800">
               <ShoppingCart size={18} className="text-indigo-600" />
-              <h3 className="font-semibold">Ringkasan Order</h3>
+              <h3 className="font-semibold">{<LocalizedText text={"Ringkasan Order"} />}</h3>
             </div>
 
             <div className="space-y-3 text-sm text-gray-600">
               <div className="flex justify-between">
-                <span>Item</span>
+                <span>{<LocalizedText text={"Item"} />}</span>
                 <span>{orderId && latestOrderItems.length > 0 ? summaryItems.reduce((sum, item) => sum + item.quantity, 0) : totalItems}</span>
               </div>
 
               {summaryItems.length > 0 ? (
                 <div className="space-y-2 rounded-xl border border-gray-200 bg-gray-50 p-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{orderId ? 'Detail pesanan Anda' : 'Rincian order'}</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{orderId ? <LocalizedText text={"Detail pesanan Anda"} /> : <LocalizedText text={"Rincian order"} />}</p>
                   {summaryItems.map(item => (
                     <div key={`${item.id}-${item.name}`} className="flex items-center justify-between gap-3 text-xs">
-                      <span className="text-gray-700">{item.name} <span className="text-gray-400">x{item.quantity}</span></span>
-                      <span className="font-semibold text-gray-900">{formatRupiah(item.subtotal)}</span>
+                      <span className="text-gray-700">{item.name} <span className="text-gray-400">{<LocalizedText text={"x"} />}{item.quantity}</span></span>
+                      <span className="font-semibold text-gray-900">{formatCurrency(item.subtotal)}</span>
                     </div>
                   ))}
                 </div>
               ) : (
                 <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-3 text-xs text-gray-400">
-                  Belum ada produk yang dipilih.
-                </div>
+                  {<LocalizedText text={"\r\n                  Belum ada produk yang dipilih.\r\n                "} />}</div>
               )}
 
               <div className="flex justify-between">
-                <span>{hasActiveOrder ? 'Total pesanan' : 'Subtotal'}</span>
-                <span className="font-semibold text-gray-900">{formatRupiah(summaryTotal)}</span>
+                <span>{hasActiveOrder ? <LocalizedText text={"Total pesanan"} /> : <LocalizedText text={"Subtotal"} />}</span>
+                <span className="font-semibold text-gray-900">{formatCurrency(summaryTotal)}</span>
               </div>
 
               {!hasActiveOrder && (
                 <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
                   <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-2">
-                    Catatan untuk kasir
-                  </label>
+                    {<LocalizedText text={"\r\n                    Catatan untuk kasir\r\n                  "} />}</label>
                   <textarea
                     value={customerNote}
                     onChange={e => setCustomerNote(e.target.value.slice(0, 200))}
                     rows={3}
                     maxLength={200}
-                    placeholder="Contoh: tidak pedas, tolong dipisah pakai wadah"
+                    placeholder={translateText("Contoh: tidak pedas, tolong dipisah pakai wadah", localizedLanguage)}
                     className="w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 overflow-y-auto break-words"
                   />
                 </div>
               )}
 
               <div className="rounded-xl border border-gray-200 bg-white p-2.5">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-2">Metode bayar</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-2">{<LocalizedText text={"Metode bayar"} />}</p>
                 <div className="grid grid-cols-2 gap-2">
                   {(['cash', 'qris'] as const).map(method => (
                     <button
@@ -851,11 +855,11 @@ export default function TableOrderPage() {
                       onClick={() => setPaymentMethod(method)}
                       className={`rounded-lg px-2.5 py-2 text-xs font-semibold transition-colors ${
                         paymentMethod === method
-                          ? 'bg-indigo-600 text-white'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          ? "bg-indigo-600 text-white"
+                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                       }`}
                     >
-                      {method === 'cash' ? 'Tunai' : 'QRIS'}
+                      {method === 'cash' ? <LocalizedText text={"Tunai"} /> : <LocalizedText text={"QRIS"} />}
                     </button>
                   ))}
                 </div>
@@ -866,25 +870,23 @@ export default function TableOrderPage() {
                   {qrisImageUrl ? (
                     <div className="flex flex-col items-center gap-2">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={qrisImageUrl} alt="QRIS pembayaran" className="w-32 h-32 object-contain rounded-xl border border-gray-200 bg-white" />
+                      <img src={qrisImageUrl} alt={translateText("QRIS pembayaran", localizedLanguage)} className="w-32 h-32 object-contain rounded-xl border border-gray-200 bg-white" />
                       <p className="text-center text-[11px] text-gray-600">
-                        Bayar sebesar <span className="font-semibold text-gray-900">{formatRupiah(summaryTotal)}</span>
+                        {<LocalizedText text={"\r\n                        Bayar sebesar "} />}<span className="font-semibold text-gray-900">{formatCurrency(summaryTotal)}</span>
                       </p>
                       <p className="text-center text-[10px] text-amber-700 font-medium">
-                        Setelah bayar, tunggu konfirmasi kasir untuk melanjutkan proses pesanan.
-                      </p>
+                        {<LocalizedText text={"\r\n                        Setelah bayar, tunggu konfirmasi kasir untuk melanjutkan proses pesanan.\r\n                      "} />}</p>
                     </div>
                   ) : (
                     <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-center text-[11px] text-amber-700">
-                      QRIS belum diatur oleh pemilik toko.
-                    </div>
+                      {<LocalizedText text={"\r\n                      QRIS belum diatur oleh pemilik toko.\r\n                    "} />}</div>
                   )}
                 </div>
               )}
 
               {hasOrderRecord && liveOrderStatus && (
                 <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-700">
-                  Status pesanan: <span className="font-semibold">{orderStatusMeta[liveOrderStatus].label}</span>
+                  {<LocalizedText text={"\r\n                  Status pesanan: "} />}<span className="font-semibold"><LocalizedText text={orderStatusMeta[liveOrderStatus].label} /></span>
                 </div>
               )}
             </div>
@@ -895,14 +897,13 @@ export default function TableOrderPage() {
                 disabled={submitting || totalItems === 0 || !!orderId}
                 className="w-full mt-5 bg-indigo-600 text-white rounded-xl py-3 text-sm font-semibold disabled:opacity-50 hover:bg-indigo-700 transition-colors"
               >
-                {submitting ? 'Mengirim...' : orderId ? 'Order sudah dikirim' : `Kirim ke kasir • ${formatRupiah(subtotal)}`}
+                {submitting ? <LocalizedText text={"Mengirim..."} /> : orderId ? <LocalizedText text={"Order sudah dikirim"} /> : `${translateText('Kirim ke kasir • ', localizedLanguage)}${formatCurrency(subtotal)}`}
               </button>
             ) : null}
 
             {hasActiveOrder && orderStatus && orderStatus !== 'pending' && orderStatus !== 'done' && (
               <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
-                Order sedang diproses oleh kasir, pembatalan tidak tersedia.
-              </div>
+                {<LocalizedText text={"\r\n                Order sedang diproses oleh kasir, pembatalan tidak tersedia.\r\n              "} />}</div>
             )}
           </aside>
         </div>
@@ -915,7 +916,7 @@ export default function TableOrderPage() {
           className="fixed bottom-6 right-6 z-50 bg-indigo-600 text-white rounded-full shadow-lg hover:bg-indigo-700 transition-all flex items-center gap-2 px-5 py-3"
         >
           <Wallet size={20} />
-          <span className="font-semibold text-sm">{formatRupiah(summaryTotal)}</span>
+          <span className="font-semibold text-sm">{formatCurrency(summaryTotal)}</span>
         </button>
       )}
 
@@ -927,7 +928,7 @@ export default function TableOrderPage() {
 
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-              <h3 className="font-bold text-gray-900">Ringkasan Pembayaran</h3>
+              <h3 className="font-bold text-gray-900">{<LocalizedText text={"Ringkasan Pembayaran"} />}</h3>
               <button
                 onClick={() => setShowPaymentSummary(false)}
                 className="text-gray-400 hover:text-gray-600"
@@ -941,15 +942,14 @@ export default function TableOrderPage() {
               {/* Rincian Order */}
               <div className="rounded-xl border border-gray-200 bg-white p-3">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-2">
-                  Rincian Order
-                </p>
+                  {<LocalizedText text={"\r\n                  Rincian Order\r\n                "} />}</p>
                 <div className="space-y-2">
                   {summaryItems.map(item => (
                     <div key={`${item.id}-${item.name}`} className="flex items-center justify-between gap-3 text-xs">
                       <span className="text-gray-700">
-                        {item.name} <span className="text-gray-400">x{item.quantity}</span>
+                        {item.name} <span className="text-gray-400">{<LocalizedText text={"x"} />}{item.quantity}</span>
                       </span>
-                      <span className="font-semibold text-gray-900">{formatRupiah(item.subtotal)}</span>
+                      <span className="font-semibold text-gray-900">{formatCurrency(item.subtotal)}</span>
                     </div>
                   ))}
                 </div>
@@ -958,18 +958,18 @@ export default function TableOrderPage() {
               {/* Rincian Harga */}
               <div className="bg-gray-50 rounded-xl px-4 py-3 space-y-1.5">
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Subtotal</span>
-                  <span className="text-gray-700">{formatRupiah(summaryTotal)}</span>
+                  <span className="text-gray-500">{<LocalizedText text={"Subtotal"} />}</span>
+                  <span className="text-gray-700">{formatCurrency(summaryTotal)}</span>
                 </div>
                 <div className="flex justify-between text-base font-bold border-t border-gray-200 pt-2 mt-1">
-                  <span className="text-gray-800">Total</span>
-                  <span className="text-indigo-700">{formatRupiah(summaryTotal)}</span>
+                  <span className="text-gray-800">{<LocalizedText text={"Total"} />}</span>
+                  <span className="text-indigo-700">{formatCurrency(summaryTotal)}</span>
                 </div>
               </div>
 
               {/* Metode Bayar */}
               <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Metode Bayar</p>
+                <p className="text-xs font-semibold text-gray-500 uppercase mb-2">{<LocalizedText text={"Metode Bayar"} />}</p>
                 <div className="grid grid-cols-2 gap-2">
                   {(['cash', 'qris'] as const).map(method => (
                     <button
@@ -980,11 +980,11 @@ export default function TableOrderPage() {
                       }}
                       className={`rounded-lg px-3 py-3 text-sm font-semibold transition-colors ${
                         paymentMethod === method
-                          ? 'bg-indigo-600 text-white'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          ? "bg-indigo-600 text-white"
+                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                       }`}
                     >
-                      {method === 'cash' ? 'Tunai' : 'QRIS'}
+                      {method === 'cash' ? <LocalizedText text={"Tunai"} /> : <LocalizedText text={"QRIS"} />}
                     </button>
                   ))}
                 </div>
@@ -992,14 +992,13 @@ export default function TableOrderPage() {
 
               <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
                 <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-2">
-                  Catatan untuk kasir
-                </label>
+                  {<LocalizedText text={"\r\n                  Catatan untuk kasir\r\n                "} />}</label>
                 <textarea
                   value={customerNote}
                   onChange={e => setCustomerNote(e.target.value.slice(0, 200))}
                   rows={3}
                   maxLength={200}
-                  placeholder="Contoh: tidak pedas, tolong dipisah pakai wadah"
+                  placeholder={translateText("Contoh: tidak pedas, tolong dipisah pakai wadah", localizedLanguage)}
                   className="w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 overflow-y-auto break-words"
                 />
               </div>
@@ -1007,24 +1006,23 @@ export default function TableOrderPage() {
               {/* QRIS */}
               {paymentMethod === 'qris' && (
                 <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Scan QRIS</p>
+                  <p className="text-xs font-semibold text-gray-500 uppercase mb-2">{<LocalizedText text={"Scan QRIS"} />}</p>
                   {qrisImageUrl ? (
                     <div className="flex flex-col items-center bg-gray-50 rounded-xl p-4">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={qrisImageUrl}
-                        alt="QRIS Pembayaran"
+                        alt={translateText("QRIS Pembayaran", localizedLanguage)}
                         className="w-48 h-48 object-contain rounded-lg bg-white"
                       />
-                      <p className="text-xs text-gray-500 mt-3">Scan & bayar sejumlah</p>
-                      <p className="text-lg font-bold text-indigo-700">{formatRupiah(summaryTotal)}</p>
+                      <p className="text-xs text-gray-500 mt-3">{<LocalizedText text={"Scan & bayar sejumlah"} />}</p>
+                      <p className="text-lg font-bold text-indigo-700">{formatCurrency(summaryTotal)}</p>
                     </div>
                   ) : (
                     <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-center">
-                      <p className="text-sm text-amber-700 font-medium">QRIS belum diatur</p>
+                      <p className="text-sm text-amber-700 font-medium">{<LocalizedText text={"QRIS belum diatur"} />}</p>
                       <p className="text-xs text-amber-600 mt-1">
-                        Unggah gambar QRIS di menu Pengaturan terlebih dahulu.
-                      </p>
+                        {<LocalizedText text={"\r\n                        Unggah gambar QRIS di menu Pengaturan terlebih dahulu.\r\n                      "} />}</p>
                     </div>
                   )}
                 </div>
@@ -1033,7 +1031,7 @@ export default function TableOrderPage() {
               {/* Status Pesanan */}
               {hasOrderRecord && liveOrderStatus && (
                 <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-700">
-                  Status pesanan: <span className="font-semibold">{orderStatusMeta[liveOrderStatus].label}</span>
+                  {<LocalizedText text={"\r\n                  Status pesanan: "} />}<span className="font-semibold"><LocalizedText text={orderStatusMeta[liveOrderStatus].label} /></span>
                 </div>
               )}
             </div>
@@ -1049,12 +1047,12 @@ export default function TableOrderPage() {
                 className="w-full bg-indigo-600 text-white py-3 rounded-xl font-semibold text-sm hover:bg-indigo-700 disabled:opacity-50 transition-colors"
               >
                 {submitting
-                  ? 'Memproses...'
+                ? <LocalizedText text={"Memproses..."} />
                   : isOrderLocked
-                    ? 'Order sedang diproses'
+                  ? <LocalizedText text={"Order sedang diproses"} />
                     : paymentMethod === 'qris'
-                      ? `Bayar ${formatRupiah(summaryTotal)} via QRIS`
-                      : `Bayar ${formatRupiah(summaryTotal)}`}
+                      ? `${translateText('Bayar ', localizedLanguage)}${formatCurrency(summaryTotal)} via QRIS`
+                      : `${translateText('Bayar ', localizedLanguage)}${formatCurrency(summaryTotal)}`}
               </button>
             </div>
           </div>

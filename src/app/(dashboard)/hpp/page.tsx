@@ -1,8 +1,10 @@
 'use client'
+import { LocalizedText, translateText, useLanguage } from '@/lib/language'
+
 
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { formatRupiah } from '@/lib/utils'
+import { useCurrency } from '@/lib/currency'
 import {
   calcManufaktur, calcRetail, calcJasa, recommendPrice,
   type BusinessType,
@@ -131,7 +133,10 @@ const calcFor = (type: BusinessType, form: Record<string, string>) =>
       : calcJasa(form)
 
 export default function HppPage() {
+  const localizedLanguage = useLanguage().language
+
   const supabase = createClient()
+  const { formatCurrency, currency } = useCurrency()
   const [businessType, setBusinessType] = useState<BusinessType>('manufaktur')
   const [form, setForm] = useState<Record<string, string>>({})
   const [margin, setMargin] = useState(20)
@@ -177,7 +182,7 @@ export default function HppPage() {
 
   const handleSave = async () => {
     if (!form.product_name?.trim()) {
-      alert('Nama produk/layanan wajib diisi sebelum menyimpan.')
+      alert(translateText("Nama produk/layanan wajib diisi sebelum menyimpan.", localizedLanguage))
       return
     }
     setSaving(true)
@@ -201,20 +206,20 @@ export default function HppPage() {
     })
 
     setSaving(false)
-    if (error) { alert('Gagal menyimpan: ' + error.message); return }
+    if (error) { alert(translateText("Gagal menyimpan: ", localizedLanguage) + error.message); return }
     resetForm()
     load()
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Hapus produk tersimpan ini?')) return
+    if (!confirm(translateText("Hapus produk tersimpan ini?", localizedLanguage))) return
     await supabase.from('hpp_products').delete().eq('id', id)
     setSaved(prev => prev.filter(p => p.id !== id))
   }
 
   // Jadikan hasil HPP sebagai produk jual di tabel `products`.
   const convertToProduct = async (p: SavedProduct) => {
-    if (!confirm(`Jadikan "${p.product_name}" sebagai produk jual?\n\nHarga modal = HPP (${formatRupiah(p.hpp_per_unit)}), harga jual = rekomendasi (${formatRupiah(p.recommended_price)}). Stok awal 0 — atur di menu Produk.`)) return
+    if (!confirm(`${translateText("Jadikan \"", localizedLanguage)}${p.product_name}${translateText("\" sebagai produk jual?\n\nHarga modal = HPP (", localizedLanguage)}${formatCurrency(p.hpp_per_unit)}${translateText("), harga jual = rekomendasi (", localizedLanguage)}${formatCurrency(p.recommended_price)}${translateText("). Stok awal 0 — atur di menu Produk.", localizedLanguage)}`)) return
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
@@ -222,8 +227,8 @@ export default function HppPage() {
       user_id: user.id,
       name: p.product_name,
       sku: p.product_code || null,
-      price: Math.round(p.recommended_price),
-      cost_price: Math.round(p.hpp_per_unit),
+      price: p.recommended_price,
+      cost_price: p.hpp_per_unit,
       stock: 0,
       unit: 'pcs',
       category_id: null,
@@ -231,14 +236,14 @@ export default function HppPage() {
       image_url: null,
     })
 
-    if (error) { alert('Gagal membuat produk: ' + error.message); return }
-    alert(`✅ "${p.product_name}" ditambahkan ke Produk. Stok masih 0 — atur stok & foto di menu Produk.`)
+    if (error) { alert(translateText("Gagal membuat produk: ", localizedLanguage) + error.message); return }
+    alert(`${translateText("✅ \"", localizedLanguage)}${p.product_name}${translateText("\" ditambahkan ke Produk. Stok masih 0 — atur stok & foto di menu Produk.", localizedLanguage)}`)
   }
 
   const exportExcel = () => {
     if (saved.length === 0) return
     const rows = saved.map(p => ({
-      Tanggal: new Date(p.created_at).toLocaleDateString('id-ID'),
+      Tanggal: new Date(p.created_at).toLocaleDateString(localizedLanguage === 'en' ? 'en-US' : 'id-ID'),
       'Jenis Bisnis': CONFIG[p.business_type]?.label ?? p.business_type,
       Nama: p.product_name,
       Kode: p.product_code ?? '',
@@ -264,8 +269,8 @@ export default function HppPage() {
     if (f.kind === 'select') {
       return (
         <select value={value} onChange={e => setField(f.key, e.target.value)} className={inputClass}>
-          <option value="">Pilih {f.label}</option>
-          {f.options?.map(o => <option key={o} value={o}>{o}</option>)}
+          <option value="">{<LocalizedText text={"Pilih "} />}<LocalizedText text={f.label} /></option>
+          {f.options?.map(o => <option key={o} value={o}><LocalizedText text={o} /></option>)}
         </select>
       )
     }
@@ -274,7 +279,7 @@ export default function HppPage() {
         <input
           value={value}
           onChange={e => setField(f.key, e.target.value)}
-          placeholder={f.placeholder}
+          placeholder={f.placeholder ? translateText(f.placeholder, localizedLanguage) : undefined}
           className={inputClass}
         />
       )
@@ -284,9 +289,10 @@ export default function HppPage() {
       <input
         type="number"
         min={0}
+        step="any"
         value={value}
         onChange={e => setField(f.key, e.target.value)}
-        placeholder={f.placeholder ?? '0'}
+        placeholder={f.placeholder ?? translateText("0", localizedLanguage)}
         className={inputClass}
       />
     )
@@ -298,11 +304,10 @@ export default function HppPage() {
       <div className="mb-6">
         <div className="flex items-center gap-2">
           <Calculator size={22} className="text-indigo-600" />
-          <h1 className="text-xl font-bold text-gray-900">Kalkulator HPP</h1>
+          <h1 className="text-xl font-bold text-gray-900">{<LocalizedText text={"Kalkulator HPP"} />}</h1>
         </div>
         <p className="text-sm text-gray-500 mt-0.5">
-          Hitung Harga Pokok Penjualan & rekomendasi harga jual berdasarkan target margin.
-        </p>
+          {<LocalizedText text={"\r\n          Hitung Harga Pokok Penjualan & rekomendasi harga jual berdasarkan target margin.\r\n        "} />}</p>
       </div>
 
       {/* Tab jenis bisnis */}
@@ -317,11 +322,11 @@ export default function HppPage() {
               onClick={() => setBusinessType(type)}
               className={`flex items-center justify-center gap-2 px-3 py-3 rounded-xl text-sm font-medium border transition-colors ${
                 active
-                  ? 'bg-indigo-600 text-white border-indigo-600'
-                  : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                  ? "bg-indigo-600 text-white border-indigo-600"
+                  : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
               }`}
             >
-              <Icon size={16} /> <span className="hidden sm:inline">{c.label}</span>
+              <Icon size={16} /> <span className="hidden sm:inline"><LocalizedText text={c.label} /></span>
             </button>
           )
         })}
@@ -332,11 +337,11 @@ export default function HppPage() {
         <div className="lg:col-span-3 space-y-5">
           {/* Identitas */}
           <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <h3 className="text-sm font-bold text-gray-800 mb-3">Identitas</h3>
+            <h3 className="text-sm font-bold text-gray-800 mb-3">{<LocalizedText text={"Identitas"} />}</h3>
             <div className="grid sm:grid-cols-2 gap-3">
               {config.identity.map(f => (
                 <div key={f.key}>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{f.label}</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1"><LocalizedText text={f.label} /></label>
                   {renderField(f)}
                 </div>
               ))}
@@ -346,11 +351,11 @@ export default function HppPage() {
           {/* Kelompok biaya */}
           {config.groups.map(group => (
             <div key={group.title} className="bg-white rounded-xl border border-gray-200 p-5">
-              <h3 className="text-sm font-bold text-gray-800 mb-3">{group.title}</h3>
+              <h3 className="text-sm font-bold text-gray-800 mb-3"><LocalizedText text={group.title} /></h3>
               <div className="grid sm:grid-cols-2 gap-3">
                 {group.fields.map(f => (
                   <div key={f.key}>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{f.label} (Rp)</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1"><LocalizedText text={f.label} /> {<LocalizedText text={" ("} />}{currency}{<LocalizedText text={")"} />}</label>
                     {renderField(f)}
                   </div>
                 ))}
@@ -363,14 +368,13 @@ export default function HppPage() {
               onClick={resetForm}
               className="flex items-center justify-center gap-2 flex-1 py-2.5 border border-gray-300 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
             >
-              <RotateCcw size={15} /> Reset Form
-            </button>
+              <RotateCcw size={15} /> {<LocalizedText text={" Reset Form\r\n            "} />}</button>
             <button
               onClick={handleSave}
               disabled={saving}
               className="flex items-center justify-center gap-2 flex-1 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
             >
-              <Save size={15} /> {saving ? 'Menyimpan...' : 'Simpan Produk'}
+              <Save size={15} /> {saving ? <LocalizedText text={"Menyimpan..."} /> : <LocalizedText text={"Simpan Produk"} />}
             </button>
           </div>
         </div>
@@ -378,28 +382,28 @@ export default function HppPage() {
         {/* Kolom hasil */}
         <div className="lg:col-span-2 space-y-4">
           <div className="bg-white rounded-xl border border-gray-200 p-5 lg:sticky lg:top-4">
-            <h3 className="text-sm font-bold text-gray-800 mb-4">Hasil Perhitungan</h3>
+            <h3 className="text-sm font-bold text-gray-800 mb-4">{<LocalizedText text={"Hasil Perhitungan"} />}</h3>
 
             <div className="space-y-3">
               <div className="flex justify-between items-center py-2 border-b border-gray-50">
-                <span className="text-sm text-gray-500">Total Biaya</span>
-                <span className="text-sm font-bold text-gray-800">{formatRupiah(result.totalCost)}</span>
+                <span className="text-sm text-gray-500">{<LocalizedText text={"Total Biaya"} />}</span>
+                <span className="text-sm font-bold text-gray-800">{formatCurrency(result.totalCost)}</span>
               </div>
               <div className="flex justify-between items-center py-2 border-b border-gray-50">
-                <span className="text-sm text-gray-500">HPP per Unit</span>
-                <span className="text-base font-bold text-indigo-600">{formatRupiah(result.hppPerUnit)}</span>
+                <span className="text-sm text-gray-500">{<LocalizedText text={"HPP per Unit"} />}</span>
+                <span className="text-base font-bold text-indigo-600">{formatCurrency(result.hppPerUnit)}</span>
               </div>
               <div className="flex justify-between items-center py-2">
-                <span className="text-sm text-gray-500">Break Even Point</span>
-                <span className="text-sm font-bold text-gray-800">{formatRupiah(result.breakEvenPoint)}</span>
+                <span className="text-sm text-gray-500">{<LocalizedText text={"Break Even Point"} />}</span>
+                <span className="text-sm font-bold text-gray-800">{formatCurrency(result.breakEvenPoint)}</span>
               </div>
             </div>
 
             {/* Rekomendasi harga */}
             <div className="mt-4 pt-4 border-t border-gray-100">
               <div className="flex justify-between items-center mb-2">
-                <label className="text-sm font-medium text-gray-700">Target Margin</label>
-                <span className="text-sm font-bold text-green-600">{margin}%</span>
+                <label className="text-sm font-medium text-gray-700">{<LocalizedText text={"Target Margin"} />}</label>
+                <span className="text-sm font-bold text-green-600">{margin}{<LocalizedText text={"%"} />}</span>
               </div>
               <input
                 type="range"
@@ -413,12 +417,12 @@ export default function HppPage() {
 
               <div className="grid grid-cols-2 gap-3 mt-4">
                 <div className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-xs text-gray-500 mb-1">Harga Minimum</p>
-                  <p className="text-sm font-bold text-gray-800">{formatRupiah(price.minPrice)}</p>
+                  <p className="text-xs text-gray-500 mb-1">{<LocalizedText text={"Harga Minimum"} />}</p>
+                  <p className="text-sm font-bold text-gray-800">{formatCurrency(price.minPrice)}</p>
                 </div>
                 <div className="bg-green-50 rounded-lg p-3">
-                  <p className="text-xs text-green-600 mb-1">Harga Rekomendasi</p>
-                  <p className="text-sm font-bold text-green-700">{formatRupiah(price.recommendedPrice)}</p>
+                  <p className="text-xs text-green-600 mb-1">{<LocalizedText text={"Harga Rekomendasi"} />}</p>
+                  <p className="text-sm font-bold text-green-700">{formatCurrency(price.recommendedPrice)}</p>
                 </div>
               </div>
             </div>
@@ -429,33 +433,32 @@ export default function HppPage() {
       {/* Produk tersimpan */}
       <div className="mt-8">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-bold text-gray-800">Produk Tersimpan</h2>
+          <h2 className="text-sm font-bold text-gray-800">{<LocalizedText text={"Produk Tersimpan"} />}</h2>
           <button
             onClick={exportExcel}
             disabled={saved.length === 0}
             className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
           >
-            <FileSpreadsheet size={15} /> Export ke Excel
-          </button>
+            <FileSpreadsheet size={15} /> {<LocalizedText text={" Export ke Excel\r\n          "} />}</button>
         </div>
 
         {loading ? (
-          <div className="text-center py-12 text-gray-400 text-sm">Memuat data...</div>
+          <div className="text-center py-12 text-gray-400 text-sm">{<LocalizedText text={"Memuat data..."} />}</div>
         ) : saved.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
             <Calculator size={36} className="text-gray-200 mx-auto mb-3" />
-            <p className="text-gray-400 text-sm">Belum ada produk yang disimpan</p>
+            <p className="text-gray-400 text-sm">{<LocalizedText text={"Belum ada produk yang disimpan"} />}</p>
           </div>
         ) : (
           <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 text-left text-xs text-gray-500">
-                  <th className="px-4 py-3 font-medium">Nama</th>
-                  <th className="px-4 py-3 font-medium">Jenis</th>
-                  <th className="px-4 py-3 font-medium text-right">HPP/Unit</th>
-                  <th className="px-4 py-3 font-medium text-right">Rekomendasi</th>
-                  <th className="px-4 py-3 font-medium text-center">Margin</th>
+                  <th className="px-4 py-3 font-medium">{<LocalizedText text={"Nama"} />}</th>
+                  <th className="px-4 py-3 font-medium">{<LocalizedText text={"Jenis"} />}</th>
+                  <th className="px-4 py-3 font-medium text-right">{<LocalizedText text={"HPP/Unit"} />}</th>
+                  <th className="px-4 py-3 font-medium text-right">{<LocalizedText text={"Rekomendasi"} />}</th>
+                  <th className="px-4 py-3 font-medium text-center">{<LocalizedText text={"Margin"} />}</th>
                   <th className="px-4 py-3"></th>
                 </tr>
               </thead>
@@ -467,22 +470,22 @@ export default function HppPage() {
                       {p.product_code && <p className="text-xs text-gray-400">{p.product_code}</p>}
                     </td>
                     <td className="px-4 py-3 text-gray-500">{CONFIG[p.business_type]?.label ?? p.business_type}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-indigo-600">{formatRupiah(p.hpp_per_unit)}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-green-600">{formatRupiah(p.recommended_price)}</td>
-                    <td className="px-4 py-3 text-center text-gray-500">{p.target_margin}%</td>
+                    <td className="px-4 py-3 text-right font-semibold text-indigo-600">{formatCurrency(p.hpp_per_unit)}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-green-600">{formatCurrency(p.recommended_price)}</td>
+                    <td className="px-4 py-3 text-center text-gray-500">{p.target_margin}{<LocalizedText text={"%"} />}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
                         <button
                           onClick={() => convertToProduct(p)}
-                          title="Jadikan produk jual"
+                          title={translateText("Jadikan produk jual", localizedLanguage)}
                           className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg text-indigo-600 hover:bg-indigo-50 transition-colors"
                         >
                           <PackagePlus size={15} />
-                          <span className="hidden sm:inline">Jadikan Produk</span>
+                          <span className="hidden sm:inline">{<LocalizedText text={"Jadikan Produk"} />}</span>
                         </button>
                         <button
                           onClick={() => handleDelete(p.id)}
-                          title="Hapus"
+                          title={translateText("Hapus", localizedLanguage)}
                           className="text-gray-300 hover:text-red-400 transition-colors p-1"
                         >
                           <Trash2 size={15} />

@@ -1,4 +1,6 @@
 'use client'
+import { LocalizedText, translateText, useLanguage } from '@/lib/language'
+
 
 import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
@@ -9,7 +11,7 @@ import PaymentModal, { PaymentAccount } from '@/components/cashier/PaymentModal'
 import ReceiptModal from '@/components/cashier/ReceiptModal'
 import BarcodeScanner from '@/components/cashier/BarcodeScanner'
 import { Search, ShoppingCart, Trash2, ChevronRight, ChevronLeft, ScanLine, Plus, X, Bell } from 'lucide-react'
-import { formatRupiah } from '@/lib/utils'
+import { useCurrency } from '@/lib/currency'
 
 interface TableOrder {
   id: string
@@ -75,7 +77,10 @@ interface MinimalTransactionError {
 }
 
 export default function CashierPage() {
+  const localizedLanguage = useLanguage().language
+
   const supabase = createClient()
+  const { formatCurrency } = useCurrency()
   const [products, setProducts] = useState<Product[]>([])
   const [filtered, setFiltered] = useState<Product[]>([])
   // Keranjang per-meja: key 'takeaway' | '1' | '2' | ... → daftar item
@@ -98,7 +103,7 @@ export default function CashierPage() {
   const [qrisImageUrl, setQrisImageUrl] = useState<string | null>(null)
   const [paymentAccounts, setPaymentAccounts] = useState<PaymentAccount[]>([])
   const [tableOrders, setTableOrders] = useState<TableOrder[]>([])
-  const [tableNotification, setTableNotification] = useState<{ table: number; message: string } | null>(null)
+  const [tableNotification, setTableNotification] = useState<{ table: number; kind: 'new' | 'completed' | 'sent' } | null>(null)
   const [tableStates, setTableStates] = useState<Record<string, 'empty' | 'occupied'>>({})
   const [cashierSoundUrl, setCashierSoundUrl] = useState<string | null>(null)
   const [cashierTone, setCashierTone] = useState('classic')
@@ -295,7 +300,7 @@ export default function CashierPage() {
         setCashierTone(prof.cashier_tone ?? 'classic')
       }
       if (compactSettingError) {
-        setCompactModeError(`Gagal memuat mode tanpa gambar: ${compactSettingError.message}`)
+        setCompactModeError(compactSettingError.message)
       } else {
         setCompactMode(compactSetting?.cashier_compact_mode === true)
         setCompactModeError('')
@@ -358,7 +363,7 @@ export default function CashierPage() {
       if (newOrderIds.length > 0) {
         const newestNewOrder = loadedOrders.find(order => newOrderIds.includes(order.id))
         if (newestNewOrder?.id && newestNewOrder.table_number && !notifiedOrderIdsRef.current.has(newestNewOrder.id)) {
-          setTableNotification({ table: newestNewOrder.table_number, message: `Pesanan meja ${newestNewOrder.table_number} masuk!` })
+          setTableNotification({ table: newestNewOrder.table_number, kind: 'new' })
           notifiedOrderIdsRef.current.add(newestNewOrder.id)
           playCashierTone()
           setTimeout(() => setTableNotification(null), 4000)
@@ -368,7 +373,7 @@ export default function CashierPage() {
       if (justCompleted.length > 0) {
         const newestCompleted = justCompleted[0]
         if (newestCompleted.id && newestCompleted.table_number && !notifiedOrderIdsRef.current.has(newestCompleted.id)) {
-          setTableNotification({ table: newestCompleted.table_number, message: `Meja ${newestCompleted.table_number} sudah selesai!` })
+          setTableNotification({ table: newestCompleted.table_number, kind: 'completed' })
           notifiedOrderIdsRef.current.add(newestCompleted.id)
           playCashierTone()
           setTimeout(() => setTableNotification(null), 4000)
@@ -380,14 +385,14 @@ export default function CashierPage() {
       await loadTableOrders()
 
       if (eventType === 'insert' && row?.id && row?.table_number && !notifiedOrderIdsRef.current.has(row.id)) {
-        setTableNotification({ table: row.table_number, message: `Pesanan meja ${row.table_number} masuk!` })
+        setTableNotification({ table: row.table_number, kind: 'new' })
         notifiedOrderIdsRef.current.add(row.id)
         playCashierTone()
         setTimeout(() => setTableNotification(null), 4000)
       }
 
       if (eventType === 'update' && row?.id && row?.table_number && row.status === 'done' && !notifiedOrderIdsRef.current.has(row.id)) {
-        setTableNotification({ table: row.table_number, message: `Meja ${row.table_number} sudah selesai!` })
+        setTableNotification({ table: row.table_number, kind: 'completed' })
         notifiedOrderIdsRef.current.add(row.id)
         playCashierTone()
         setTimeout(() => setTableNotification(null), 4000)
@@ -555,7 +560,7 @@ export default function CashierPage() {
   const removeTable = (key: string) => {
     const num = Number(key)
     const hasItems = (carts[key]?.length ?? 0) > 0
-    if (hasItems && !confirm(`Meja ${num} masih ada pesanan. Hapus meja & buang pesanannya?`)) return
+    if (hasItems && !confirm(`${translateText("Meja ", localizedLanguage)}${num}${translateText(" masih ada pesanan. Hapus meja & buang pesanannya?", localizedLanguage)}`)) return
 
     const remaining = tables.filter(t => t !== num)
     setTables(remaining)
@@ -606,15 +611,15 @@ export default function CashierPage() {
     }
 
     if (!product) {
-      flash(`❌ Barcode "${code}" tidak terdaftar`)
+      flash(`❌ Barcode "${code}${translateText('" tidak terdaftar', localizedLanguage)}`)
       return
     }
     if (product.stock <= 0) {
-      flash(`⚠️ Stok "${product.name}" habis`)
+      flash(`${translateText('⚠️ Stok "', localizedLanguage)}${product.name}${translateText('" habis', localizedLanguage)}`)
       return
     }
     addToCart(product)
-    flash(`✅ ${product.name} ditambahkan ke keranjang`)
+    flash(`✅ ${product.name}${translateText(' ditambahkan ke keranjang', localizedLanguage)}`)
   }
 
   const increase = (id: string, isRepeat = false) => {
@@ -678,7 +683,7 @@ export default function CashierPage() {
       .single()
 
     if (error || !data) {
-      setSuccessMsg('⚠️ Gagal mengirim pesanan meja')
+      setSuccessMsg(translateText('⚠️ Gagal mengirim pesanan meja', localizedLanguage))
       setTimeout(() => setSuccessMsg(''), 3000)
       return
     }
@@ -686,13 +691,13 @@ export default function CashierPage() {
     setTableOrders(prev => [data as TableOrder, ...prev])
     setTableNotification({
       table: Number(activeTable),
-      message: `Pesanan meja ${activeTable} masuk ke kasir!`,
+      kind: 'sent',
     })
     playCashierTone()
     setTimeout(() => setTableNotification(null), 4000)
     setActiveCart(() => [])
     returnToTakeawayAfterEmptyCart()
-    setSuccessMsg(`✅ Pesanan meja ${activeTable} dikirim`)
+    setSuccessMsg(`${translateText('✅ Pesanan meja ', localizedLanguage)}${activeTable}${translateText(' dikirim', localizedLanguage)}`)
     setTimeout(() => setSuccessMsg(''), 2500)
   }
 
@@ -789,7 +794,7 @@ export default function CashierPage() {
         await supabase.from('transaction_items').insert(itemsToInsert)
       }
 
-      setSuccessMsg(`✅ Meja ${currentOrder.table_number} masuk ke transaksi hari ini`)
+      setSuccessMsg(`${translateText('✅ Meja ', localizedLanguage)}${currentOrder.table_number}${translateText(' masuk ke transaksi hari ini', localizedLanguage)}`)
       setTimeout(() => setSuccessMsg(''), 3000)
     }
   }
@@ -805,7 +810,7 @@ export default function CashierPage() {
 
     if (!error) {
       setTableOrders(prev => prev.filter(order => order.id !== id))
-      setSuccessMsg('✅ Pesanan selesai berhasil dihapus')
+      setSuccessMsg(translateText('✅ Pesanan selesai berhasil dihapus', localizedLanguage))
       setTimeout(() => setSuccessMsg(''), 2500)
     }
   }
@@ -958,7 +963,7 @@ export default function CashierPage() {
               <input
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                placeholder="Cari produk..."
+                placeholder={translateText("Cari produk...", localizedLanguage)}
                 className="w-full pl-9 pr-4 py-2.5 border border-gray-300 rounded-xl text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-50"
               />
             </div>
@@ -967,11 +972,11 @@ export default function CashierPage() {
                 playClickSound()
                 setShowScanner(true)
               }}
-              title="Scan barcode"
+              title={translateText("Scan barcode", localizedLanguage)}
               className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 transition-colors"
             >
               <ScanLine size={16} />
-              <span className="hidden sm:inline">Scan</span>
+              <span className="hidden sm:inline">{<LocalizedText text={"Scan"} />}</span>
             </button>
           </div>
 
@@ -985,8 +990,7 @@ export default function CashierPage() {
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
-                Semua
-              </button>
+                {<LocalizedText text={"\r\n                Semua\r\n              "} />}</button>
               <button
                 onClick={() => {
                   playClickSound()
@@ -999,8 +1003,7 @@ export default function CashierPage() {
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
-                Available Only
-              </button>
+                {<LocalizedText text={"\r\n                Available Only\r\n              "} />}</button>
               {categories.map(c => {
                 const isActive = activeCategory === c.name
                 return (
@@ -1009,13 +1012,13 @@ export default function CashierPage() {
                     onClick={() => setActiveCategory(c.name)}
                     className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
                       isActive
-                        ? 'bg-indigo-600 text-white'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        ? "bg-indigo-600 text-white"
+                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                     }`}
                   >
                     <span
                       className="w-2 h-2 rounded-full flex-shrink-0"
-                      style={{ backgroundColor: c.color || '#9ca3af' }}
+                      style={{ backgroundColor: c.color || "#9ca3af" }}
                     />
                     {c.name}
                   </button>
@@ -1033,13 +1036,17 @@ export default function CashierPage() {
         {tableNotification && (
           <div className="mx-4 mt-3 bg-indigo-50 text-indigo-700 text-sm px-4 py-2.5 rounded-lg border border-indigo-200 flex items-center gap-2">
             <Bell size={16} />
-            {tableNotification.message}
+            {tableNotification.kind === 'completed'
+              ? `${translateText('Meja ', localizedLanguage)}${tableNotification.table}${translateText(' sudah selesai!', localizedLanguage)}`
+              : tableNotification.kind === 'sent'
+                ? `${translateText('Pesanan meja ', localizedLanguage)}${tableNotification.table}${translateText(' masuk ke kasir!', localizedLanguage)}`
+                : `${translateText('Pesanan meja ', localizedLanguage)}${tableNotification.table}${translateText(' masuk!', localizedLanguage)}`}
           </div>
         )}
 
         {compactModeError && (
           <div className="mx-4 mt-3 bg-amber-50 text-amber-800 text-sm px-4 py-2.5 rounded-lg border border-amber-200">
-            {compactModeError}
+            {<LocalizedText text={"Gagal memuat mode tanpa gambar:"} />} {compactModeError}
           </div>
         )}
 
@@ -1047,16 +1054,16 @@ export default function CashierPage() {
           {filtered.length === 0 ? (
             <div className="text-center py-16 text-gray-400 text-sm">
               {products.length === 0
-                ? 'Belum ada produk. Tambah produk dulu!'
-                : 'Produk tidak ditemukan'}
+                ? <LocalizedText text={"Belum ada produk. Tambah produk dulu!"} />
+                : <LocalizedText text={"Produk tidak ditemukan"} />}
             </div>
           ) : (
             <div className={`grid gap-3 ${
               compactMode
-                ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4'
+                ? "grid-cols-2 sm:grid-cols-3 md:grid-cols-4"
                 : cartVisible
-                  ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4'
-                  : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6'
+                  ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
+                  : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6"
             }`}>
               {filtered.map(p => (
                 <ProductCard key={p.id} product={p} onAdd={addToCart} compactMode={compactMode} />
@@ -1097,7 +1104,7 @@ export default function CashierPage() {
               <ShoppingCart size={20} className="text-indigo-600" />
               <div className="flex flex-col leading-none">
                 <div className="flex items-center gap-3">
-                  <span className="font-bold text-gray-800">Keranjang</span>
+                  <span className="font-bold text-gray-800">{<LocalizedText text={"Keranjang"} />}</span>
                   {cart.length > 0 && (
                     <span className="bg-indigo-600 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold">
                       {cart.length}
@@ -1112,8 +1119,7 @@ export default function CashierPage() {
                 onClick={clearCart}
                 className="text-xs text-red-400 hover:text-red-600 flex items-center gap-1"
               >
-                <Trash2 size={13} /> Hapus Semua
-              </button>
+                <Trash2 size={13} /> {<LocalizedText text={" Hapus Semua\r\n              "} />}</button>
             )}
           </div>
 
@@ -1122,7 +1128,7 @@ export default function CashierPage() {
             <div className="flex flex-wrap items-center gap-1.5">
               {[
                 { key: 'takeaway', label: 'Bawa Pulang', canDelete: false },
-                ...visibleTables.map(t => ({ key: String(t), label: `Meja ${t}`, canDelete: true })),
+                ...visibleTables.map(t => ({ key: String(t), label: `${translateText('Meja ', localizedLanguage)}${t}`, canDelete: true })),
               ].map(({ key, label, canDelete }) => {
                 const isActive = activeTable === key
                 const hasItems = (carts[key]?.length ?? 0) > 0
@@ -1132,8 +1138,8 @@ export default function CashierPage() {
                     key={key}
                     className={`relative flex-shrink-0 flex items-center rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
                       isActive
-                        ? 'bg-indigo-600 text-white'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        ? "bg-indigo-600 text-white"
+                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                     }`}
                   >
                     <button
@@ -1141,14 +1147,14 @@ export default function CashierPage() {
                         playClickSound()
                         setActiveTable(key)
                       }}
-                      className={`py-1.5 pl-3 ${isActive && canDelete ? 'pr-1' : 'pr-3'}`}
+                      className={`py-1.5 pl-3 ${isActive && canDelete ? "pr-1" : "pr-3"}`}
                     >
                       {label}
                     </button>
                     {isActive && canDelete && (
                       <button
                         onClick={() => removeTable(key)}
-                        title="Hapus meja"
+                        title={translateText("Hapus meja", localizedLanguage)}
                         className="pr-2 pl-0.5 py-1.5 text-indigo-200 hover:text-white"
                       >
                         <X size={13} />
@@ -1158,8 +1164,8 @@ export default function CashierPage() {
                       <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-indigo-500 rounded-full ring-2 ring-white" />
                     )}
                     {key !== 'takeaway' && (
-                      <span className={`absolute -bottom-1.5 right-1 px-1 py-0.5 rounded-full text-[8px] font-semibold ${currentStatus === 'occupied' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                        {currentStatus === 'occupied' ? 'Aktif' : 'Kosong'}
+                      <span className={`absolute -bottom-1.5 right-1 px-1 py-0.5 rounded-full text-[8px] font-semibold ${currentStatus === 'occupied' ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>
+                        {currentStatus === 'occupied' ? <LocalizedText text={"Aktif"} /> : <LocalizedText text={"Kosong"} />}
                       </span>
                     )}
                   </div>
@@ -1170,7 +1176,7 @@ export default function CashierPage() {
                   playClickSound()
                   addTable()
                 }}
-                title="Tambah meja"
+                title={translateText("Tambah meja", localizedLanguage)}
                 className="flex-shrink-0 w-7 h-7 rounded-lg bg-gray-100 text-gray-500 hover:bg-gray-200 flex items-center justify-center"
               >
                 <Plus size={14} />
@@ -1183,38 +1189,36 @@ export default function CashierPage() {
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2 text-sm font-semibold text-amber-800">
                   <Bell size={15} />
-                  Pesanan Meja
-                </div>
+                  {<LocalizedText text={"\r\n                  Pesanan Meja\r\n                "} />}</div>
                 <span className="text-[10px] text-amber-700 font-medium">
-                  {tableOrders.filter(order => order.status !== 'done').length} pending
-                </span>
+                  {tableOrders.filter(order => order.status !== 'done').length} {<LocalizedText text={" Menunggu\r\n "} />}</span>
               </div>
 
               <div className="space-y-2">
                 {tableOrders.slice(0, 3).map(order => (
                   <div key={order.id} className="bg-white rounded-lg border border-amber-200 p-2.5">
                     <div className="flex items-center justify-between gap-3">
-                      <p className="text-xs font-semibold text-gray-800">Meja {order.table_number}</p>
+                      <p className="text-xs font-semibold text-gray-800">{<LocalizedText text={"Meja "} />}{order.table_number}</p>
                       <span className={`px-2 py-0.5 text-[10px] font-medium rounded-full ${statusColor[order.status]}`}>
-                        {statusLabel[order.status]}
+                        <LocalizedText text={statusLabel[order.status]} />
                       </span>
                     </div>
                     <p className="text-[11px] text-gray-500 mt-1">
                       {order.items.slice(0, 2).map(item => `${item.name} x${item.quantity}`).join(', ')}
-                      {order.items.length > 2 ? ' ...' : ''}
+                      {order.items.length > 2 ? <LocalizedText text={" ..."} /> : ""}
                     </p>
                     <div className="mt-2 flex items-center justify-between gap-2">
                       <div className="flex flex-col">
-                        <span className="text-[11px] font-medium text-gray-700">{formatRupiah(order.total)}</span>
-                        <span className="text-[10px] text-gray-500">{order.payment_method === 'qris' ? 'QRIS' : 'Tunai'}</span>
+                        <span className="text-[11px] font-medium text-gray-700">{formatCurrency(order.total)}</span>
+                        <span className="text-[10px] text-gray-500">{order.payment_method === 'qris' ? <LocalizedText text={"QRIS"} /> : <LocalizedText text={"Tunai"} />}</span>
                       </div>
                       <div className="flex items-center gap-1">
                         {order.status !== 'done' && (
                           <button
-                            onClick={() => updateOrderStatus(order.id, order.status === 'pending' ? 'processing' : order.status === 'processing' ? 'ready' : 'done')}
+                            onClick={() => updateOrderStatus(order.id, order.status === 'pending' ? "processing" : order.status === 'processing' ? "ready" : "done")}
                             className="text-[10px] px-2 py-1 rounded-md bg-indigo-600 text-white hover:bg-indigo-700"
                           >
-                            {order.status === 'pending' ? 'Proses' : order.status === 'processing' ? 'Siap' : 'Selesai'}
+                            {order.status === 'pending' ? <LocalizedText text={"Proses"} /> : order.status === 'processing' ? <LocalizedText text={"Siap"} /> : <LocalizedText text={"Selesai"} />}
                           </button>
                         )}
                         {order.status === 'done' && (
@@ -1222,8 +1226,7 @@ export default function CashierPage() {
                             onClick={() => deleteCompletedOrder(order.id)}
                             className="text-[10px] px-2 py-1 rounded-md bg-red-100 text-red-600 hover:bg-red-200"
                           >
-                            Hapus
-                          </button>
+                            {<LocalizedText text={"\r\n                            Hapus\r\n                          "} />}</button>
                         )}
                       </div>
                     </div>
@@ -1237,8 +1240,8 @@ export default function CashierPage() {
             {cart.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-gray-800">
                 <ShoppingCart size={40} />
-                <p className="text-sm mt-2">Keranjang kosong</p>
-                <p className="text-xs mt-1">Klik produk untuk menambahkan</p>
+                <p className="text-sm mt-2">{<LocalizedText text={"Keranjang kosong"} />}</p>
+                <p className="text-xs mt-1">{<LocalizedText text={"Klik produk untuk menambahkan"} />}</p>
               </div>
             ) : (
               <div className="py-2">
@@ -1259,8 +1262,8 @@ export default function CashierPage() {
           {cart.length > 0 && (
             <div className="p-4 border-t border-gray-100 space-y-3">
               <div className="flex justify-between text-sm">
-                <span className="text-gray-500">{totalItems} item</span>
-                <span className="font-bold text-gray-900">{formatRupiah(subtotal)}</span>
+                <span className="text-gray-500">{totalItems} {<LocalizedText text={" item"} />}</span>
+                <span className="font-bold text-gray-900">{formatCurrency(subtotal)}</span>
               </div>
 
               {activeTable !== 'takeaway' && (
@@ -1271,7 +1274,7 @@ export default function CashierPage() {
                   }}
                   className="w-full bg-amber-500 text-white py-3 rounded-xl font-semibold text-sm hover:bg-amber-600 transition-colors"
                 >
-                  Kirim Pesanan Meja {activeTable}
+                  {<LocalizedText text={"\r\n                  Kirim Pesanan Meja "} />}{activeTable}
                 </button>
               )}
 
@@ -1282,7 +1285,7 @@ export default function CashierPage() {
                 }}
                 className="w-full bg-indigo-600 text-white py-3 rounded-xl font-semibold text-sm hover:bg-indigo-700 transition-colors"
               >
-                Bayar {formatRupiah(subtotal)}
+                {<LocalizedText text={"\r\n                Bayar "} />}{formatCurrency(subtotal)}
               </button>
             </div>
           )}
@@ -1300,7 +1303,7 @@ export default function CashierPage() {
             className="bg-indigo-600 text-white px-6 py-3 rounded-2xl font-semibold text-sm shadow-lg hover:bg-indigo-700 transition-colors flex items-center gap-2"
           >
             <ShoppingCart size={16} />
-            Bayar {formatRupiah(subtotal)}
+            {<LocalizedText text={"\r\n            Bayar "} />}{formatCurrency(subtotal)}
             <span className="bg-white text-indigo-600 text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold">
               {totalItems}
             </span>
@@ -1335,7 +1338,7 @@ export default function CashierPage() {
           data={receiptData}
           onClose={() => {
             setReceiptData(null)
-            setSuccessMsg('✅ Transaksi berhasil!')
+            setSuccessMsg(translateText('✅ Transaksi berhasil!', localizedLanguage))
             setTimeout(() => setSuccessMsg(''), 4000)
           }}
         />

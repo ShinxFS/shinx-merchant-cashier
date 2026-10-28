@@ -1,4 +1,6 @@
 'use client'
+import { LocalizedText, translateText, useLanguage } from '@/lib/language'
+
 
 import { useState, useEffect, useRef, useSyncExternalStore } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
@@ -9,6 +11,7 @@ import {
   Settings, LogOut, Menu, Store, BarChart2, WalletCards, Users, Calculator, Bell, X, Grid2X2, ScrollText, Moon, Sun,
 } from 'lucide-react'
 import { getServerThemeSnapshot, getThemeSnapshot, setDarkTheme, subscribeToTheme } from '@/lib/theme'
+import { CurrencyProvider } from '@/lib/currency'
 
 interface NotificationLog {
   id: string
@@ -34,6 +37,8 @@ const setLastSeenAt = (key: string, value: string) => {
 }
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const localizedLanguage = useLanguage().language
+
   const router = useRouter()
   const pathname = usePathname()
   const supabase = createClient()
@@ -167,7 +172,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     if (!notificationShopUserId) {
       setNotificationLogs([])
-      setNotificationError('Data toko belum siap. Tutup lalu coba buka lagi.')
+      setNotificationError(translateText("Data toko belum siap. Tutup lalu coba buka lagi.", localizedLanguage))
       setNotificationLoading(false)
       return
     }
@@ -204,8 +209,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       setNotificationLogs([])
       setNotificationError(
         error instanceof Error && error.message === 'notification-timeout'
-          ? 'Permintaan terlalu lama. Periksa koneksi lalu coba lagi.'
-          : 'Gagal memuat log notifikasi. Periksa koneksi atau konfigurasi database.'
+          ? translateText("Permintaan terlalu lama. Periksa koneksi lalu coba lagi.", localizedLanguage)
+          : translateText("Gagal memuat log notifikasi. Periksa koneksi atau konfigurasi database.", localizedLanguage)
       )
     } finally {
       if (timeoutId) window.clearTimeout(timeoutId)
@@ -214,7 +219,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   const formatNotificationDate = (date: string) =>
-    new Date(date).toLocaleString('id-ID', {
+    new Date(date).toLocaleString(localizedLanguage === 'en' ? 'en-US' : 'id-ID', {
       day: 'numeric', month: 'short', year: 'numeric',
       hour: '2-digit', minute: '2-digit',
     })
@@ -229,7 +234,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     try {
       setDarkTheme(!darkMode, event.currentTarget)
     } catch {
-      window.alert('Mode gelap tidak dapat disimpan di browser ini.')
+      window.alert(translateText('Mode gelap tidak dapat disimpan di browser ini.', localizedLanguage))
     }
   }
 
@@ -257,7 +262,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
           <div>
             <p className="text-xs text-gray-400 font-medium">
-              {role === 'staff' ? 'Staff' : 'Owner'}
+              {role === 'staff' ? <LocalizedText text={"Staff"} /> : <LocalizedText text={"Owner"} />}
             </p>
             <p className="text-sm font-bold text-gray-800 leading-tight truncate max-w-[140px]">
               {businessName}
@@ -281,12 +286,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               }}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                 active
-                  ? 'bg-indigo-50 text-indigo-600'
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  ? "bg-indigo-50 text-indigo-600"
+                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
               }`}
             >
               <Icon size={18} />
-              {label}
+              <LocalizedText text={label} />
             </Link>
           )
         })}
@@ -296,15 +301,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {role === 'staff' && (
           <div className="px-3 py-2 mb-2">
             <span className="text-xs bg-orange-100 text-orange-600 px-2 py-1 rounded-full font-medium">
-              👤 Staff Account
-            </span>
+              {<LocalizedText text={"\r\n              👤 Staff Account\r\n            "} />}</span>
           </div>
         )}
         <div className="relative ml-[5px] mb-2 w-fit">
           <button
             type="button"
             onClick={toggleDarkMode}
-            aria-label={darkMode ? 'Aktifkan mode terang' : 'Aktifkan mode gelap'}
+            aria-label={darkMode ? translateText("Aktifkan mode terang", localizedLanguage) : translateText("Aktifkan mode gelap", localizedLanguage)}
             aria-pressed={darkMode}
             className="group relative flex h-9 w-9 items-center justify-center text-gray-600 transition-colors hover:text-indigo-600"
           >
@@ -315,7 +319,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               aria-hidden="true"
               className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 translate-x-1 whitespace-nowrap rounded-md bg-gray-800 px-2 py-1 text-xs font-medium text-white opacity-0 shadow-md transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100"
             >
-              {darkMode ? 'Mode Terang' : 'Mode Gelap'}
+              {darkMode ? <LocalizedText text={"Mode Terang"} /> : <LocalizedText text={"Mode Gelap"} />}
             </span>
           </button>
         </div>
@@ -331,8 +335,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   <Bell size={16} className="text-gray-500" />
                   {hasUnreadNotifications && <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-red-500" />}
                 </span>
-                Notifikasi
-              </button>
+                {<LocalizedText text={"\r\n                Notifikasi\r\n              "} />}</button>
               <button
                 type="button"
                 ref={changelogButtonRef}
@@ -344,8 +347,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
               >
                 <ScrollText size={16} className="text-gray-500" />
-                Changelog
-              </button>
+                {<LocalizedText text={"\r\n                Changelog\r\n              "} />}</button>
               <div className="my-1 border-t border-gray-100" />
               <button
                 type="button"
@@ -353,15 +355,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
               >
                 <LogOut size={16} />
-                Keluar
-              </button>
+                {<LocalizedText text={"\r\n                Keluar\r\n              "} />}</button>
             </div>
           )}
           <button
             type="button"
             ref={sidebarMenuButtonRef}
             onClick={toggleSidebarMenu}
-            aria-label="Menu"
+            aria-label={translateText("Menu", localizedLanguage)}
             aria-expanded={sidebarMenuOpen}
             className="group relative flex h-9 w-9 items-center justify-center text-gray-600 transition-colors hover:text-indigo-600"
           >
@@ -375,8 +376,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               aria-hidden="true"
               className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 translate-x-1 whitespace-nowrap rounded-md bg-gray-800 px-2 py-1 text-xs font-medium text-white opacity-0 shadow-md transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100"
             >
-              Menu
-            </span>
+              {<LocalizedText text={"\r\n              Menu\r\n            "} />}</span>
           </button>
         </div>
       </div>
@@ -407,18 +407,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </header>
 
         <main className="flex-1 overflow-y-auto">
-          {children}
+          <CurrencyProvider>{children}</CurrencyProvider>
         </main>
       </div>
 
       {notificationLogOpen && (
         <section ref={notificationPanelRef} className="fixed bottom-28 left-4 z-50 w-[calc(100vw-2rem)] max-w-sm overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
           <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-            <h2 className="text-sm font-semibold text-gray-900">Log Notifikasi</h2>
+            <h2 className="text-sm font-semibold text-gray-900">{<LocalizedText text={"Log Notifikasi"} />}</h2>
             <button
               type="button"
               onClick={() => setNotificationLogOpen(false)}
-              aria-label="Tutup log notifikasi"
+              aria-label={translateText("Tutup log notifikasi", localizedLanguage)}
               className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
             >
               <X size={16} />
@@ -426,11 +426,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
           <div className="max-h-[60vh] overflow-y-auto">
             {notificationLoading ? (
-              <p className="px-4 py-8 text-center text-sm text-gray-400">Memuat notifikasi...</p>
+              <p className="px-4 py-8 text-center text-sm text-gray-400">{<LocalizedText text={"Memuat notifikasi..."} />}</p>
             ) : notificationError ? (
               <p className="px-4 py-8 text-center text-sm text-red-500">{notificationError}</p>
             ) : notificationLogs.length === 0 ? (
-              <p className="px-4 py-8 text-center text-sm text-gray-400">Belum ada notifikasi.</p>
+              <p className="px-4 py-8 text-center text-sm text-gray-400">{<LocalizedText text={"Belum ada notifikasi."} />}</p>
             ) : (
               notificationLogs.map(notification => (
                 <article key={notification.id} className="border-b border-gray-100 px-4 py-3 last:border-0">
@@ -449,40 +449,48 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {changelogOpen && (
         <section ref={changelogPanelRef} className="fixed bottom-28 left-4 z-50 w-[calc(100vw-2rem)] max-w-sm overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
           <div className="changelog-header-divider flex items-center justify-between border-b border-gray-100 px-4 py-3">
-            <h2 className="text-sm font-semibold text-gray-900">Changelog</h2>
+            <h2 className="text-sm font-semibold text-gray-900">{<LocalizedText text={"Changelog"} />}</h2>
             <button
               type="button"
               onClick={() => setChangelogOpen(false)}
-              aria-label="Tutup changelog"
+              aria-label={translateText("Tutup changelog", localizedLanguage)}
               className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
             >
               <X size={16} />
             </button>
           </div>
           <div className="max-h-[60vh] divide-y divide-gray-100 overflow-y-auto px-4">
+            <article className="py-3">
+              <p className="text-sm font-medium text-gray-800">{<LocalizedText text={"Bahasa Toko"} />}</p>
+              <p className="mt-0.5 text-sm text-gray-600">{<LocalizedText text={"Pilih Bahasa Indonesia atau English untuk aplikasi dan halaman QR meja."} />}</p>
+            </article>
+            <article className="py-3">
+              <p className="text-sm font-medium text-gray-800">{<LocalizedText text={"Mata Uang Toko"} />}</p>
+              <p className="mt-0.5 text-sm text-gray-600">{<LocalizedText text={"Atur mata uang tampilan tanpa mengonversi otomatis nilai yang sudah tersimpan."} />}</p>
+            </article>
              <article className="py-3">
-              <p className="text-sm font-medium text-gray-800">Dark Mode</p>
-              <p className="mt-0.5 text-sm text-gray-600">Menambahkan tampilan gelap untuk mengurangi kelelahan mata.</p>
+              <p className="text-sm font-medium text-gray-800">{<LocalizedText text={"Dark Mode"} />}</p>
+              <p className="mt-0.5 text-sm text-gray-600">{<LocalizedText text={"Menambahkan tampilan gelap untuk mengurangi kelelahan mata."} />}</p>
             </article>
             <article className="py-3">
-              <p className="text-sm font-medium text-gray-800">Mode Compact</p>
-              <p className="mt-0.5 text-sm text-gray-600">Sembunyikan gambar produk agar lebih banyak item terlihat di layar kasir.</p>
+              <p className="text-sm font-medium text-gray-800">{<LocalizedText text={"Mode Compact"} />}</p>
+              <p className="mt-0.5 text-sm text-gray-600">{<LocalizedText text={"Sembunyikan gambar produk agar lebih banyak item terlihat di layar kasir."} />}</p>
             </article>
             <article className="py-3">
-              <p className="text-sm font-medium text-gray-800">Restock Produk</p>
-              <p className="mt-0.5 text-sm text-gray-600">Tambah stok langsung dari daftar produk.</p>
+              <p className="text-sm font-medium text-gray-800">{<LocalizedText text={"Restock Produk"} />}</p>
+              <p className="mt-0.5 text-sm text-gray-600">{<LocalizedText text={"Tambah stok langsung dari daftar produk."} />}</p>
             </article>
             <article className="py-3">
-              <p className="text-sm font-medium text-gray-800">Status Produk</p>
-              <p className="mt-0.5 text-sm text-gray-600">Badge Aktif dan Nonaktif terlihat di daftar produk.</p>
+              <p className="text-sm font-medium text-gray-800">{<LocalizedText text={"Status Produk"} />}</p>
+              <p className="mt-0.5 text-sm text-gray-600">{<LocalizedText text={"Badge Aktif dan Nonaktif terlihat di daftar produk."} />}</p>
             </article>
             <article className="py-3">
-              <p className="text-sm font-medium text-gray-800">Riwayat Transaksi</p>
-              <p className="mt-0.5 text-sm text-gray-600">Filter transaksi menurut bulan dan tahun.</p>
+              <p className="text-sm font-medium text-gray-800">{<LocalizedText text={"Riwayat Transaksi"} />}</p>
+              <p className="mt-0.5 text-sm text-gray-600">{<LocalizedText text={"Filter transaksi menurut bulan dan tahun."} />}</p>
             </article>
             <article className="py-3">
-              <p className="text-sm font-medium text-gray-800">Log Notifikasi</p>
-              <p className="mt-0.5 text-sm text-gray-600">Catatan produk baru, stok menipis, dan perubahan nama toko.</p>
+              <p className="text-sm font-medium text-gray-800">{<LocalizedText text={"Log Notifikasi"} />}</p>
+              <p className="mt-0.5 text-sm text-gray-600">{<LocalizedText text={"Catatan produk baru, stok menipis, dan perubahan nama toko."} />}</p>
             </article>
           </div>
         </section>

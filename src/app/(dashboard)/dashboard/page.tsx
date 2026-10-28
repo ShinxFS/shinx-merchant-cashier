@@ -1,7 +1,10 @@
 'use client'
+import { LocalizedText, translateText, useLanguage } from '@/lib/language'
+
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useCurrency } from '@/lib/currency'
 import {
   ShoppingCart,
   Package,
@@ -49,7 +52,10 @@ interface CashflowStats {
 }
 
 export default function DashboardPage() {
+  const localizedLanguage = useLanguage().language
+
   const supabase = createClient()
+  const { formatCurrency } = useCurrency()
   const [stats, setStats] = useState<Stats>({
     todayRevenue: 0,
     todayTransactions: 0,
@@ -184,7 +190,7 @@ export default function DashboardPage() {
         setLoadError('')
       } catch (error) {
         if (!cancelled) {
-          setLoadError(error instanceof Error ? error.message : 'Terjadi kesalahan saat memuat dashboard.')
+          setLoadError(error instanceof Error ? error.message : translateText("Terjadi kesalahan saat memuat dashboard.", localizedLanguage))
         }
       } finally {
         if (!cancelled) setLoading(false)
@@ -192,19 +198,16 @@ export default function DashboardPage() {
     }
     load()
     return () => { cancelled = true }
-  }, [cashflowPeriod, supabase])
-
-  const formatRupiah = (n: number) =>
-    new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n)
+  }, [cashflowPeriod, localizedLanguage, supabase])
 
   const formatDate = (str: string) =>
-    new Date(str).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+    new Date(str).toLocaleDateString(localizedLanguage === 'en' ? 'en-US' : 'id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 
   const statCards = [
-    { label: 'Pendapatan Hari Ini', value: formatRupiah(stats.todayRevenue), icon: Banknote, color: 'text-green-600', bg: 'bg-green-50' },
+    { label: 'Pendapatan Hari Ini', value: formatCurrency(stats.todayRevenue), icon: Banknote, color: 'text-green-600', bg: 'bg-green-50' },
     { label: 'Transaksi Hari Ini', value: stats.todayTransactions, icon: ShoppingCart, color: 'text-blue-600', bg: 'bg-blue-50' },
     { label: 'Total Produk Aktif', value: stats.totalProducts, icon: Package, color: 'text-purple-600', bg: 'bg-purple-50' },
-    { label: 'Pendapatan Bulan Ini', value: formatRupiah(stats.monthRevenue), icon: TrendingUp, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+    { label: 'Pendapatan Bulan Ini', value: formatCurrency(stats.monthRevenue), icon: TrendingUp, color: 'text-indigo-600', bg: 'bg-indigo-50' },
   ]
 
   const cashflowCards = [
@@ -217,7 +220,7 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="text-gray-400 text-sm">Memuat data...</div>
+        <div className="text-gray-400 text-sm">{<LocalizedText text={"Memuat data..."} />}</div>
       </div>
     )
   }
@@ -226,14 +229,14 @@ export default function DashboardPage() {
     <div className="p-6 max-w-5xl mx-auto">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-xl font-bold text-gray-900">Dashboard</h1>
+        <h1 className="text-xl font-bold text-gray-900">{<LocalizedText text={"Dashboard"} />}</h1>
         <p className="text-gray-500 text-sm mt-0.5">
-          Selamat datang kembali, <span className="font-medium text-gray-700">{businessName}</span>
+          {<LocalizedText text={"\r\n          Selamat datang kembali, "} />}<span className="font-medium text-gray-700">{businessName}</span>
         </p>
       </div>
       {loadError && (
         <p role="alert" className="mb-6 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">
-          Gagal memuat dashboard: {loadError}
+          {<LocalizedText text={"\r\n          Gagal memuat dashboard: "} />}{loadError}
         </p>
       )}
 
@@ -254,10 +257,9 @@ export default function DashboardPage() {
       <div className="bg-white rounded-xl border border-gray-200 mb-8">
         <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between gap-4">
           <div>
-            <h2 className="font-semibold text-gray-800 whitespace-nowrap">Cash Inflow/Outflow</h2>
+            <h2 className="font-semibold text-gray-800 whitespace-nowrap">{<LocalizedText text={"Cash Inflow/Outflow"} />}</h2>
             <p className="text-xs text-gray-400 mt-0.5">
-              Ringkasan pendapatan, biaya, dan laba bersih
-            </p>
+              {<LocalizedText text={"\r\n              Ringkasan pendapatan, biaya, dan laba bersih\r\n            "} />}</p>
           </div>
           <div className="flex items-center gap-2">
             <div className={`overflow-hidden transition-all duration-300 ease-out ${cashflowVisible ? 'max-w-40 opacity-100' : 'max-w-0 opacity-0'}`}>
@@ -266,11 +268,11 @@ export default function DashboardPage() {
                 onChange={e => setCashflowPeriod(e.target.value as CashflowPeriod)}
                 tabIndex={cashflowVisible ? 0 : -1}
                 className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                aria-label="Periode cash flow"
+                aria-label={translateText("Periode cash flow", localizedLanguage)}
               >
-                <option value="today">Hari ini</option>
-                <option value="7days">7 Hari</option>
-                <option value="month">Bulan ini</option>
+                <option value="today">{<LocalizedText text={"Hari ini"} />}</option>
+                <option value="7days">{<LocalizedText text={"7 Hari"} />}</option>
+                <option value="month">{<LocalizedText text={"Bulan ini"} />}</option>
               </select>
             </div>
             <button
@@ -278,11 +280,11 @@ export default function DashboardPage() {
               onClick={() => setCashflowVisible(visible => !visible)}
               className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-gray-600 border border-gray-200 hover:bg-gray-50 transition-colors"
               aria-expanded={cashflowVisible}
-              aria-label={cashflowVisible ? 'Sembunyikan Cash Flow' : 'Tampilkan Cash Flow'}
-              title={cashflowVisible ? 'Sembunyikan Cash Flow' : 'Tampilkan Cash Flow'}
+              aria-label={cashflowVisible ? translateText("Sembunyikan Cash Flow", localizedLanguage) : translateText("Tampilkan Cash Flow", localizedLanguage)}
+              title={cashflowVisible ? translateText("Sembunyikan Cash Flow", localizedLanguage) : translateText("Tampilkan Cash Flow", localizedLanguage)}
             >
               <span className="transition-transform duration-300 ease-out">{cashflowVisible ? <EyeOff size={15} /> : <Eye size={15} />}</span>
-              <span className="hidden sm:inline">{cashflowVisible ? 'Sembunyikan' : 'Tampilkan'}</span>
+              <span className="hidden sm:inline">{cashflowVisible ? <LocalizedText text={"Sembunyikan"} /> : <LocalizedText text={"Tampilkan"} />}</span>
             </button>
           </div>
         </div>
@@ -293,8 +295,8 @@ export default function DashboardPage() {
                 <div className={`w-8 h-8 ${bg} rounded-lg flex items-center justify-center mb-3`}>
                   <Icon size={16} className={color} />
                 </div>
-                <p className={`text-lg font-bold ${label === 'Laba Bersih' && cashflow.netProfit < 0 ? 'text-red-600' : 'text-gray-900'}`}>
-                  {formatRupiah(value)}
+                <p className={`text-lg font-bold ${label === 'Laba Bersih' && cashflow.netProfit < 0 ? "text-red-600" : "text-gray-900"}`}>
+                  {formatCurrency(value)}
                 </p>
                 <p className="text-xs text-gray-500 mt-0.5">{label}</p>
               </div>
@@ -306,16 +308,15 @@ export default function DashboardPage() {
       {/* Transaksi Terbaru */}
       <div className="bg-white rounded-xl border border-gray-200">
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-          <h2 className="font-semibold text-gray-800">Transaksi Terbaru</h2>
+          <h2 className="font-semibold text-gray-800">{<LocalizedText text={"Transaksi Terbaru"} />}</h2>
           <a href="/transactions" className="text-xs text-indigo-600 flex items-center gap-1 hover:underline">
-            Lihat semua <ArrowUpRight size={12} />
+            {<LocalizedText text={"\r\n            Lihat semua "} />}<ArrowUpRight size={12} />
           </a>
         </div>
 
         {recent.length === 0 ? (
           <div className="px-5 py-10 text-center text-gray-400 text-sm">
-            Belum ada transaksi hari ini
-          </div>
+            {<LocalizedText text={"\r\n            Belum ada transaksi hari ini\r\n          "} />}</div>
         ) : (
           <div className="divide-y divide-gray-50">
             {recent.map(tx => (
@@ -325,7 +326,7 @@ export default function DashboardPage() {
                   <p className="text-xs text-gray-400 mt-0.5">{formatDate(tx.created_at)}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-semibold text-gray-900">{formatRupiah(tx.total)}</p>
+                  <p className="text-sm font-semibold text-gray-900">{formatCurrency(tx.total)}</p>
                   <p className="text-xs text-gray-400 capitalize mt-0.5">{tx.payment_method}</p>
                 </div>
               </div>

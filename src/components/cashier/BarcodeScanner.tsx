@@ -1,4 +1,6 @@
 'use client'
+import { LocalizedText } from '@/lib/language'
+
 
 import { useEffect, useRef, useState } from 'react'
 import { BrowserMultiFormatReader } from '@zxing/library'
@@ -54,7 +56,7 @@ export default function BarcodeScanner({ onDetected, onClose }: Props) {
       <div className="flex items-center justify-between px-4 py-4 text-white">
         <div className="flex items-center gap-2">
           <ScanLine size={18} />
-          <span className="font-semibold text-sm">Scan Barcode</span>
+          <span className="font-semibold text-sm">{<LocalizedText text={"Scan Barcode"} />}</span>
         </div>
         <button onClick={onClose} className="p-1 hover:bg-white/10 rounded-lg">
           <X size={22} />
@@ -65,13 +67,12 @@ export default function BarcodeScanner({ onDetected, onClose }: Props) {
       <div className="flex-1 relative flex items-center justify-center overflow-hidden">
         {error ? (
           <div className="text-center px-8">
-            <p className="text-red-300 text-sm">{error}</p>
+            <p className="text-red-300 text-sm"><LocalizedText text={error} /></p>
             <button
               onClick={onClose}
               className="mt-4 px-5 py-2 bg-white/10 text-white rounded-xl text-sm hover:bg-white/20"
             >
-              Tutup
-            </button>
+              {<LocalizedText text={"\r\n              Tutup\r\n            "} />}</button>
           </div>
         ) : (
           <>
@@ -86,8 +87,7 @@ export default function BarcodeScanner({ onDetected, onClose }: Props) {
               <div className="w-64 h-40 border-2 border-white/80 rounded-xl shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]" />
             </div>
             <p className="absolute bottom-10 left-0 right-0 text-center text-white/80 text-sm px-6">
-              Arahkan kamera ke barcode produk
-            </p>
+              {<LocalizedText text={"\r\n              Arahkan kamera ke barcode produk\r\n            "} />}</p>
           </>
         )}
       </div>

@@ -1,8 +1,10 @@
 'use client'
+import { LocalizedText, translateText, useLanguage } from '@/lib/language'
+
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { formatRupiah } from '@/lib/utils'
+import { useCurrency } from '@/lib/currency'
 import { useRole } from '@/lib/useRole' // Import useRole berhasil ditambahkan
 import { Plus, Trash2, WalletCards, Search } from 'lucide-react'
 
@@ -26,7 +28,10 @@ const CATEGORIES = [
 const inputClass = "w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
 
 export default function ExpensesPage() {
+  const localizedLanguage = useLanguage().language
+
   const supabase = createClient()
+  const { formatCurrency, currency } = useCurrency()
   const { isOwner } = useRole() // Menambahkan hook role setelah deklarasi awal
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [loading, setLoading] = useState(true)
@@ -84,7 +89,7 @@ export default function ExpensesPage() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Hapus pengeluaran ini?')) return
+    if (!confirm(translateText("Hapus pengeluaran ini?", localizedLanguage))) return
     await supabase.from('expenses').delete().eq('id', id)
     setExpenses(prev => prev.filter(e => e.id !== id))
   }
@@ -102,10 +107,10 @@ export default function ExpensesPage() {
   const totalAll = expenses.reduce((s, e) => s + e.amount, 0)
 
   const formatDate = (str: string) =>
-    new Date(str).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
+    new Date(str).toLocaleDateString(localizedLanguage === 'en' ? 'en-US' : 'id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
 
   const formatCreatedTime = (str: string) =>
-    new Date(str).toLocaleTimeString('id-ID', {
+    new Date(str).toLocaleTimeString(localizedLanguage === 'en' ? 'en-US' : 'id-ID', {
       hour: '2-digit',
       minute: '2-digit',
     })
@@ -116,17 +121,16 @@ export default function ExpensesPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Pengeluaran</h1>
+          <h1 className="text-xl font-bold text-gray-900">{<LocalizedText text={"Pengeluaran"} />}</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            Total: <span className="font-semibold text-red-500">{formatRupiah(totalAll)}</span>
+            {<LocalizedText text={"\r\n            Total: "} />}<span className="font-semibold text-red-500">{formatCurrency(totalAll)}</span>
           </p>
         </div>
         <button
           onClick={() => setShowForm(true)}
           className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-indigo-700 transition-colors"
         >
-          <Plus size={16} /> Tambah
-        </button>
+          <Plus size={16} /> {<LocalizedText text={" Tambah\r\n        "} />}</button>
       </div>
 
       {/* Ringkasan per kategori */}
@@ -137,8 +141,8 @@ export default function ExpensesPage() {
             .reduce((s, e) => s + e.amount, 0)
           return (
             <div key={cat.value} className="bg-white rounded-xl border border-gray-200 p-3">
-              <p className="text-xs text-gray-500 mb-1">{cat.label}</p>
-              <p className="text-sm font-bold text-gray-800">{formatRupiah(total)}</p>
+              <p className="text-xs text-gray-500 mb-1"><LocalizedText text={cat.label} /></p>
+              <p className="text-sm font-bold text-gray-800">{formatCurrency(total)}</p>
             </div>
           )
         })}
@@ -151,7 +155,7 @@ export default function ExpensesPage() {
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Cari pengeluaran..."
+            placeholder={translateText("Cari pengeluaran...", localizedLanguage)}
             className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
@@ -160,27 +164,27 @@ export default function ExpensesPage() {
           onChange={e => setFilterCat(e.target.value)}
           className="px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
         >
-          <option value="">Semua Kategori</option>
+          <option value="">{<LocalizedText text={"Semua Kategori"} />}</option>
           {CATEGORIES.map(c => (
-            <option key={c.value} value={c.value}>{c.label}</option>
+            <option key={c.value} value={c.value}><LocalizedText text={c.label} /></option>
           ))}
         </select>
       </div>
 
       {/* List */}
       {loading ? (
-        <div className="text-center py-16 text-gray-400 text-sm">Memuat data...</div>
+        <div className="text-center py-16 text-gray-400 text-sm">{<LocalizedText text={"Memuat data..."} />}</div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-16">
           <WalletCards size={40} className="text-gray-200 mx-auto mb-3" />
-          <p className="text-gray-400 text-sm">Belum ada pengeluaran</p>
+          <p className="text-gray-400 text-sm">{<LocalizedText text={"Belum ada pengeluaran"} />}</p>
         </div>
       ) : (
         <>
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <div className="px-4 py-3 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
-              <span className="text-xs text-gray-500">{filtered.length} pengeluaran</span>
-              <span className="text-xs font-semibold text-red-500">{formatRupiah(totalFiltered)}</span>
+              <span className="text-xs text-gray-500">{filtered.length} {<LocalizedText text={" pengeluaran"} />}</span>
+              <span className="text-xs font-semibold text-red-500">{formatCurrency(totalFiltered)}</span>
             </div>
             <div className="divide-y divide-gray-50">
               {filtered.map(expense => {
@@ -196,14 +200,14 @@ export default function ExpensesPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         <p className="text-xs text-gray-400">{formatDate(expense.date)}</p>
-                        <p className="text-xs text-gray-400">· Dibuat {formatCreatedTime(expense.created_at)}</p>
+                        <p className="text-xs text-gray-400">{<LocalizedText text={"· Dibuat "} />}{formatCreatedTime(expense.created_at)}</p>
                         {expense.notes && (
-                          <p className="text-xs text-gray-400 truncate">· {expense.notes}</p>
+                          <p className="text-xs text-gray-400 truncate">{<LocalizedText text={"· "} />}{expense.notes}</p>
                         )}
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-bold text-red-500">{formatRupiah(expense.amount)}</p>
+                      <p className="text-sm font-bold text-red-500">{formatCurrency(expense.amount)}</p>
                     </div>
                     {/* Pembatasan Tombol Hapus Pengeluaran */}
                     {isOwner && (
@@ -227,37 +231,38 @@ export default function ExpensesPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <div className="bg-white rounded-2xl w-full max-w-md">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <h3 className="font-bold text-gray-900">Tambah Pengeluaran</h3>
-              <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+              <h3 className="font-bold text-gray-900">{<LocalizedText text={"Tambah Pengeluaran"} />}</h3>
+              <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">{<LocalizedText text={"✕"} />}</button>
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Keterangan *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{<LocalizedText text={"Keterangan *"} />}</label>
                 <input
                   required
                   value={form.title}
                   onChange={e => setForm(p => ({ ...p, title: e.target.value }))}
-                  placeholder="Contoh: Beli tepung terigu 5kg"
+                  placeholder={translateText("Contoh: Beli tepung terigu 5kg", localizedLanguage)}
                   className={inputClass}
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Jumlah (Rp) *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{<LocalizedText text={"Jumlah ("} />}{currency}{<LocalizedText text={") *"} />}</label>
                   <input
                     required
                     type="number"
                     min={0}
+                    step="any"
                     value={form.amount}
                     onChange={e => setForm(p => ({ ...p, amount: e.target.value }))}
-                    placeholder="0"
+                    placeholder={translateText("0", localizedLanguage)}
                     className={inputClass}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Tanggal *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{<LocalizedText text={"Tanggal *"} />}</label>
                   <input
                     required
                     type="date"
@@ -269,27 +274,27 @@ export default function ExpensesPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Kategori</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{<LocalizedText text={"Kategori"} />}</label>
                 <select
                   value={form.category}
                   onChange={e => setForm(p => ({ ...p, category: e.target.value }))}
                   className={inputClass}
                 >
                   {CATEGORIES.map(c => (
-                    <option key={c.value} value={c.value}>{c.label}</option>
+                    <option key={c.value} value={c.value}><LocalizedText text={c.label} /></option>
                   ))}
                 </select>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Catatan <span className="text-gray-400">(opsional)</span>
+                  {<LocalizedText text={"\r\n                  Catatan "} />}<span className="text-gray-400">{<LocalizedText text={"(opsional)"} />}</span>
                 </label>
                 <textarea
                   value={form.notes}
                   onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
                   rows={2}
-                  placeholder="Catatan tambahan..."
+                  placeholder={translateText("Catatan tambahan...", localizedLanguage)}
                   className={`${inputClass} resize-none`}
                 />
               </div>
@@ -300,14 +305,13 @@ export default function ExpensesPage() {
                   onClick={() => setShowForm(false)}
                   className="flex-1 py-2.5 border border-gray-300 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50"
                 >
-                  Batal
-                </button>
+                  {<LocalizedText text={"\r\n                  Batal\r\n                "} />}</button>
                 <button
                   type="submit"
                   disabled={formLoading}
                   className="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
                 >
-                  {formLoading ? 'Menyimpan...' : 'Simpan'}
+                  {formLoading ? <LocalizedText text={"Menyimpan..."} /> : <LocalizedText text={"Simpan"} />}
                 </button>
               </div>
             </form>

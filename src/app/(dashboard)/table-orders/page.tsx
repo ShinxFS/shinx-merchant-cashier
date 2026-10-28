@@ -1,8 +1,10 @@
 'use client'
+import { LocalizedText, translateText, useLanguage } from '@/lib/language'
+
 
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { formatRupiah } from '@/lib/utils'
+import { useCurrency } from '@/lib/currency'
 import { Bell, CheckCheck, Clock3, CircleDashed, PackageCheck, Search, Trash2 } from 'lucide-react'
 
 interface TableOrderItem {
@@ -26,7 +28,10 @@ interface TableOrder {
 }
 
 export default function TableOrdersPage() {
+  const localizedLanguage = useLanguage().language
+
   const supabase = createClient()
+  const { formatCurrency } = useCurrency()
   const [orders, setOrders] = useState<TableOrder[]>([])
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
@@ -107,7 +112,7 @@ export default function TableOrdersPage() {
   }
 
   const deleteOrder = async (id: string) => {
-    if (!confirm('Hapus order meja ini?')) return
+    if (!confirm(translateText("Hapus order meja ini?", localizedLanguage))) return
     await supabase.from('table_orders').delete().eq('id', id)
   }
 
@@ -115,8 +120,8 @@ export default function TableOrdersPage() {
     <div className="p-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between gap-4 mb-6 flex-wrap">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Order Meja</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{orders.length} pesanan aktif</p>
+          <h1 className="text-xl font-bold text-gray-900">{<LocalizedText text={"Order Meja"} />}</h1>
+          <p className="text-sm text-gray-500 mt-0.5">{orders.length} {<LocalizedText text={" pesanan aktif"} />}</p>
         </div>
 
         <div className="relative w-full max-w-sm">
@@ -124,18 +129,17 @@ export default function TableOrdersPage() {
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Cari meja / menu / pelanggan"
+            placeholder={translateText("Cari meja / menu / pelanggan", localizedLanguage)}
             className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
       </div>
 
       {loading ? (
-        <div className="text-center text-sm text-gray-400 py-16">Memuat daftar order meja...</div>
+        <div className="text-center text-sm text-gray-400 py-16">{<LocalizedText text={"Memuat daftar order meja..."} />}</div>
       ) : filtered.length === 0 ? (
         <div className="bg-white border border-gray-200 rounded-2xl p-10 text-center text-sm text-gray-500">
-          Belum ada pesanan meja.
-        </div>
+          {<LocalizedText text={"\r\n          Belum ada pesanan meja.\r\n        "} />}</div>
       ) : (
         <div className="space-y-4">
           {filtered.map(order => {
@@ -150,7 +154,7 @@ export default function TableOrdersPage() {
                       {order.table_number}
                     </div>
                     <div>
-                      <p className="font-semibold text-gray-900">Meja {order.table_number}</p>
+                      <p className="font-semibold text-gray-900">{<LocalizedText text={"Meja "} />}{order.table_number}</p>
                       <p className="text-xs text-gray-500">{order.customer_name}</p>
                     </div>
                   </div>
@@ -158,15 +162,14 @@ export default function TableOrdersPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <div className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${currentStatus.className}`}>
                       <StatusIcon size={12} />
-                      {currentStatus.label}
+                      <LocalizedText text={currentStatus.label} />
                     </div>
                     <button
                       onClick={() => deleteOrder(order.id)}
                       className="inline-flex items-center gap-1.5 text-red-500 hover:text-red-600 text-xs font-medium px-2.5 py-1.5 rounded-lg hover:bg-red-50 transition-colors"
                     >
                       <Trash2 size={12} />
-                      Hapus
-                    </button>
+                      {<LocalizedText text={"\r\n                      Hapus\r\n                    "} />}</button>
                   </div>
                 </div>
 
@@ -175,17 +178,17 @@ export default function TableOrdersPage() {
                     {order.items.map(item => (
                       <div key={item.id} className="flex items-center justify-between text-sm text-gray-700">
                         <span>
-                          {item.name} <span className="text-gray-400">x{item.quantity}</span>
+                          {item.name} <span className="text-gray-400">{<LocalizedText text={"x"} />}{item.quantity}</span>
                         </span>
-                        <span className="font-medium">{formatRupiah(item.subtotal)}</span>
+                        <span className="font-medium">{formatCurrency(item.subtotal)}</span>
                       </div>
                     ))}
                   </div>
 
                   <div className="bg-gray-50 rounded-xl p-3">
                     <div className="flex items-center justify-between text-xs text-gray-500 mb-2">
-                      <span>Total</span>
-                      <span className="font-semibold text-gray-900">{formatRupiah(order.total)}</span>
+                      <span>{<LocalizedText text={"Total"} />}</span>
+                      <span className="font-semibold text-gray-900">{formatCurrency(order.total)}</span>
                     </div>
 
                     <div className="grid grid-cols-2 gap-2">
@@ -199,7 +202,7 @@ export default function TableOrdersPage() {
                               : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-100'
                           }`}
                         >
-                          {statusMeta[status].label}
+                          <LocalizedText text={statusMeta[status].label} />
                         </button>
                       ))}
                     </div>

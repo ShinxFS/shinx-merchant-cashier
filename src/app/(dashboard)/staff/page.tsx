@@ -1,8 +1,10 @@
 'use client'
+import { LocalizedText, translateText, useLanguage } from '@/lib/language'
+
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { formatRupiah } from '@/lib/utils'
+import { useCurrency } from '@/lib/currency'
 import { Plus, Trash2, Users, TrendingUp, ShoppingCart, Wallet } from 'lucide-react'
 
 interface Staff {
@@ -28,7 +30,10 @@ interface StaffTransactionStatsRow {
 const inputClass = "w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
 
 export default function StaffPage() {
+  const localizedLanguage = useLanguage().language
+
   const supabase = createClient()
+  const { formatCurrency } = useCurrency()
   const [staffList, setStaffList] = useState<Staff[]>([])
   const [staffStats, setStaffStats] = useState<Record<string, StaffStats>>({})
   const [loading, setLoading] = useState(true)
@@ -95,7 +100,7 @@ export default function StaffPage() {
     })
 
     if (signUpError || !data.user) {
-      setError(signUpError?.message ?? 'Gagal membuat akun')
+      setError(signUpError?.message ?? translateText('Gagal membuat akun', localizedLanguage))
       setFormLoading(false)
       return
     }
@@ -111,13 +116,13 @@ export default function StaffPage() {
     setForm({ email: '', password: '', name: '' })
     setShowForm(false)
     setFormLoading(false)
-    setSuccess('✅ Akun karyawan berhasil dibuat!')
+    setSuccess(translateText("✅ Akun karyawan berhasil dibuat!", localizedLanguage))
     setTimeout(() => setSuccess(''), 4000)
     load()
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Hapus akun karyawan ini?')) return
+    if (!confirm(translateText("Hapus akun karyawan ini?", localizedLanguage))) return
     await supabase.from('profiles').delete().eq('id', id)
     setStaffList(prev => prev.filter(s => s.id !== id))
   }
@@ -127,15 +132,14 @@ export default function StaffPage() {
 
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Kelola Karyawan</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{staffList.length} karyawan terdaftar</p>
+          <h1 className="text-xl font-bold text-gray-900">{<LocalizedText text={"Kelola Karyawan"} />}</h1>
+          <p className="text-sm text-gray-500 mt-0.5">{staffList.length} {<LocalizedText text={" karyawan terdaftar"} />}</p>
         </div>
         <button
           onClick={() => setShowForm(true)}
           className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-indigo-700 transition-colors"
         >
-          <Plus size={16} /> Tambah Karyawan
-        </button>
+          <Plus size={16} /> {<LocalizedText text={" Tambah Karyawan\r\n        "} />}</button>
       </div>
 
       {success && (
@@ -146,31 +150,31 @@ export default function StaffPage() {
 
       {/* Info akses */}
       <div className="mb-6 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
-        <p className="text-sm font-semibold text-blue-700 mb-2">🔒 Hak Akses Karyawan</p>
+        <p className="text-sm font-semibold text-blue-700 mb-2">{<LocalizedText text={"🔒 Hak Akses Karyawan"} />}</p>
         <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-          <p className="text-xs text-blue-600">✅ Bisa menggunakan kasir</p>
-          <p className="text-xs text-blue-600">✅ Bisa melihat produk & transaksi</p>
-          <p className="text-xs text-red-500">❌ Tidak bisa ubah/hapus produk</p>
-          <p className="text-xs text-red-500">❌ Tidak bisa lihat laporan</p>
-          <p className="text-xs text-red-500">❌ Tidak bisa menambah/hapus pengeluaran</p>
-          <p className="text-xs text-red-500">❌ Tidak bisa lihat laba bersih</p>
-          <p className="text-xs text-red-500">❌ Tidak bisa akses pengaturan</p>
-          <p className="text-xs text-red-500">❌ Tidak bisa kelola karyawan</p>
+          <p className="text-xs text-blue-600">{<LocalizedText text={"✅ Bisa menggunakan kasir"} />}</p>
+          <p className="text-xs text-blue-600">{<LocalizedText text={"✅ Bisa melihat produk & transaksi"} />}</p>
+          <p className="text-xs text-red-500">{<LocalizedText text={"❌ Tidak bisa ubah/hapus produk"} />}</p>
+          <p className="text-xs text-red-500">{<LocalizedText text={"❌ Tidak bisa lihat laporan"} />}</p>
+          <p className="text-xs text-red-500">{<LocalizedText text={"❌ Tidak bisa menambah/hapus pengeluaran"} />}</p>
+          <p className="text-xs text-red-500">{<LocalizedText text={"❌ Tidak bisa lihat laba bersih"} />}</p>
+          <p className="text-xs text-red-500">{<LocalizedText text={"❌ Tidak bisa akses pengaturan"} />}</p>
+          <p className="text-xs text-red-500">{<LocalizedText text={"❌ Tidak bisa kelola karyawan"} />}</p>
         </div>
       </div>
 
       {loadError && (
         <div role="alert" className="mb-4 bg-red-50 text-red-600 text-sm px-4 py-3 rounded-xl">
-          Gagal memuat data karyawan: {loadError}
+          {<LocalizedText text={"\r\n          Gagal memuat data karyawan: "} />}{loadError}
         </div>
       )}
 
       {loading ? (
-        <div className="text-center py-16 text-gray-400 text-sm">Memuat data...</div>
+        <div className="text-center py-16 text-gray-400 text-sm">{<LocalizedText text={"Memuat data..."} />}</div>
       ) : staffList.length === 0 ? (
         <div className="text-center py-16">
           <Users size={40} className="text-gray-200 mx-auto mb-3" />
-          <p className="text-gray-400 text-sm">Belum ada karyawan</p>
+          <p className="text-gray-400 text-sm">{<LocalizedText text={"Belum ada karyawan"} />}</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -186,23 +190,23 @@ export default function StaffPage() {
                 >
                   <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center flex-shrink-0">
                     <span className="text-sm font-bold text-indigo-600">
-                      {staff.owner_name?.charAt(0).toUpperCase() ?? 'K'}
+                      {staff.owner_name?.charAt(0).toUpperCase() ?? <LocalizedText text={"K"} />}
                     </span>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-gray-800">{staff.owner_name ?? 'Karyawan'}</p>
-                    <span className="text-xs bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full font-medium">STAFF</span>
+                    <p className="text-sm font-semibold text-gray-800">{staff.owner_name ?? <LocalizedText text={"Karyawan"} />}</p>
+                    <span className="text-xs bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full font-medium">{<LocalizedText text={"STAFF"} />}</span>
                   </div>
 
                   {stats && (
                     <div className="hidden sm:flex items-center gap-4 text-right">
                       <div>
-                        <p className="text-xs text-gray-400">Transaksi</p>
+                        <p className="text-xs text-gray-400">{<LocalizedText text={"Transaksi"} />}</p>
                         <p className="text-sm font-bold text-gray-800">{stats.totalTransactions}</p>
                       </div>
                       <div>
-                        <p className="text-xs text-gray-400">Omzet</p>
-                        <p className="text-sm font-bold text-indigo-600">{formatRupiah(stats.totalRevenue)}</p>
+                        <p className="text-xs text-gray-400">{<LocalizedText text={"Omzet"} />}</p>
+                        <p className="text-sm font-bold text-indigo-600">{formatCurrency(stats.totalRevenue)}</p>
                       </div>
                     </div>
                   )}
@@ -217,38 +221,38 @@ export default function StaffPage() {
 
                 {isExpanded && stats && (
                   <div className="border-t border-gray-100 bg-gray-50 px-4 py-4">
-                    <p className="text-xs font-semibold text-gray-500 uppercase mb-3">Performa Keseluruhan</p>
+                    <p className="text-xs font-semibold text-gray-500 uppercase mb-3">{<LocalizedText text={"Performa Keseluruhan"} />}</p>
                     <div className="grid grid-cols-3 gap-3">
                       <div className="bg-white rounded-xl border border-gray-200 p-3 text-center">
                         <div className="flex items-center justify-center gap-1 mb-1">
                           <ShoppingCart size={13} className="text-blue-500" />
-                          <p className="text-xs text-gray-500">Transaksi</p>
+                          <p className="text-xs text-gray-500">{<LocalizedText text={"Transaksi"} />}</p>
                         </div>
                         <p className="text-sm font-bold text-gray-800">{stats.totalTransactions}</p>
                       </div>
                       <div className="bg-white rounded-xl border border-gray-200 p-3 text-center">
                         <div className="flex items-center justify-center gap-1 mb-1">
                           <TrendingUp size={13} className="text-indigo-500" />
-                          <p className="text-xs text-gray-500">Omzet</p>
+                          <p className="text-xs text-gray-500">{<LocalizedText text={"Omzet"} />}</p>
                         </div>
-                        <p className="text-sm font-bold text-indigo-600">{formatRupiah(stats.totalRevenue)}</p>
+                        <p className="text-sm font-bold text-indigo-600">{formatCurrency(stats.totalRevenue)}</p>
                       </div>
                       <div className="bg-white rounded-xl border border-gray-200 p-3 text-center">
                         <div className="flex items-center justify-center gap-1 mb-1">
                           <Wallet size={13} className="text-green-500" />
-                          <p className="text-xs text-gray-500">Laba Bersih</p>
+                          <p className="text-xs text-gray-500">{<LocalizedText text={"Laba Bersih"} />}</p>
                         </div>
                         <p className={`text-sm font-bold ${stats.totalProfit >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                          {formatRupiah(stats.totalProfit)}
+                          {formatCurrency(stats.totalProfit)}
                         </p>
                       </div>
                     </div>
 
                     {stats.totalTransactions > 0 && (
                       <div className="mt-3 bg-white rounded-xl border border-gray-200 px-4 py-3 flex justify-between items-center">
-                        <p className="text-xs text-gray-500">Rata-rata per transaksi</p>
+                        <p className="text-xs text-gray-500">{<LocalizedText text={"Rata-rata per transaksi"} />}</p>
                         <p className="text-sm font-semibold text-gray-700">
-                          {formatRupiah(Math.round(stats.totalRevenue / stats.totalTransactions))}
+                          {formatCurrency(Math.round(stats.totalRevenue / stats.totalTransactions))}
                         </p>
                       </div>
                     )}
@@ -264,43 +268,43 @@ export default function StaffPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <div className="bg-white rounded-2xl w-full max-w-md">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <h3 className="font-bold text-gray-900">Tambah Karyawan</h3>
-              <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+              <h3 className="font-bold text-gray-900">{<LocalizedText text={"Tambah Karyawan"} />}</h3>
+              <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">{<LocalizedText text={"✕"} />}</button>
             </div>
             <form onSubmit={handleAddStaff} className="p-6 space-y-4">
               {error && (
                 <div className="bg-red-50 text-red-600 text-sm px-4 py-3 rounded-lg">{error}</div>
               )}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nama Karyawan *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{<LocalizedText text={"Nama Karyawan *"} />}</label>
                 <input
                   required
                   value={form.name}
                   onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
-                  placeholder="Contoh: Budi"
+                  placeholder={translateText("Contoh: Budi", localizedLanguage)}
                   className={inputClass}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{<LocalizedText text={"Email *"} />}</label>
                 <input
                   required
                   type="email"
                   value={form.email}
                   onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
-                  placeholder="email@karyawan.com"
+                  placeholder={translateText("email@karyawan.com", localizedLanguage)}
                   className={inputClass}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Password *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{<LocalizedText text={"Password *"} />}</label>
                 <input
                   required
                   type="password"
                   minLength={6}
                   value={form.password}
                   onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
-                  placeholder="Minimal 6 karakter"
+                  placeholder={translateText("Minimal 6 karakter", localizedLanguage)}
                   className={inputClass}
                 />
               </div>
@@ -310,14 +314,13 @@ export default function StaffPage() {
                   onClick={() => setShowForm(false)}
                   className="flex-1 py-2.5 border border-gray-300 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50"
                 >
-                  Batal
-                </button>
+                  {<LocalizedText text={"\r\n                  Batal\r\n                "} />}</button>
                 <button
                   type="submit"
                   disabled={formLoading}
                   className="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
                 >
-                  {formLoading ? 'Membuat akun...' : 'Buat Akun'}
+                  {formLoading ? <LocalizedText text={"Membuat akun..."} /> : <LocalizedText text={"Buat Akun"} />}
                 </button>
               </div>
             </form>

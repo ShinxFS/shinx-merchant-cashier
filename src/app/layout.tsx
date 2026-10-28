@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Geist } from 'next/font/google'
 import Script from 'next/script'
+import { LanguageProvider } from '@/lib/language'
 import './globals.css'
 
 const geist = Geist({ subsets: ['latin'] })
@@ -26,7 +27,9 @@ export default function RootLayout({
           } catch {}`}
         </Script>
       </head>
-      <body className={geist.className}>{children}</body>
+      <body className={geist.className}>
+        <LanguageProvider>{children}</LanguageProvider>
+      </body>
     </html>
   )
 }

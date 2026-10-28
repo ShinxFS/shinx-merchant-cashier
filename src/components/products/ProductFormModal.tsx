@@ -1,4 +1,6 @@
 'use client'
+import { LocalizedText, translateText, useLanguage } from '@/lib/language'
+
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
@@ -78,6 +80,8 @@ const compressImage = (file: File, quality = 0.75): Promise<File> => {
 }
 
 export default function ProductFormModal({ product, categories, onClose }: Props) {
+  const localizedLanguage = useLanguage().language
+
   const supabase = createClient()
   const isEdit = !!product
 
@@ -162,7 +166,7 @@ export default function ProductFormModal({ product, categories, onClose }: Props
     try {
       imageUrl = await uploadImage(user.id)
     } catch (uploadError) {
-      setError(uploadError instanceof Error ? uploadError.message : 'Gagal mengunggah gambar')
+      setError(uploadError instanceof Error ? uploadError.message : translateText("Gagal mengunggah gambar", localizedLanguage))
       setLoading(false)
       return
     }
@@ -215,7 +219,7 @@ export default function ProductFormModal({ product, categories, onClose }: Props
       <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
 
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white">
-          <h3 className="font-bold text-gray-900">{isEdit ? 'Edit Produk' : 'Tambah Produk'}</h3>
+          <h3 className="font-bold text-gray-900">{isEdit ? <LocalizedText text={"Edit Produk"} /> : <LocalizedText text={"Tambah Produk"} />}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <X size={20} />
           </button>
@@ -230,17 +234,17 @@ export default function ProductFormModal({ product, categories, onClose }: Props
           <div className="flex items-center gap-4">
             <div className="w-20 h-20 rounded-xl bg-gray-100 flex items-center justify-center overflow-hidden flex-shrink-0">
               {compressing ? (
-                <span className="text-xs text-gray-400">Kompres...</span>
+                <span className="text-xs text-gray-400">{<LocalizedText text={"Kompres..."} />}</span>
               ) : imagePreview ? (
                 <img src={imagePreview} alt="" className="w-full h-full object-cover" />
               ) : (
-                <span className="text-3xl">🛍️</span>
+                <span className="text-3xl">{<LocalizedText text={"🛍️"} />}</span>
               )}
             </div>
             <div>
               <label className="cursor-pointer flex items-center gap-2 text-sm text-indigo-600 font-medium hover:text-indigo-700">
                 <Upload size={15} />
-                {compressing ? 'Mengompres...' : 'Upload Foto'}
+                {compressing ? <LocalizedText text={"Mengompres..."} /> : <LocalizedText text={"Upload Foto"} />}
                 <input
                   type="file"
                   accept="image/*"
@@ -251,22 +255,22 @@ export default function ProductFormModal({ product, categories, onClose }: Props
               </label>
               {imageInfo ? (
                 <p className="text-xs text-green-600 mt-1">
-                  ✅ {imageInfo.original} → {imageInfo.compressed}
+                  {<LocalizedText text={"\r\n                  ✅ "} />}{imageInfo.original} {<LocalizedText text={" → "} />}{imageInfo.compressed}
                 </p>
               ) : (
-                <p className="text-xs text-gray-400 mt-1">JPG, PNG — otomatis dikompres</p>
+                <p className="text-xs text-gray-400 mt-1">{<LocalizedText text={"JPG, PNG — otomatis dikompres"} />}</p>
               )}
             </div>
           </div>
 
           {/* Nama */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nama Produk *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{<LocalizedText text={"Nama Produk *"} />}</label>
             <input
               required
               value={form.name}
               onChange={e => set('name', e.target.value)}
-              placeholder="Contoh: Kopi Hitam"
+              placeholder={translateText("Contoh: Kopi Hitam", localizedLanguage)}
               className={inputClass}
             />
           </div>
@@ -274,23 +278,23 @@ export default function ProductFormModal({ product, categories, onClose }: Props
           {/* SKU / Barcode */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              SKU / Barcode <span className="text-gray-400">(opsional)</span>
+              {<LocalizedText text={"\r\n              SKU / Barcode "} />}<span className="text-gray-400">{<LocalizedText text={"(opsional)"} />}</span>
             </label>
             <div className="flex items-center gap-2">
               <input
                 value={form.sku}
                 onChange={e => set('sku', e.target.value)}
-                placeholder="Ketik manual atau scan"
+                placeholder={translateText("Ketik manual atau scan", localizedLanguage)}
                 className={inputClass}
               />
               <button
                 type="button"
                 onClick={() => setShowScanner(true)}
-                title="Scan barcode"
+                title={translateText("Scan barcode", localizedLanguage)}
                 className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
               >
                 <ScanLine size={16} />
-                <span className="hidden sm:inline">Scan</span>
+                <span className="hidden sm:inline">{<LocalizedText text={"Scan"} />}</span>
               </button>
             </div>
           </div>
@@ -298,21 +302,23 @@ export default function ProductFormModal({ product, categories, onClose }: Props
           {/* Harga */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Harga Jual *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{<LocalizedText text={"Harga Jual *"} />}</label>
               <input
                 required
                 type="number"
                 min={0}
+                step="any"
                 value={form.price}
                 onChange={e => set('price', e.target.value)}
                 className={inputClass}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Harga Modal</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{<LocalizedText text={"Harga Modal"} />}</label>
               <input
                 type="number"
                 min={0}
+                step="any"
                 value={form.cost_price}
                 onChange={e => set('cost_price', e.target.value)}
                 className={inputClass}
@@ -323,7 +329,7 @@ export default function ProductFormModal({ product, categories, onClose }: Props
           {/* Stok & Satuan */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Stok *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{<LocalizedText text={"Stok *"} />}</label>
               <input
                 required
                 type="number"
@@ -334,7 +340,7 @@ export default function ProductFormModal({ product, categories, onClose }: Props
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Satuan</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{<LocalizedText text={"Satuan"} />}</label>
               <select
                 value={form.unit}
                 onChange={e => set('unit', e.target.value)}
@@ -350,7 +356,7 @@ export default function ProductFormModal({ product, categories, onClose }: Props
           {/* Kategori (bisa sampai 2) */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Kategori 1</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{<LocalizedText text={"Kategori 1"} />}</label>
               <select
                 value={form.category_id}
                 onChange={e => {
@@ -361,7 +367,7 @@ export default function ProductFormModal({ product, categories, onClose }: Props
                 }}
                 className={inputClass}
               >
-                <option value="">— Tanpa Kategori —</option>
+                <option value="">{<LocalizedText text={"— Tanpa Kategori —"} />}</option>
                 {categories.map(c => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
@@ -369,7 +375,7 @@ export default function ProductFormModal({ product, categories, onClose }: Props
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Kategori 2 <span className="text-gray-400">(opsional)</span>
+                {<LocalizedText text={"\r\n                Kategori 2 "} />}<span className="text-gray-400">{<LocalizedText text={"(opsional)"} />}</span>
               </label>
               <select
                 value={form.category_id_2}
@@ -377,7 +383,7 @@ export default function ProductFormModal({ product, categories, onClose }: Props
                 disabled={!form.category_id}
                 className={`${inputClass} disabled:bg-gray-50 disabled:text-gray-400`}
               >
-                <option value="">— Tanpa Kategori —</option>
+                <option value="">{<LocalizedText text={"— Tanpa Kategori —"} />}</option>
                 {categories
                   .filter(c => c.id !== form.category_id)
                   .map(c => (
@@ -397,8 +403,7 @@ export default function ProductFormModal({ product, categories, onClose }: Props
               className="w-4 h-4 accent-indigo-600"
             />
             <label htmlFor="is_active" className="text-sm text-gray-700">
-              Produk aktif (tampil di kasir)
-            </label>
+              {<LocalizedText text={"\r\n              Produk aktif (tampil di kasir)\r\n            "} />}</label>
           </div>
 
           {/* Tombol */}
@@ -408,14 +413,13 @@ export default function ProductFormModal({ product, categories, onClose }: Props
               onClick={onClose}
               className="flex-1 py-2.5 border border-gray-300 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
             >
-              Batal
-            </button>
+              {<LocalizedText text={"\r\n              Batal\r\n            "} />}</button>
             <button
               type="submit"
               disabled={loading || compressing}
               className="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
             >
-              {loading ? 'Menyimpan...' : compressing ? 'Mengompres...' : isEdit ? 'Simpan Perubahan' : 'Tambah Produk'}
+              {loading ? <LocalizedText text={"Menyimpan..."} /> : compressing ? <LocalizedText text={"Mengompres..."} /> : isEdit ? <LocalizedText text={"Simpan Perubahan"} /> : <LocalizedText text={"Tambah Produk"} />}
             </button>
           </div>
         </form>

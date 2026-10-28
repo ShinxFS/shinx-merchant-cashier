@@ -1,8 +1,10 @@
 'use client'
+import { LocalizedText, translateText, useLanguage } from '@/lib/language'
+
 
 import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { formatRupiah } from '@/lib/utils'
+import { useCurrency } from '@/lib/currency'
 import { useRole } from '@/lib/useRole'
 import { Plus, Pencil, Trash2, Package, PackagePlus, Search, Download, Upload, X } from 'lucide-react'
 import ProductFormModal from '@/components/products/ProductFormModal'
@@ -30,7 +32,10 @@ interface Product {
 }
 
 export default function ProductsPage() {
+  const localizedLanguage = useLanguage().language
+
   const supabase = createClient()
+  const { formatCurrency } = useCurrency()
   const { isOwner } = useRole()
   const fileInputRef = useRef<HTMLInputElement>(null)
   
@@ -49,7 +54,7 @@ export default function ProductsPage() {
   const load = async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
-      setLoadError('Sesi login tidak ditemukan. Silakan masuk kembali.')
+      setLoadError(translateText("Sesi login tidak ditemukan. Silakan masuk kembali.", localizedLanguage))
       setLoading(false)
       return
     }
@@ -87,7 +92,7 @@ export default function ProductsPage() {
   )
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Hapus produk ini?')) return
+    if (!confirm(translateText("Hapus produk ini?", localizedLanguage))) return
     await supabase.from('products').delete().eq('id', id)
     setProducts(prev => prev.filter(p => p.id !== id))
   }
@@ -98,7 +103,7 @@ export default function ProductsPage() {
 
     const quantity = Number(restockQuantity)
     if (!Number.isSafeInteger(quantity) || quantity <= 0) {
-      setRestockError('Masukkan jumlah restock berupa bilangan bulat lebih dari 0.')
+      setRestockError(translateText("Masukkan jumlah restock berupa bilangan bulat lebih dari 0.", localizedLanguage))
       return
     }
 
@@ -111,7 +116,7 @@ export default function ProductsPage() {
       .single()
 
     if (fetchError || !currentProduct) {
-      setRestockError('Gagal mengambil stok terbaru. Coba lagi.')
+      setRestockError(translateText("Gagal mengambil stok terbaru. Coba lagi.", localizedLanguage))
       setRestockLoading(false)
       return
     }
@@ -123,7 +128,7 @@ export default function ProductsPage() {
       .eq('id', restockProduct.id)
 
     if (updateError) {
-      setRestockError('Gagal menyimpan stok. Coba lagi.')
+      setRestockError(translateText("Gagal menyimpan stok. Coba lagi.", localizedLanguage))
       setRestockLoading(false)
       return
     }
@@ -157,7 +162,7 @@ export default function ProductsPage() {
   // LOGIKA EXPORT TO CSV (DENGAN GAMBAR)
   // ==========================================
   const exportToCSV = () => {
-    if (products.length === 0) return alert("Belum ada data produk untuk di-export.")
+    if (products.length === 0) return alert(translateText("Belum ada data produk untuk di-export.", localizedLanguage))
 
     // Struktur header menyertakan gambar_url di akhir kolom
     const headers = ['nama_produk', 'sku_barcode', 'harga_modal', 'harga_jual', 'stok', 'satuan', 'gambar_url']
@@ -205,7 +210,7 @@ export default function ProductsPage() {
       const lines = text.split('\n').map(line => line.trim()).filter(line => line)
       
       const dataLines = lines.slice(1) // Lewati baris header
-      if (dataLines.length === 0) return alert("File CSV kosong atau format salah.")
+      if (dataLines.length === 0) return alert(translateText("File CSV kosong atau format salah.", localizedLanguage))
 
       setLoading(true)
       
@@ -239,11 +244,11 @@ export default function ProductsPage() {
 
         if (error) throw error
 
-        alert(`Berhasil mengimpor ${productsToInsert.length} produk beserta gambarnya!`)
+        alert(`${translateText("Berhasil mengimpor ", localizedLanguage)}${productsToInsert.length}${translateText(" produk beserta gambarnya!", localizedLanguage)}`)
         load()
 
       } catch (err: any) {
-        alert("Gagal mengimpor produk: " + err.message)
+        alert(translateText("Gagal mengimpor produk: ", localizedLanguage) + err.message)
       } finally {
         setLoading(false)
         if (fileInputRef.current) fileInputRef.current.value = '' 
@@ -258,8 +263,8 @@ export default function ProductsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Produk</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{products.length} produk terdaftar</p>
+          <h1 className="text-xl font-bold text-gray-900">{<LocalizedText text={"Produk"} />}</h1>
+          <p className="text-sm text-gray-500 mt-0.5">{products.length} {<LocalizedText text={" produk terdaftar"} />}</p>
         </div>
         
         {/* Kontainer Tombol Aksi */}
@@ -270,8 +275,7 @@ export default function ProductsPage() {
             className="flex items-center gap-2 bg-white border border-gray-200 text-gray-800 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
           >
             <Download size={16} />
-            Export CSV
-          </button>
+            {<LocalizedText text={"\r\n            Export CSV\r\n          "} />}</button>
 
           {/* Tombol Import & Tambah Produk diproteksi hanya untuk Owner */}
           {isOwner && (
@@ -289,16 +293,14 @@ export default function ProductsPage() {
                 className="flex items-center gap-2 bg-white border border-gray-200 text-gray-800 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
 >
                <Upload size={16} />
-                Import CSV
-              </button>
+                {<LocalizedText text={"\r\n                Import CSV\r\n              "} />}</button>
 
               <button
                 onClick={() => { setEditProduct(null); setShowModal(true) }}
                 className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-indigo-700 transition-colors"
               >
                 <Plus size={16} />
-                Tambah Produk
-              </button>
+                {<LocalizedText text={"\r\n                Tambah Produk\r\n              "} />}</button>
             </>
           )}
         </div>
@@ -310,7 +312,7 @@ export default function ProductsPage() {
         <input
           value={search}
           onChange={e => setSearch(e.target.value)}
-          placeholder="Cari nama atau SKU..."
+          placeholder={translateText("Cari nama atau SKU...", localizedLanguage)}
           className="w-full pl-9 pr-4 py-2.5 border border-gray-200 text-gray-900 placeholder-gray-400 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
         />
       </div>
@@ -318,11 +320,11 @@ export default function ProductsPage() {
       {/* Notifikasi stok menipis */}
       {products.filter(p => p.stock <= 5 && p.stock > 0).length > 0 && (
         <div className="mb-4 bg-orange-50 border border-orange-200 rounded-xl px-4 py-3">
-          <p className="text-sm font-semibold text-orange-700 mb-1">⚠️ Stok Menipis</p>
+          <p className="text-sm font-semibold text-orange-700 mb-1">{<LocalizedText text={"⚠️ Stok Menipis"} />}</p>
           <div className="flex flex-wrap gap-2">
             {products.filter(p => p.stock <= 5 && p.stock > 0).map(p => (
               <span key={p.id} className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-lg">
-                {p.name} — sisa {p.stock} {p.unit}
+                {p.name} {<LocalizedText text={" — sisa "} />}{p.stock} {p.unit}
               </span>
             ))}
           </div>
@@ -332,7 +334,7 @@ export default function ProductsPage() {
       {/* Notifikasi stok habis */}
       {products.filter(p => p.stock === 0).length > 0 && (
         <div className="stock-out-alert mb-4 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-          <p className="text-sm font-semibold text-red-700 mb-1">🚫 Stok Habis</p>
+          <p className="text-sm font-semibold text-red-700 mb-1">{<LocalizedText text={"🚫 Stok Habis"} />}</p>
           <div className="flex flex-wrap gap-2">
             {products.filter(p => p.stock === 0).map(p => (
               <span key={p.id} className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded-lg">
@@ -345,16 +347,16 @@ export default function ProductsPage() {
 
       {/* Tabel */}
       {loading ? (
-        <div className="text-center py-16 text-gray-400 text-sm">Memuat produk...</div>
+        <div className="text-center py-16 text-gray-400 text-sm">{<LocalizedText text={"Memuat produk..."} />}</div>
       ) : loadError ? (
         <div className="text-center py-16 text-sm text-red-600">
-          Gagal memuat produk: {loadError}
+          {<LocalizedText text={"\r\n          Gagal memuat produk: "} />}{loadError}
         </div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-16">
           <Package size={40} className="text-gray-200 mx-auto mb-3" />
           <p className="text-gray-400 text-sm">
-            {products.length === 0 ? 'Belum ada produk. Tambah produk pertama kamu!' : 'Produk tidak ditemukan'}
+            {products.length === 0 ? <LocalizedText text={"Belum ada produk. Tambah produk pertama kamu!"} /> : <LocalizedText text={"Produk tidak ditemukan"} />}
           </p>
         </div>
       ) : (
@@ -362,12 +364,12 @@ export default function ProductsPage() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50">
-                <th className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3">Produk</th>
-                <th className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3 hidden sm:table-cell">Kategori</th>
-                <th className="text-right text-xs font-semibold text-gray-500 uppercase px-4 py-3">Harga</th>
-                <th className="text-right text-xs font-semibold text-gray-500 uppercase px-4 py-3 hidden md:table-cell">Stok</th>
+                <th className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3">{<LocalizedText text={"Produk"} />}</th>
+                <th className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3 hidden sm:table-cell">{<LocalizedText text={"Kategori"} />}</th>
+                <th className="text-right text-xs font-semibold text-gray-500 uppercase px-4 py-3">{<LocalizedText text={"Harga"} />}</th>
+                <th className="text-right text-xs font-semibold text-gray-500 uppercase px-4 py-3 hidden md:table-cell">{<LocalizedText text={"Stok"} />}</th>
                 {isOwner && (
-                  <th className="text-right text-xs font-semibold text-gray-500 uppercase px-4 py-3">Aksi</th>
+                  <th className="text-right text-xs font-semibold text-gray-500 uppercase px-4 py-3">{<LocalizedText text={"Aksi"} />}</th>
                 )}
               </tr>
             </thead>
@@ -379,14 +381,14 @@ export default function ProductsPage() {
                       <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center overflow-hidden flex-shrink-0">
                         {product.image_url
                           ? <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
-                          : <span className="text-lg">🛍️</span>
+                          : <span className="text-lg">{<LocalizedText text={"🛍️"} />}</span>
                         }
                       </div>
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="text-sm font-medium text-gray-800">{product.name}</p>
                           <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${product.is_active ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                            {product.is_active ? 'Aktif' : 'Nonaktif'}
+                            {product.is_active ? <LocalizedText text={"Aktif"} /> : <LocalizedText text={"Nonaktif"} />}
                           </span>
                         </div>
                         {product.sku && <p className="text-xs text-gray-400">{product.sku}</p>}
@@ -412,14 +414,14 @@ export default function ProductsPage() {
                           ))}
                       </div>
                     ) : (
-                      <span className="text-xs text-gray-300">—</span>
+                      <span className="text-xs text-gray-300">{<LocalizedText text={"—"} />}</span>
                     )}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <p className="text-sm font-semibold text-gray-800">{formatRupiah(product.price)}</p>
+                    <p className="text-sm font-semibold text-gray-800">{formatCurrency(product.price)}</p>
                   </td>
                   <td className="px-4 py-3 text-right hidden md:table-cell">
-                    <span className={`text-sm font-medium ${product.stock <= 5 ? 'text-red-500' : 'text-gray-700'}`}>
+                    <span className={`text-sm font-medium ${product.stock <= 5 ? "text-red-500" : "text-gray-700"}`}>
                       {product.stock} {product.unit}
                     </span>
                   </td>
@@ -432,24 +434,24 @@ export default function ProductsPage() {
                             setRestockQuantity('')
                             setRestockError('')
                           }}
-                          aria-label={`Restock ${product.name}`}
-                          title="Restock"
+                          aria-label={`${translateText('Tambah stok ', localizedLanguage)}${product.name}`}
+                          title={translateText("Restock", localizedLanguage)}
                           className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
                         >
                           <PackagePlus size={15} />
                         </button>
                         <button
                           onClick={() => handleEdit(product)}
-                          aria-label={`Edit ${product.name}`}
-                          title="Edit produk"
+                          aria-label={`${translateText('Edit ', localizedLanguage)}${product.name}`}
+                          title={translateText("Edit produk", localizedLanguage)}
                           className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
                         >
                           <Pencil size={15} />
                         </button>
                         <button
                           onClick={() => handleDelete(product.id)}
-                          aria-label={`Hapus ${product.name}`}
-                          title="Hapus produk"
+                          aria-label={`${translateText('Hapus ', localizedLanguage)}${product.name}`}
+                          title={translateText("Hapus produk", localizedLanguage)}
                           className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                         >
                           <Trash2 size={15} />
@@ -476,12 +478,12 @@ export default function ProductsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-sm overflow-hidden rounded-2xl bg-white">
             <div className="sticky top-0 flex items-center justify-between border-b border-gray-100 bg-white px-6 py-4">
-              <h2 className="font-bold text-gray-900">Restock Barang</h2>
+              <h2 className="font-bold text-gray-900">{<LocalizedText text={"Restock Barang"} />}</h2>
               <button
                 type="button"
                 onClick={closeRestockModal}
                 disabled={restockLoading}
-                aria-label="Tutup restock barang"
+                aria-label={translateText("Tutup restock barang", localizedLanguage)}
                 className="text-gray-400 hover:text-gray-600 disabled:opacity-50"
               >
                 <X size={20} />
@@ -490,17 +492,17 @@ export default function ProductsPage() {
 
             <form onSubmit={handleRestock} className="space-y-4 p-6">
               <div>
-                <p className="text-xs font-semibold uppercase text-gray-500">Detail Produk:</p>
+                <p className="text-xs font-semibold uppercase text-gray-500">{<LocalizedText text={"Detail Produk:"} />}</p>
                 <p className="mt-1 text-sm text-gray-700">{restockProduct.name}</p>
               </div>
 
               <div className="rounded-lg bg-gray-50 p-3 text-sm">
                 <div className="flex justify-between text-gray-600">
-                  <span>Jumlah saat ini</span>
+                  <span>{<LocalizedText text={"Jumlah saat ini"} />}</span>
                   <span>{restockProduct.stock} {restockProduct.unit}</span>
                 </div>
                 <div className="mt-2 flex justify-between font-semibold text-gray-900">
-                  <span>Jumlah setelah restock</span>
+                  <span>{<LocalizedText text={"Jumlah setelah restock"} />}</span>
                   <span>
                     {restockProduct.stock + (Number(restockQuantity) || 0)} {restockProduct.unit}
                   </span>
@@ -508,8 +510,7 @@ export default function ProductsPage() {
               </div>
 
               <label className="block text-sm font-medium text-gray-700">
-                Jumlah tambahan
-                <input
+                {<LocalizedText text={"\r\n                Jumlah tambahan\r\n                "} />}<input
                   type="number"
                   min="1"
                   step="1"
@@ -517,7 +518,7 @@ export default function ProductsPage() {
                   autoFocus
                   value={restockQuantity}
                   onChange={e => setRestockQuantity(e.target.value)}
-                  placeholder={`Jumlah dalam ${restockProduct.unit}`}
+                  placeholder={`${translateText('Jumlah dalam ', localizedLanguage)}${restockProduct.unit}`}
                   className="mt-1.5 w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </label>
@@ -531,14 +532,13 @@ export default function ProductsPage() {
                   disabled={restockLoading}
                   className="flex-1 rounded-xl border border-gray-300 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
                 >
-                  Batal
-                </button>
+                  {<LocalizedText text={"\r\n                  Batal\r\n                "} />}</button>
                 <button
                   type="submit"
                   disabled={restockLoading}
                   className="flex-1 rounded-xl bg-indigo-600 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:opacity-50"
                 >
-                  {restockLoading ? 'Menyimpan...' : 'Simpan'}
+                  {restockLoading ? <LocalizedText text={"Menyimpan..."} /> : <LocalizedText text={"Simpan"} />}
                 </button>
               </div>
             </form>

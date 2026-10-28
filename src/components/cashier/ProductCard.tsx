@@ -1,4 +1,7 @@
-import { formatRupiah } from '@/lib/utils'
+
+import { LocalizedText } from '@/lib/language'
+
+import { useCurrency } from '@/lib/currency'
 import { Plus } from 'lucide-react'
 
 interface Product {
@@ -21,6 +24,7 @@ export default function ProductCard({
   onAdd: (product: Product) => void
   compactMode?: boolean
 }) {
+  const { formatCurrency } = useCurrency()
   const outOfStock = product.stock <= 0
 
   return (
@@ -40,7 +44,7 @@ export default function ProductCard({
           {product.image_url ? (
             <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
           ) : (
-            <span className="text-2xl">🛍️</span>
+            <span className="text-2xl">{<LocalizedText text={"🛍️"} />}</span>
           )}
         </div>
       )}
@@ -70,15 +74,15 @@ export default function ProductCard({
 
       <div className={`flex items-center justify-between gap-1 ${compactMode ? 'mt-1' : 'mt-2'}`}>
         <p className={`${compactMode ? 'text-xs sm:text-sm' : 'text-sm'} font-bold text-indigo-600`}>
-          {formatRupiah(product.price)}
+          {formatCurrency(product.price)}
         </p>
         <div className="flex items-center gap-1">
           {outOfStock ? (
-            <span className="text-xs text-red-400">Habis</span>
+            <span className="text-xs text-red-400">{<LocalizedText text={"Habis"} />}</span>
           ) : (
             <>
-              <span className={`text-xs text-gray-400 ${compactMode ? 'hidden sm:inline' : ''}`}>
-                Stok {product.stock}
+              <span className={`text-xs text-gray-400 ${compactMode ? "hidden sm:inline" : ""}`}>
+                {<LocalizedText text={"\r\n                Stok "} />}{product.stock}
               </span>
               <div className="w-5 h-5 bg-indigo-600 rounded-full flex items-center justify-center">
                 <Plus size={12} className="text-white" />
