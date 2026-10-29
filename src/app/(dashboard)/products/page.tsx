@@ -283,6 +283,7 @@ export default function ProductsPage() {
   return (
     <div className="p-6 max-w-5xl mx-auto">
 
+      <div className="sticky top-0 z-30 -mx-6 -mt-6 bg-gray-50 px-6 pb-4 pt-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
@@ -354,7 +355,7 @@ export default function ProductsPage() {
       </div>
 
       {products.length > 0 && (
-        <div className="scrollbar-thin mb-4 flex items-center gap-2 overflow-x-auto pb-1">
+        <div className="scrollbar-thin mb-0 flex items-center gap-2 overflow-x-auto pb-1">
           <button
             type="button"
             onClick={() => setActiveCategory('all')}
@@ -425,6 +426,7 @@ export default function ProductsPage() {
           })}
         </div>
       )}
+      </div>
 
       {/* Notifikasi stok menipis */}
       {products.filter(p => p.stock <= 5 && p.stock > 0).length > 0 && (
