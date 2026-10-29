@@ -42,6 +42,8 @@ export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [search, setSearch] = useState('')
+  const [activeCategory, setActiveCategory] = useState('all')
+  const [stockFilter, setStockFilter] = useState<'all' | 'low' | 'out'>('all')
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [compactView, setCompactView] = useState(false)
@@ -87,10 +89,30 @@ export default function ProductsPage() {
 
   useEffect(() => { load() }, [])
 
-  const filtered = products.filter(p =>
-    p.name.toLowerCase().includes(search.toLowerCase()) ||
-    p.sku?.toLowerCase().includes(search.toLowerCase())
-  )
+  const productCategories = Array.from(
+    new Map(
+      products
+        .flatMap(product => [product.category, product.category2])
+        .filter((category): category is Category => !!category)
+        .map(category => [category.id, category])
+    ).values()
+  ).sort((a, b) => a.name.localeCompare(b.name))
+
+  const filtered = products.filter(product => {
+    const matchesSearch =
+      product.name.toLowerCase().includes(search.toLowerCase()) ||
+      !!product.sku?.toLowerCase().includes(search.toLowerCase())
+    const matchesCategory =
+      activeCategory === 'all' ||
+      product.category_id === activeCategory ||
+      product.category_id_2 === activeCategory
+    const matchesStock =
+      stockFilter === 'all' ||
+      (stockFilter === 'low' && product.stock > 0 && product.stock <= 5) ||
+      (stockFilter === 'out' && product.stock <= 0)
+
+    return matchesSearch && matchesCategory && matchesStock
+  })
 
   const handleDelete = async (id: string) => {
     if (!confirm(translateText("Hapus produk ini?", localizedLanguage))) return
@@ -330,6 +352,79 @@ export default function ProductsPage() {
           className="w-full pl-9 pr-4 py-2.5 border border-gray-200 text-gray-900 placeholder-gray-400 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
         />
       </div>
+
+      {products.length > 0 && (
+        <div className="scrollbar-thin mb-4 flex items-center gap-2 overflow-x-auto pb-1">
+          <button
+            type="button"
+            onClick={() => setActiveCategory('all')}
+            aria-pressed={activeCategory === 'all'}
+            className={`flex-shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors ${
+              activeCategory === 'all'
+                ? 'border-indigo-300 bg-indigo-50 text-indigo-700'
+                : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            <LocalizedText text="Semua" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setStockFilter(value => value === 'out' ? 'all' : 'out')}
+            aria-pressed={stockFilter === 'out'}
+            className={`flex flex-shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors ${
+              stockFilter === 'out'
+                ? 'border-red-300 bg-red-50 text-red-700'
+                : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            <span className={`h-1.5 w-1.5 rounded-full ${stockFilter === 'out' ? 'bg-red-500' : 'bg-gray-400'}`} />
+            <LocalizedText text="Stok Habis" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setStockFilter(value => value === 'low' ? 'all' : 'low')}
+            aria-pressed={stockFilter === 'low'}
+            className={`flex flex-shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors ${
+              stockFilter === 'low'
+                ? 'border-orange-300 bg-orange-50 text-orange-700'
+                : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            <span className={`h-1.5 w-1.5 rounded-full ${stockFilter === 'low' ? 'bg-orange-500' : 'bg-gray-400'}`} />
+            <LocalizedText text="Stok Menipis" />
+          </button>
+          {productCategories.length > 0 && (
+            <span aria-hidden="true" className="mx-1 h-5 flex-shrink-0 border-l border-gray-200" />
+          )}
+          {productCategories.map(category => {
+            const isActive = activeCategory === category.id
+            return (
+              <button
+                key={category.id}
+                type="button"
+                onClick={() => setActiveCategory(category.id)}
+                aria-pressed={isActive}
+                className={`flex flex-shrink-0 items-center gap-1.5 rounded-full border bg-white px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors ${
+                  isActive
+                    ? ''
+                    : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                }`}
+                style={isActive ? {
+                  borderColor: `${category.color}80`,
+                  backgroundColor: `${category.color}14`,
+                  color: category.color,
+                } : undefined}
+              >
+                <span
+                  className="h-2 w-2 flex-shrink-0 rounded-full"
+                  style={{ backgroundColor: category.color || '#9ca3af' }}
+                />
+                {category.name}
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       {/* Notifikasi stok menipis */}
       {products.filter(p => p.stock <= 5 && p.stock > 0).length > 0 && (

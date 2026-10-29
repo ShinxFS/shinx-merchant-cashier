@@ -115,6 +115,8 @@ const translations: Array<[string, string]> = [
   ['⚠️ Stok Menipis', '⚠️ Low Stock'],
   ['— sisa', '— left'],
   ['🚫 Stok Habis', '🚫 Out of Stock'],
+  ['Stok Habis', 'Out of Stock'],
+  ['Stok Menipis', 'Low Stock'],
   ['Memuat produk...', 'Loading products...'],
   ['Gagal memuat produk:', 'Failed to load products:'],
   ['Harga', 'Price'],
