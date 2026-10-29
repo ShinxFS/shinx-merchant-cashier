@@ -6,7 +6,7 @@ import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useCurrency } from '@/lib/currency'
 import { useRole } from '@/lib/useRole'
-import { Plus, Pencil, Trash2, Package, PackagePlus, Search, Download, Upload, X } from 'lucide-react'
+import { Plus, Pencil, Trash2, Package, PackagePlus, Search, Download, Upload, X, Grid2X2, List } from 'lucide-react'
 import ProductFormModal from '@/components/products/ProductFormModal'
 
 interface Category {
@@ -44,6 +44,7 @@ export default function ProductsPage() {
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
+  const [compactView, setCompactView] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [editProduct, setEditProduct] = useState<Product | null>(null)
   const [restockProduct, setRestockProduct] = useState<Product | null>(null)
@@ -269,6 +270,19 @@ export default function ProductsPage() {
         
         {/* Kontainer Tombol Aksi */}
         <div className="flex items-center gap-2 self-end sm:self-auto">
+          <button
+            type="button"
+            onClick={() => setCompactView(value => !value)}
+            aria-label={translateText(compactView ? 'Tampilan Tabel' : 'Tampilan Ringkas', localizedLanguage)}
+            title={translateText(compactView ? 'Tampilan Tabel' : 'Tampilan Ringkas', localizedLanguage)}
+            className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium text-gray-800 transition-colors hover:bg-gray-50"
+          >
+            {compactView ? <List size={16} /> : <Grid2X2 size={16} />}
+            <span className="hidden sm:inline">
+              <LocalizedText text={compactView ? 'Tampilan Tabel' : 'Tampilan Ringkas'} />
+            </span>
+          </button>
+
           {/* Tombol Export bisa diakses oleh Owner maupun Staff */}
           <button 
             onClick={exportToCSV}
@@ -360,6 +374,93 @@ export default function ProductsPage() {
           </p>
         </div>
       ) : (
+        compactView ? (
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {filtered.map(product => (
+              <article key={product.id} className="flex min-w-0 items-center justify-between gap-2 rounded-xl border border-gray-200 bg-white px-2.5 py-2">
+                <div className="flex min-w-0 flex-1 items-center gap-2">
+                  <div className="h-9 w-9 flex-shrink-0 overflow-hidden rounded-lg bg-gray-100">
+                    {product.image_url ? (
+                      <img src={product.image_url} alt={product.name} className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full items-center justify-center">
+                        <Package size={18} className="text-gray-300" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex min-w-0 items-center gap-1">
+                      <h2 className="truncate text-[11px] font-semibold text-gray-800 sm:text-xs" title={product.name}>{product.name}</h2>
+                      <span className={`flex-shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-medium ${product.is_active ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                        {product.is_active ? <LocalizedText text={"Aktif"} /> : <LocalizedText text={"Nonaktif"} />}
+                      </span>
+                    </div>
+                    <div className="mt-0.5 flex min-w-0 items-center gap-1 overflow-hidden">
+                      {product.sku && <span className="hidden max-w-20 truncate text-[9px] text-gray-400 xl:block">{product.sku}</span>}
+                      {[product.category, product.category2]
+                        .filter((category): category is Category => !!category)
+                        .map(category => (
+                          <span
+                            key={category.id}
+                            className="max-w-16 flex-shrink-0 truncate rounded-md px-1 py-0.5 text-[9px] font-medium"
+                            style={{ backgroundColor: `${category.color}20`, color: category.color }}
+                          >
+                            {category.name}
+                          </span>
+                        ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-shrink-0 items-center gap-1.5 sm:gap-2.5">
+                  <div className="min-w-0 text-right">
+                    <p className="truncate text-[10px] font-semibold text-gray-800 sm:text-xs">{formatCurrency(product.price)}</p>
+                  </div>
+                  <div className="hidden flex-shrink-0 border-l border-gray-100 pl-1.5 text-right sm:block sm:pl-2">
+                    <p className={`text-[10px] font-medium sm:text-xs ${product.stock <= 5 ? 'text-red-500' : 'text-gray-700'}`}>
+                      {product.stock} {product.unit}
+                    </p>
+                  </div>
+                  {isOwner && (
+                    <div className="flex flex-shrink-0 items-center gap-0.5 border-l border-gray-100 pl-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRestockProduct(product)
+                          setRestockQuantity('')
+                          setRestockError('')
+                        }}
+                        aria-label={`${translateText('Tambah stok ', localizedLanguage)}${product.name}`}
+                        title={translateText("Restock", localizedLanguage)}
+                        className="rounded-lg p-1 text-gray-400 transition-colors hover:bg-green-50 hover:text-green-600"
+                      >
+                        <PackagePlus size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleEdit(product)}
+                        aria-label={`${translateText('Edit ', localizedLanguage)}${product.name}`}
+                        title={translateText("Edit produk", localizedLanguage)}
+                        className="rounded-lg p-1 text-gray-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600"
+                      >
+                        <Pencil size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(product.id)}
+                        aria-label={`${translateText('Hapus ', localizedLanguage)}${product.name}`}
+                        title={translateText("Hapus produk", localizedLanguage)}
+                        className="rounded-lg p-1 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <table className="w-full">
             <thead>
@@ -464,6 +565,7 @@ export default function ProductsPage() {
             </tbody>
           </table>
         </div>
+        )
       )}
 
       {showModal && (

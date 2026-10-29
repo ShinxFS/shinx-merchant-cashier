@@ -651,7 +651,7 @@ export default function SettingsPage() {
                 <button
                   type="button"
                   onClick={() => void handleDeletePaymentAccount(account.id)}
-                  className="text-gray-300 hover:text-red-400 transition-colors"
+                  className="text-gray-400 hover:text-indigo-600 transition-colors"
                   aria-label={`${translateText('Hapus rekening ', localizedLanguage)}${account.bank_name}`}
                 >
                   <Trash2 size={15} />
@@ -910,7 +910,7 @@ export default function SettingsPage() {
                       type="button"
                       aria-label={`${translateText('Hapus kategori ', localizedLanguage)}${cat.name}`}
                       onClick={() => handleDeleteCategory(cat.id)}
-                      className="text-gray-300 transition-colors hover:text-red-400"
+                      className="text-gray-400 transition-colors hover:text-indigo-600"
                     >
                       <Trash2 size={15} />
                     </button>

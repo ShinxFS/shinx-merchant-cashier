@@ -15,6 +15,8 @@ const LANGUAGE_STORAGE_KEY = 'shinx-language'
 
 const translations: Array<[string, string]> = [
   ['Masuk ke akun kamu', 'Sign in to your account'],
+  ['Masuk', 'Sign in'],
+  ['Memuat...', 'Loading...'],
   ['Belum punya akun?', "Don't have an account?"],
   ['Daftar sekarang', 'Sign up now'],
   ['Buat Akun Baru', 'Create a New Account'],
@@ -381,6 +383,8 @@ const translations: Array<[string, string]> = [
   ['Pemilik', 'Owner'],
   ['Pajak (', 'Tax ('],
   ['Produk tidak ditemukan', 'No products found'],
+  ['Tampilan Ringkas', 'Compact View'],
+  ['Tampilan Tabel', 'Table View'],
   ['Proses', 'Process'],
   ['Rekening:', 'Account:'],
   ['Rincian order', 'Order details'],

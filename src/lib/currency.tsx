@@ -38,15 +38,14 @@ export function isCurrencyCode(value: string): value is CurrencyCode {
 }
 
 export function formatCurrency(amount: number, currency: CurrencyCode = 'IDR') {
-  const maximumFractionDigits = new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency,
-  }).resolvedOptions().maximumFractionDigits
+  const fractionDigits = currency === 'IDR'
+    ? { minimumFractionDigits: 0, maximumFractionDigits: 0 }
+    : {}
 
   return new Intl.NumberFormat('id-ID', {
     style: 'currency',
     currency,
-    maximumFractionDigits,
+    ...fractionDigits,
   }).format(amount)
 }
 
