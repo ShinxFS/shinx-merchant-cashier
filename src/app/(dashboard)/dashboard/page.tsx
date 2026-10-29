@@ -210,6 +210,13 @@ export default function DashboardPage() {
     { label: 'Pendapatan Bulan Ini', value: formatCurrency(stats.monthRevenue), icon: TrendingUp, color: 'text-indigo-600', bg: 'bg-indigo-50' },
   ]
 
+  const paymentMethodLabels: Record<string, string> = {
+    cash: 'Tunai',
+    transfer: 'Transfer',
+    ewallet: 'E-Wallet',
+    qris: 'QRIS',
+  }
+
   const cashflowCards = [
     { label: 'Pendapatan', value: cashflow.revenue, icon: Banknote, color: 'text-indigo-600', bg: 'bg-indigo-50' },
     { label: 'Pengeluaran', value: cashflow.expenses, icon: TrendingDown, color: 'text-red-600', bg: 'bg-red-50' },
@@ -248,7 +255,7 @@ export default function DashboardPage() {
               <Icon size={18} className={color} />
             </div>
             <p className="text-2xl font-bold text-gray-900">{value}</p>
-            <p className="text-xs text-gray-500 mt-0.5">{label}</p>
+            <p className="text-xs text-gray-500 mt-0.5"><LocalizedText text={label} /></p>
           </div>
         ))}
       </div>
@@ -298,7 +305,7 @@ export default function DashboardPage() {
                 <p className={`text-lg font-bold ${label === 'Laba Bersih' && cashflow.netProfit < 0 ? "text-red-600" : "text-gray-900"}`}>
                   {formatCurrency(value)}
                 </p>
-                <p className="text-xs text-gray-500 mt-0.5">{label}</p>
+                <p className="text-xs text-gray-500 mt-0.5"><LocalizedText text={label} /></p>
               </div>
             ))}
           </div>
@@ -327,7 +334,9 @@ export default function DashboardPage() {
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-semibold text-gray-900">{formatCurrency(tx.total)}</p>
-                  <p className="text-xs text-gray-400 capitalize mt-0.5">{tx.payment_method}</p>
+                  <p className="text-xs text-gray-400 capitalize mt-0.5">
+                    {translateText(paymentMethodLabels[tx.payment_method] ?? tx.payment_method, localizedLanguage)}
+                  </p>
                 </div>
               </div>
             ))}

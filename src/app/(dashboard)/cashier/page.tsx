@@ -532,7 +532,9 @@ export default function CashierPage() {
 
   // Keranjang meja yang sedang aktif
   const cart = carts[activeTable] ?? []
-  const activeLabel = activeTable === 'takeaway' ? 'Bawa Pulang' : `Meja ${activeTable}`
+  const activeLabel = activeTable === 'takeaway'
+    ? translateText('Bawa Pulang', localizedLanguage)
+    : `${translateText('Meja ', localizedLanguage)}${activeTable}`
   const visibleTables = tables
 
   const setActiveCart = (updater: (prev: CartItemType[]) => CartItemType[]) =>
@@ -1127,7 +1129,7 @@ export default function CashierPage() {
           <div className="px-3 py-3 border-b border-gray-100 flex flex-col gap-2">
             <div className="flex flex-wrap items-center gap-1.5">
               {[
-                { key: 'takeaway', label: 'Bawa Pulang', canDelete: false },
+                { key: 'takeaway', label: translateText('Bawa Pulang', localizedLanguage), canDelete: false },
                 ...visibleTables.map(t => ({ key: String(t), label: `${translateText('Meja ', localizedLanguage)}${t}`, canDelete: true })),
               ].map(({ key, label, canDelete }) => {
                 const isActive = activeTable === key

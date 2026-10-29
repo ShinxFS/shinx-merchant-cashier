@@ -28,7 +28,7 @@ interface TableOrder {
 }
 
 export default function TableOrdersPage() {
-  const localizedLanguage = useLanguage().language
+  const { language: localizedLanguage, ready: languageReady } = useLanguage()
 
   const supabase = createClient()
   const { formatCurrency } = useCurrency()
@@ -100,6 +100,30 @@ export default function TableOrdersPage() {
     )
   }, [orders, search])
 
+  const localizeCustomerName = (name: string) => {
+    const match = name.match(/^Pelanggan Meja (\d+)$/)
+    return match
+      ? `${translateText('Pelanggan Meja', localizedLanguage)} ${match[1]}`
+      : name
+  }
+
+  const localizeOrderNote = (note: string) => {
+    const qrOrderMatch = note.match(/^Order via QR Meja (\d+)( - menunggu konfirmasi pembayaran QRIS)?(.*)$/)
+    if (qrOrderMatch) {
+      const paymentStatus = qrOrderMatch[2]
+        ? ` - ${translateText('menunggu konfirmasi pembayaran QRIS', localizedLanguage)}`
+        : ''
+      return `${translateText('Order via QR Meja', localizedLanguage)} ${qrOrderMatch[1]}${paymentStatus}${qrOrderMatch[3]}`
+    }
+
+    const cashierOrderMatch = note.match(/^Order dari meja (\d+)$/)
+    if (cashierOrderMatch) {
+      return `${translateText('Order dari meja', localizedLanguage)} ${cashierOrderMatch[1]}`
+    }
+
+    return note
+  }
+
   const statusMeta: Record<TableOrder['status'], { label: string; className: string; icon: any }> = {
     pending: { label: 'Menunggu', className: 'bg-amber-100 text-amber-700 border border-amber-200', icon: Clock3 },
     processing: { label: 'Diproses', className: 'bg-blue-100 text-blue-700 border border-blue-200', icon: CircleDashed },
@@ -114,6 +138,14 @@ export default function TableOrdersPage() {
   const deleteOrder = async (id: string) => {
     if (!confirm(translateText("Hapus order meja ini?", localizedLanguage))) return
     await supabase.from('table_orders').delete().eq('id', id)
+  }
+
+  if (!languageReady) {
+    return (
+      <div aria-busy="true" className="flex h-full items-center justify-center">
+        <div aria-hidden="true" className="h-6 w-6 animate-spin rounded-full border-2 border-gray-200 border-t-indigo-600" />
+      </div>
+    )
   }
 
   return (
@@ -155,7 +187,7 @@ export default function TableOrdersPage() {
                     </div>
                     <div>
                       <p className="font-semibold text-gray-900">{<LocalizedText text={"Meja "} />}{order.table_number}</p>
-                      <p className="text-xs text-gray-500">{order.customer_name}</p>
+                      <p className="text-xs text-gray-500">{localizeCustomerName(order.customer_name)}</p>
                     </div>
                   </div>
 
@@ -212,7 +244,7 @@ export default function TableOrdersPage() {
                 {order.note && (
                   <div className="mt-3 flex items-center gap-2 text-xs text-gray-500 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                     <Bell size={13} className="text-amber-600" />
-                    {order.note}
+                    {localizeOrderNote(order.note)}
                   </div>
                 )}
               </div>

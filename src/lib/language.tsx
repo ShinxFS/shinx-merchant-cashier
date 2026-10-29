@@ -23,7 +23,11 @@ const translations: Array<[string, string]> = [
   ['Sudah punya akun?', 'Already have an account?'],
   ['Masuk di sini', 'Sign in here'],
   ['Dashboard', 'Dashboard'],
+  ['Bawa Pulang', 'Takeaway'],
   ['Selamat datang kembali,', 'Welcome back,'],
+  ['Transaksi Hari Ini', "Today's Transactions"],
+  ['Total Produk Aktif', 'Active Products'],
+  ['Pendapatan Bulan Ini', 'Revenue This Month'],
   ['Gagal memuat dashboard:', 'Failed to load dashboard:'],
   ['Arus Kas Masuk/Keluar', 'Cash Inflow/Outflow'],
   ['Ringkasan pendapatan, biaya, dan laba bersih', 'Summary of revenue, expenses, and net profit'],
@@ -197,6 +201,10 @@ const translations: Array<[string, string]> = [
   ['Email *', 'Email *'],
   ['Password *', 'Password *'],
   ['Order Meja', 'Table Orders'],
+  ['Pelanggan Meja', 'Customer at Table'],
+  ['Order via QR Meja', 'QR order for Table'],
+  ['menunggu konfirmasi pembayaran QRIS', 'awaiting QRIS payment confirmation'],
+  ['Order dari meja', 'Order from table'],
   ['pesanan aktif', 'active orders'],
   ['Memuat daftar order meja...', 'Loading table orders...'],
   ['Belum ada pesanan meja.', 'No table orders yet.'],
@@ -820,7 +828,7 @@ export function LanguageToggle({ localOnly = false }: { localOnly?: boolean }) {
   return (
     <div>
       <div
-        className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-1"
+        className="inline-flex rounded-lg border border-gray-200 bg-white p-1"
         role="group"
         aria-label={language === 'id' ? 'Pilih bahasa toko' : 'Select store language'}
       >
