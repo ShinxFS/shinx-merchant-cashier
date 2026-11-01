@@ -441,7 +441,7 @@ export default function ProductsPage() {
             type="button"
             onClick={() => setActiveCategory('all')}
             aria-pressed={activeCategory === 'all'}
-            className={`flex-shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors ${
+            className={`flex-shrink-0 rounded-lg border px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors ${
               activeCategory === 'all'
                 ? 'border-indigo-300 bg-indigo-50 text-indigo-700'
                 : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
@@ -453,7 +453,7 @@ export default function ProductsPage() {
             type="button"
             onClick={() => setStockFilter(value => value === 'out' ? 'all' : 'out')}
             aria-pressed={stockFilter === 'out'}
-            className={`flex flex-shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors ${
+            className={`flex flex-shrink-0 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors ${
               stockFilter === 'out'
                 ? 'border-red-300 bg-red-50 text-red-700'
                 : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
@@ -466,7 +466,7 @@ export default function ProductsPage() {
             type="button"
             onClick={() => setStockFilter(value => value === 'low' ? 'all' : 'low')}
             aria-pressed={stockFilter === 'low'}
-            className={`flex flex-shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors ${
+            className={`flex flex-shrink-0 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors ${
               stockFilter === 'low'
                 ? 'border-orange-300 bg-orange-50 text-orange-700'
                 : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
@@ -486,7 +486,7 @@ export default function ProductsPage() {
                 type="button"
                 onClick={() => setActiveCategory(category.id)}
                 aria-pressed={isActive}
-                className={`flex flex-shrink-0 items-center gap-1.5 rounded-full border bg-white px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors ${
+                className={`flex flex-shrink-0 items-center gap-1.5 rounded-lg border bg-white px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors ${
                   isActive
                     ? ''
                     : 'border-gray-200 text-gray-600 hover:bg-gray-50'

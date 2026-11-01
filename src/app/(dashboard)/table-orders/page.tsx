@@ -37,6 +37,8 @@ export default function TableOrdersPage() {
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [userId, setUserId] = useState<string>('')
+  const [updatingOrderIds, setUpdatingOrderIds] = useState<Set<string>>(new Set())
+  const [actionError, setActionError] = useState('')
 
   useEffect(() => {
     const load = async () => {
@@ -133,7 +135,30 @@ export default function TableOrdersPage() {
   }
 
   const updateStatus = async (id: string, status: TableOrder['status']) => {
-    await supabase.from('table_orders').update({ status }).eq('id', id)
+    const previousOrder = orders.find(order => order.id === id)
+    if (!previousOrder || previousOrder.status === status || updatingOrderIds.has(id)) return
+
+    setActionError('')
+    setUpdatingOrderIds(prev => new Set(prev).add(id))
+    setOrders(prev => prev.map(order => order.id === id ? { ...order, status } : order))
+
+    const { error } = await supabase
+      .from('table_orders')
+      .update({ status })
+      .eq('id', id)
+
+    if (error) {
+      setOrders(prev => prev.map(order => (
+        order.id === id ? { ...order, status: previousOrder.status } : order
+      )))
+      setActionError(`${translateText('Gagal mengubah status pesanan:', localizedLanguage)} ${error.message}`)
+    }
+
+    setUpdatingOrderIds(prev => {
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
   }
 
   const deleteOrder = async (id: string) => {
@@ -167,6 +192,12 @@ export default function TableOrdersPage() {
           />
         </div>
       </div>
+
+      {actionError && (
+        <div role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {actionError}
+        </div>
+      )}
 
       {loading ? (
         <div className="text-center text-sm text-gray-400 py-16">{<LocalizedText text={"Memuat daftar order meja..."} />}</div>
@@ -234,11 +265,14 @@ export default function TableOrdersPage() {
                         <button
                           key={status}
                           onClick={() => updateStatus(order.id, status)}
+                          disabled={updatingOrderIds.has(order.id)}
+                          aria-pressed={order.status === status}
+                          aria-busy={updatingOrderIds.has(order.id)}
                           className={`text-[10px] font-medium rounded-lg px-2 py-2 transition-colors ${
                             order.status === status
                               ? statusMeta[status].className
                               : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-100'
-                          }`}
+                          } disabled:cursor-wait disabled:opacity-60`}
                         >
                           <LocalizedText text={statusMeta[status].label} />
                         </button>

@@ -33,6 +33,19 @@ interface Props {
   onClose: () => void
 }
 
+interface ProductFormState {
+  name: string
+  sku: string
+  price: number | string
+  cost_price: number | string
+  stock: number | string
+  unit: string
+  category_id: string
+  category_id_2: string
+  is_active: boolean
+  image_url: string
+}
+
 // Fungsi compress gambar pakai Canvas
 const compressImage = (file: File, quality = 0.75): Promise<File> => {
   return new Promise((resolve) => {
@@ -85,12 +98,12 @@ export default function ProductFormModal({ product, categories, onClose }: Props
   const supabase = createClient()
   const isEdit = !!product
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<ProductFormState>({
     name: product?.name ?? '',
     sku: product?.sku ?? '',
-    price: product?.price ?? 0,
-    cost_price: product?.cost_price ?? 0,
-    stock: product?.stock ?? 0,
+    price: product ? product.price : '',
+    cost_price: product ? product.cost_price : '',
+    stock: product ? product.stock : '',
     unit: product?.unit ?? 'pcs',
     category_id: product?.category_id ?? '',
     category_id_2: product?.category_id_2 ?? '',
@@ -310,6 +323,7 @@ export default function ProductFormModal({ product, categories, onClose }: Props
                 step="any"
                 value={form.price}
                 onChange={e => set('price', e.target.value)}
+                placeholder={translateText('0', localizedLanguage)}
                 className={inputClass}
               />
             </div>
@@ -321,6 +335,7 @@ export default function ProductFormModal({ product, categories, onClose }: Props
                 step="any"
                 value={form.cost_price}
                 onChange={e => set('cost_price', e.target.value)}
+                placeholder={translateText('0', localizedLanguage)}
                 className={inputClass}
               />
             </div>
@@ -336,6 +351,7 @@ export default function ProductFormModal({ product, categories, onClose }: Props
                 min={0}
                 value={form.stock}
                 onChange={e => set('stock', e.target.value)}
+                placeholder={translateText('0', localizedLanguage)}
                 className={inputClass}
               />
             </div>
