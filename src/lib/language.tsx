@@ -39,6 +39,8 @@ const translations: Array<[string, string]> = [
   ['Baru', 'New'],
   ['Gagal memuat dashboard:', 'Failed to load dashboard:'],
   ['Gagal mengubah status pesanan:', 'Failed to update order status:'],
+  ['Gagal menghapus pesanan:', 'Failed to delete order:'],
+  ['Pesanan tidak ditemukan atau tidak dapat dihapus.', 'The order was not found or could not be deleted.'],
   ['Arus Kas Keluar/Masuk', 'Cash Inflow/Outflow'],
   ['Ringkasan pendapatan, biaya, dan laba bersih', 'Summary of revenue, expenses, and net profit'],
   ['Hari ini', 'Today'],

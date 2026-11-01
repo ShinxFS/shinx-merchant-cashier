@@ -343,7 +343,7 @@ export default function DashboardPage() {
                     positive ? 'bg-green-50 text-green-700' : negative ? 'bg-red-50 text-red-600' : 'bg-gray-100 text-gray-700'
                   }`}>
                     {positive
-                      ? <ArrowUpRight size={13} />
+                      ? <TrendingUp size={13} />
                       : negative
                         ? <TrendingDown size={13} />
                         : null}

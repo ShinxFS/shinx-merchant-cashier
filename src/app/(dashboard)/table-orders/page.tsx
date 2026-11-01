@@ -38,6 +38,7 @@ export default function TableOrdersPage() {
   const [loading, setLoading] = useState(true)
   const [userId, setUserId] = useState<string>('')
   const [updatingOrderIds, setUpdatingOrderIds] = useState<Set<string>>(new Set())
+  const [deletingOrderIds, setDeletingOrderIds] = useState<Set<string>>(new Set())
   const [actionError, setActionError] = useState('')
 
   useEffect(() => {
@@ -163,7 +164,47 @@ export default function TableOrdersPage() {
 
   const deleteOrder = async (id: string) => {
     if (!confirm(translateText("Hapus order meja ini?", localizedLanguage))) return
-    await supabase.from('table_orders').delete().eq('id', id)
+
+    const previousIndex = orders.findIndex(order => order.id === id)
+    const previousOrder = orders[previousIndex]
+    if (!previousOrder || deletingOrderIds.has(id)) return
+
+    setActionError('')
+    setDeletingOrderIds(prev => new Set(prev).add(id))
+    setOrders(prev => prev.filter(order => order.id !== id))
+
+    const restoreOrder = () => {
+      setOrders(prev => prev.some(order => order.id === id)
+        ? prev
+        : [...prev.slice(0, Math.min(previousIndex, prev.length)), previousOrder, ...prev.slice(Math.min(previousIndex, prev.length))])
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('table_orders')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', userId)
+        .select('id')
+        .maybeSingle()
+
+      if (error || !data) {
+        restoreOrder()
+        setActionError(error
+          ? `${translateText('Gagal menghapus pesanan:', localizedLanguage)} ${error.message}`
+          : translateText('Pesanan tidak ditemukan atau tidak dapat dihapus.', localizedLanguage))
+      }
+    } catch (error) {
+      restoreOrder()
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      setActionError(`${translateText('Gagal menghapus pesanan:', localizedLanguage)} ${errorMessage}`)
+    } finally {
+      setDeletingOrderIds(prev => {
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
+    }
   }
 
   if (!languageReady) {
@@ -230,7 +271,9 @@ export default function TableOrdersPage() {
                     </div>
                     <button
                       onClick={() => deleteOrder(order.id)}
-                      className="inline-flex items-center gap-1.5 text-red-500 hover:text-red-600 text-xs font-medium px-2.5 py-1.5 rounded-lg hover:bg-red-50 transition-colors"
+                      disabled={deletingOrderIds.has(order.id)}
+                      aria-busy={deletingOrderIds.has(order.id)}
+                      className="inline-flex items-center gap-1.5 text-red-500 hover:text-red-600 text-xs font-medium px-2.5 py-1.5 rounded-lg hover:bg-red-50 transition-colors disabled:cursor-wait disabled:opacity-60"
                     >
                       <Trash2 size={12} />
                       {<LocalizedText text={"\r\n                      Hapus\r\n                    "} />}</button>
