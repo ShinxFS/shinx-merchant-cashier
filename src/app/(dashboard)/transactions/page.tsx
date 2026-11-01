@@ -211,6 +211,7 @@ export default function TransactionsPage() {
   const handleDelete = async (id: string, invoiceNumber: string) => {
     if (!confirm(`${translateText("Hapus invoice ", localizedLanguage)}${invoiceNumber}${translateText("? Aksi ini tidak bisa dibatalkan.", localizedLanguage)}`)) return
 
+    const deletedTransaction = transactions.find(transaction => transaction.id === id)
     const { error: itemsError } = await supabase.from('transaction_items').delete().eq('transaction_id', id)
     if (itemsError) {
       setError(itemsError.message)
@@ -225,6 +226,19 @@ export default function TransactionsPage() {
 
     setTransactions(prev => prev.filter(t => t.id !== id))
     setTotalCount(prev => Math.max(0, prev - 1))
+    if (deletedTransaction) {
+      const deletedAt = new Date(deletedTransaction.created_at)
+      const todayStart = new Date()
+      todayStart.setHours(0, 0, 0, 0)
+      const tomorrowStart = new Date(todayStart)
+      tomorrowStart.setDate(tomorrowStart.getDate() + 1)
+
+      if (deletedAt >= todayStart && deletedAt < tomorrowStart) {
+        const { labaBersih } = calcProfit(deletedTransaction)
+        setTodayTotal(prev => Math.max(0, prev - deletedTransaction.total))
+        setTodayLabaBersih(prev => prev - labaBersih)
+      }
+    }
     if (transactions.length === 1 && page > 0) setPage(prev => prev - 1)
   }
 
@@ -382,7 +396,7 @@ export default function TransactionsPage() {
                   {isOwner && (
                     <button
                       onClick={() => handleDelete(tx.id, tx.invoice_number)}
-                      className="text-gray-300 hover:text-red-400 transition-colors ml-1 flex-shrink-0"
+                      className="ml-1 flex-shrink-0 text-gray-400 transition-colors hover:text-indigo-600"
                     >
                       <Trash2 size={16} />
                     </button>

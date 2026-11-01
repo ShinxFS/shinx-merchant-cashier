@@ -221,16 +221,16 @@ export default function CartItem({
             aria-expanded={noteOpen}
             title={translateText(item.note?.trim() ? 'Edit catatan' : 'Tambah catatan', localizedLanguage)}
             className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition-colors ${
-              item.note?.trim() || noteOpen
-                ? 'text-indigo-600'
-                : 'text-gray-500 hover:text-gray-700'
+              item.note?.trim()
+                ? 'text-indigo-600 hover:bg-indigo-50'
+                : 'text-gray-400 hover:text-indigo-600'
             }`}
           >
             <Pencil size={12} />
           </button>
           <button
             onClick={() => onRemove(item.id)}
-            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600"
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-gray-400 transition-colors hover:text-indigo-600"
           >
             <Trash2 size={12} />
           </button>
