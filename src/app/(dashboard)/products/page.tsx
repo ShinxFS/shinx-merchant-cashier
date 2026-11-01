@@ -280,10 +280,91 @@ export default function ProductsPage() {
     reader.readAsText(file)
   }
 
+  const renderCompactProduct = (product: Product) => (
+    <article
+      key={product.id}
+      className="flex min-w-0 items-center gap-2 px-3 py-2 transition-colors hover:bg-gray-50 sm:gap-4 sm:px-4"
+    >
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        <div className="h-8 w-8 flex-shrink-0 overflow-hidden rounded-lg bg-gray-100">
+          {product.image_url ? (
+            <img src={product.image_url} alt={product.name} className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full items-center justify-center">
+              <Package size={16} className="text-gray-300" />
+            </div>
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <h2 className="truncate text-xs font-medium text-gray-800" title={product.name}>{product.name}</h2>
+          <div className="mt-0.5 flex min-w-0 items-center gap-1 overflow-hidden">
+            <span className={`flex-shrink-0 rounded-full px-1 py-0.5 text-[8px] font-medium ${product.is_active ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+              {product.is_active ? <LocalizedText text={"Aktif"} /> : <LocalizedText text={"Nonaktif"} />}
+            </span>
+            {product.sku && <span className="max-w-16 truncate text-[9px] text-gray-400">{product.sku}</span>}
+            {[product.category, product.category2]
+              .filter((category): category is Category => !!category)
+              .map(category => (
+                <span
+                  key={category.id}
+                  className="max-w-16 flex-shrink-0 truncate rounded-md px-1 py-0.5 text-[9px] font-medium"
+                  style={{ backgroundColor: `${category.color}20`, color: category.color }}
+                >
+                  {category.name}
+                </span>
+              ))}
+          </div>
+        </div>
+      </div>
+
+      <p className="w-16 flex-shrink-0 text-right text-[11px] font-semibold text-gray-800 sm:w-20 sm:text-xs">
+        {formatCurrency(product.price)}
+      </p>
+      <p className={`hidden w-14 flex-shrink-0 border-l border-gray-100 pl-2 text-right text-[11px] font-medium sm:block sm:text-xs ${product.stock <= 5 ? 'text-red-500' : 'text-gray-700'}`}>
+        {product.stock} {product.unit}
+      </p>
+      {isOwner && (
+        <div className="flex flex-shrink-0 items-center gap-0.5 border-l border-gray-100 pl-1 sm:pl-2">
+          <button
+            type="button"
+            onClick={() => {
+              setRestockProduct(product)
+              setRestockQuantity('')
+              setRestockError('')
+            }}
+            aria-label={`${translateText('Tambah stok ', localizedLanguage)}${product.name}`}
+            title={translateText("Restock", localizedLanguage)}
+            className="rounded-lg p-1 text-gray-400 transition-colors hover:bg-green-50 hover:text-green-600"
+          >
+            <PackagePlus size={14} />
+          </button>
+          <button
+            type="button"
+            onClick={() => handleEdit(product)}
+            aria-label={`${translateText('Edit ', localizedLanguage)}${product.name}`}
+            title={translateText("Edit produk", localizedLanguage)}
+            className="rounded-lg p-1 text-gray-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600"
+          >
+            <Pencil size={14} />
+          </button>
+          <button
+            type="button"
+            onClick={() => handleDelete(product.id)}
+            aria-label={`${translateText('Hapus ', localizedLanguage)}${product.name}`}
+            title={translateText("Hapus produk", localizedLanguage)}
+            className="rounded-lg p-1 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500"
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
+      )}
+    </article>
+  )
+
   return (
     <div className="p-6 max-w-5xl mx-auto">
 
-      <div className="sticky top-0 z-30 -mx-6 -mt-6 bg-gray-50 px-6 pb-4 pt-6">
+      <div className="sticky top-0 z-30 relative -mx-6 -mt-6 bg-gray-50 px-6 pb-4 pt-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
@@ -472,90 +553,19 @@ export default function ProductsPage() {
         </div>
       ) : (
         compactView ? (
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            {filtered.map(product => (
-              <article key={product.id} className="flex min-w-0 items-center justify-between gap-2 rounded-xl border border-gray-200 bg-white px-2.5 py-2">
-                <div className="flex min-w-0 flex-1 items-center gap-2">
-                  <div className="h-9 w-9 flex-shrink-0 overflow-hidden rounded-lg bg-gray-100">
-                    {product.image_url ? (
-                      <img src={product.image_url} alt={product.name} className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="flex h-full items-center justify-center">
-                        <Package size={18} className="text-gray-300" />
-                      </div>
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex min-w-0 items-center gap-1">
-                      <h2 className="truncate text-[11px] font-semibold text-gray-800 sm:text-xs" title={product.name}>{product.name}</h2>
-                      <span className={`flex-shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-medium ${product.is_active ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                        {product.is_active ? <LocalizedText text={"Aktif"} /> : <LocalizedText text={"Nonaktif"} />}
-                      </span>
-                    </div>
-                    <div className="mt-0.5 flex min-w-0 items-center gap-1 overflow-hidden">
-                      {product.sku && <span className="hidden max-w-20 truncate text-[9px] text-gray-400 xl:block">{product.sku}</span>}
-                      {[product.category, product.category2]
-                        .filter((category): category is Category => !!category)
-                        .map(category => (
-                          <span
-                            key={category.id}
-                            className="max-w-16 flex-shrink-0 truncate rounded-md px-1 py-0.5 text-[9px] font-medium"
-                            style={{ backgroundColor: `${category.color}20`, color: category.color }}
-                          >
-                            {category.name}
-                          </span>
-                        ))}
-                    </div>
-                  </div>
+          <div>
+            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white divide-y divide-gray-100 md:hidden">
+              {filtered.map(renderCompactProduct)}
+            </div>
+            <div className="hidden gap-x-3 md:grid md:grid-cols-2">
+              {[0, 1].map(column => (
+                <div key={column} className="overflow-hidden rounded-xl border border-gray-200 bg-white divide-y divide-gray-100">
+                  {filtered
+                    .filter((_, index) => index % 2 === column)
+                    .map(renderCompactProduct)}
                 </div>
-
-                <div className="flex flex-shrink-0 items-center gap-1.5 sm:gap-2.5">
-                  <div className="min-w-0 text-right">
-                    <p className="truncate text-[10px] font-semibold text-gray-800 sm:text-xs">{formatCurrency(product.price)}</p>
-                  </div>
-                  <div className="hidden flex-shrink-0 border-l border-gray-100 pl-1.5 text-right sm:block sm:pl-2">
-                    <p className={`text-[10px] font-medium sm:text-xs ${product.stock <= 5 ? 'text-red-500' : 'text-gray-700'}`}>
-                      {product.stock} {product.unit}
-                    </p>
-                  </div>
-                  {isOwner && (
-                    <div className="flex flex-shrink-0 items-center gap-0.5 border-l border-gray-100 pl-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setRestockProduct(product)
-                          setRestockQuantity('')
-                          setRestockError('')
-                        }}
-                        aria-label={`${translateText('Tambah stok ', localizedLanguage)}${product.name}`}
-                        title={translateText("Restock", localizedLanguage)}
-                        className="rounded-lg p-1 text-gray-400 transition-colors hover:bg-green-50 hover:text-green-600"
-                      >
-                        <PackagePlus size={14} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleEdit(product)}
-                        aria-label={`${translateText('Edit ', localizedLanguage)}${product.name}`}
-                        title={translateText("Edit produk", localizedLanguage)}
-                        className="rounded-lg p-1 text-gray-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600"
-                      >
-                        <Pencil size={14} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(product.id)}
-                        aria-label={`${translateText('Hapus ', localizedLanguage)}${product.name}`}
-                        title={translateText("Hapus produk", localizedLanguage)}
-                        className="rounded-lg p-1 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </article>
-            ))}
+              ))}
+            </div>
           </div>
         ) : (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">

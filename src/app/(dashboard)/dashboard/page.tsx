@@ -25,6 +25,8 @@ interface Stats {
   todayTransactions: number
   totalProducts: number
   monthRevenue: number
+  yesterdayRevenue: number
+  previousMonthRevenue: number
 }
 
 interface RecentTransaction {
@@ -61,6 +63,8 @@ export default function DashboardPage() {
     todayTransactions: 0,
     totalProducts: 0,
     monthRevenue: 0,
+    yesterdayRevenue: 0,
+    previousMonthRevenue: 0,
   })
   const [recent, setRecent] = useState<RecentTransaction[]>([])
   const [businessName, setBusinessName] = useState('')
@@ -86,6 +90,13 @@ export default function DashboardPage() {
         tomorrowStart.setDate(tomorrowStart.getDate() + 1)
         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
         const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+        const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+        const previousMonthDay = Math.min(
+          now.getDate(),
+          new Date(now.getFullYear(), now.getMonth(), 0).getDate(),
+        )
+        const previousMonthComparableEnd = new Date(previousMonthStart)
+        previousMonthComparableEnd.setDate(previousMonthDay + 1)
 
         const cashflowStart = new Date(now)
         if (cashflowPeriod === 'today') {
@@ -106,7 +117,7 @@ export default function DashboardPage() {
         }
         cashflowEnd.setHours(0, 0, 0, 0)
 
-        const queryStart = new Date(Math.min(monthStart.getTime(), cashflowStart.getTime()))
+        const queryStart = new Date(Math.min(previousMonthStart.getTime(), cashflowStart.getTime()))
         const queryEnd = new Date(Math.max(nextMonthStart.getTime(), cashflowEnd.getTime()))
         const formatLocalDate = (date: Date) => {
           const year = date.getFullYear()
@@ -115,9 +126,31 @@ export default function DashboardPage() {
           return `${year}-${month}-${day}`
         }
 
+        const fetchTransactions = async () => {
+          const pageSize = 1000
+          const rows: DashboardTransaction[] = []
+          let from = 0
+
+          while (true) {
+            const { data, error } = await supabase.from('transactions')
+              .select('id, invoice_number, total, payment_method, created_at, transaction_items(cost_price, quantity)')
+              .eq('user_id', user.id)
+              .gte('created_at', queryStart.toISOString())
+              .lt('created_at', queryEnd.toISOString())
+              .order('created_at', { ascending: false })
+              .order('id', { ascending: false })
+              .range(from, from + pageSize - 1)
+
+            if (error) throw error
+            rows.push(...(data ?? []))
+            if (!data || data.length < pageSize) return rows
+            from += pageSize
+          }
+        }
+
         const [
           { data: profile, error: profileError },
-          { data: transactions, error: transactionsError },
+          transactions,
           { data: expenses, error: expensesError },
           { count: productCount, error: productsError },
         ] = await Promise.all([
@@ -125,12 +158,7 @@ export default function DashboardPage() {
             .select('business_name')
             .eq('id', user.id)
             .single(),
-          supabase.from('transactions')
-            .select('id, invoice_number, total, payment_method, created_at, transaction_items(cost_price, quantity)')
-            .eq('user_id', user.id)
-            .gte('created_at', queryStart.toISOString())
-            .lt('created_at', queryEnd.toISOString())
-            .order('created_at', { ascending: false }),
+          fetchTransactions(),
           supabase.from('expenses')
             .select('amount, date')
             .eq('user_id', user.id)
@@ -141,13 +169,12 @@ export default function DashboardPage() {
             .eq('user_id', user.id)
             .eq('is_active', true),
         ])
-
         if (profileError) throw profileError
-        if (transactionsError) throw transactionsError
+        if (profileError) throw profileError
         if (expensesError) throw expensesError
         if (productsError) throw productsError
 
-        const transactionRows: DashboardTransaction[] = transactions ?? []
+        const transactionRows = transactions
         const expenseRows: DashboardExpense[] = expenses ?? []
         const inRangeTransactions = transactionRows.filter(transaction => {
           const createdAt = new Date(transaction.created_at).getTime()
@@ -170,9 +197,24 @@ export default function DashboardPage() {
           const createdAt = new Date(transaction.created_at).getTime()
           return createdAt >= todayStart.getTime() && createdAt < tomorrowStart.getTime()
         })
+        const yesterdayStart = new Date(todayStart)
+        yesterdayStart.setDate(yesterdayStart.getDate() - 1)
+        const yesterdayRevenue = transactionRows.reduce((sum, transaction) => {
+          const createdAt = new Date(transaction.created_at).getTime()
+          return createdAt >= yesterdayStart.getTime()
+            && createdAt < todayStart.getTime()
+            ? sum + transaction.total
+            : sum
+        }, 0)
         const monthRevenue = transactionRows.reduce((sum, transaction) => {
           const createdAt = new Date(transaction.created_at).getTime()
           return createdAt >= monthStart.getTime() && createdAt < nextMonthStart.getTime()
+            ? sum + transaction.total
+            : sum
+        }, 0)
+        const previousMonthRevenue = transactionRows.reduce((sum, transaction) => {
+          const createdAt = new Date(transaction.created_at).getTime()
+          return createdAt >= previousMonthStart.getTime() && createdAt < previousMonthComparableEnd.getTime()
             ? sum + transaction.total
             : sum
         }, 0)
@@ -184,6 +226,8 @@ export default function DashboardPage() {
           todayTransactions: todayTransactions.length,
           totalProducts: productCount ?? 0,
           monthRevenue,
+          yesterdayRevenue,
+          previousMonthRevenue,
         })
         setCashflow({ revenue, expenses: expensesTotal, cogs, netProfit: revenue - cogs - expensesTotal })
         setRecent(transactionRows.slice(0, 5))
@@ -260,6 +304,70 @@ export default function DashboardPage() {
         ))}
       </div>
 
+      {/* Sales Comparison */}
+      <section className="mb-8 overflow-hidden rounded-xl border border-gray-200 bg-white">
+        <div className="grid sm:grid-cols-2">
+          {([
+            {
+              label: 'Perbandingan Penjualan Harian',
+              currentLabel: 'Hari ini',
+              previousLabel: 'Kemarin',
+              current: stats.todayRevenue,
+              previous: stats.yesterdayRevenue,
+            },
+            {
+              label: 'Perbandingan Penjualan Bulanan',
+              currentLabel: 'Bulan ini',
+              previousLabel: 'Bulan lalu',
+              current: stats.monthRevenue,
+              previous: stats.previousMonthRevenue,
+            },
+          ] as const).map(comparison => {
+            const change = comparison.current - comparison.previous
+            const percentChange = comparison.previous > 0
+              ? (change / comparison.previous) * 100
+              : null
+            const positive = change > 0
+            const negative = change < 0
+
+            return (
+              <div
+                key={comparison.label}
+                className="px-4 py-3 first:border-b first:border-gray-200 sm:first:border-b-0 sm:first:border-r sm:first:border-gray-200"
+              >
+                <div className="mb-2 flex items-center justify-between gap-2 border-b border-gray-200 pb-2">
+                  <h3 className="text-sm font-medium text-gray-800">
+                    <LocalizedText text={comparison.label} />
+                  </h3>
+                  <span className={`inline-flex flex-shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-medium ${
+                    positive ? 'bg-green-50 text-green-700' : negative ? 'bg-red-50 text-red-600' : 'bg-gray-100 text-gray-700'
+                  }`}>
+                    {positive
+                      ? <ArrowUpRight size={13} />
+                      : negative
+                        ? <TrendingDown size={13} />
+                        : null}
+                    {percentChange === null
+                      ? comparison.current > 0
+                        ? <LocalizedText text="Baru" />
+                        : '0%'
+                      : `${positive ? '+' : ''}${percentChange.toFixed(1)}%`}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2">
+                  <div className="pr-3">
+                    <p className="text-xs text-gray-500"><LocalizedText text={comparison.currentLabel} /> <span className="text-gray-300">·</span> <span className="font-semibold text-gray-900">{formatCurrency(comparison.current)}</span></p>
+                  </div>
+                  <div className="border-l border-gray-200 pl-3">
+                    <p className="text-xs text-gray-500"><LocalizedText text={comparison.previousLabel} /> <span className="text-gray-300">·</span> <span className="font-semibold text-gray-900">{formatCurrency(comparison.previous)}</span></p>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </section>
+
       {/* Cash Flow */}
       <div className="bg-white rounded-xl border border-gray-200 mb-8">
         <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between gap-4">
@@ -269,7 +377,7 @@ export default function DashboardPage() {
               {<LocalizedText text={"\r\n              Ringkasan pendapatan, biaya, dan laba bersih\r\n            "} />}</p>
           </div>
           <div className="flex items-center gap-2">
-            <div className={`overflow-hidden transition-all duration-300 ease-out ${cashflowVisible ? 'max-w-40 opacity-100' : 'max-w-0 opacity-0'}`}>
+            <div className={`overflow-hidden transition-all duration-500 ease-in-out ${cashflowVisible ? 'max-w-40 opacity-100' : 'max-w-0 opacity-0'}`}>
               <select
                 value={cashflowPeriod}
                 onChange={e => setCashflowPeriod(e.target.value as CashflowPeriod)}
@@ -290,13 +398,13 @@ export default function DashboardPage() {
               aria-label={cashflowVisible ? translateText("Sembunyikan Cash Flow", localizedLanguage) : translateText("Tampilkan Cash Flow", localizedLanguage)}
               title={cashflowVisible ? translateText("Sembunyikan Cash Flow", localizedLanguage) : translateText("Tampilkan Cash Flow", localizedLanguage)}
             >
-              <span className="transition-transform duration-300 ease-out">{cashflowVisible ? <EyeOff size={15} /> : <Eye size={15} />}</span>
+              <span className="transition-transform duration-500 ease-in-out">{cashflowVisible ? <EyeOff size={15} /> : <Eye size={15} />}</span>
               <span className="hidden sm:inline">{cashflowVisible ? <LocalizedText text={"Sembunyikan"} /> : <LocalizedText text={"Tampilkan"} />}</span>
             </button>
           </div>
         </div>
-        <div className={`overflow-hidden transition-all duration-300 ease-out ${cashflowVisible ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'}`}>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 p-5 translate-y-0 transition-transform duration-300 ease-out">
+        <div className={`overflow-hidden transition-all duration-500 ease-in-out ${cashflowVisible ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'}`}>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 p-5 translate-y-0 transition-transform duration-500 ease-in-out">
             {cashflowCards.map(({ label, value, icon: Icon, color, bg }) => (
               <div key={label} className="rounded-xl border border-gray-200 p-4">
                 <div className={`w-8 h-8 ${bg} rounded-lg flex items-center justify-center mb-3`}>

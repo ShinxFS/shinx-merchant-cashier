@@ -58,7 +58,7 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 w-full max-w-md p-8">
-        <div className="mb-5 flex justify-end">
+        <div className="mb-5 flex justify-start">
           <LanguageToggle localOnly />
         </div>
 
