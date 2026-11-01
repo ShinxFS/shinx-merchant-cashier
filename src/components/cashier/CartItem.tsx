@@ -4,7 +4,7 @@ import { LocalizedText, translateText, useLanguage } from '@/lib/language'
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useCurrency } from '@/lib/currency'
-import { Minus, Plus, Trash2 } from 'lucide-react'
+import { Minus, Pencil, Plus, Trash2 } from 'lucide-react'
 
 export interface CartItemType {
   id: string
@@ -13,6 +13,7 @@ export interface CartItemType {
   quantity: number
   stock: number
   image_url?: string | null
+  note?: string
 }
 
 export default function CartItem({
@@ -20,18 +21,21 @@ export default function CartItem({
   onIncrease,
   onDecrease,
   onSetQuantity,
+  onNoteChange,
   onRemove,
 }: {
   item: CartItemType
   onIncrease: (id: string, isRepeat?: boolean) => void
   onDecrease: (id: string, isRepeat?: boolean) => void
   onSetQuantity: (id: string, quantity: number) => void
+  onNoteChange: (id: string, note: string) => void
   onRemove: (id: string) => void
 }) {
   const localizedLanguage = useLanguage().language
   const { formatCurrency } = useCurrency()
   const [editingQuantity, setEditingQuantity] = useState(false)
   const [quantityDraft, setQuantityDraft] = useState('')
+  const [noteOpen, setNoteOpen] = useState(false)
   const holdDelayRef = useRef<number | null>(null)
   const repeatIntervalRef = useRef<number | null>(null)
   const holdActivatedRef = useRef(false)
@@ -126,7 +130,7 @@ export default function CartItem({
     <div className="flex items-center gap-3 py-3 border-b border-gray-100 last:border-0">
 
       {/* Gambar */}
-      <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center overflow-hidden flex-shrink-0">
+      <div className="w-12 h-12 self-start rounded-lg bg-gray-100 flex items-center justify-center overflow-hidden flex-shrink-0">
         {item.image_url ? (
           <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
         ) : (
@@ -140,22 +144,32 @@ export default function CartItem({
         <p className="text-[12px] text-indigo-600 font-semibold mt-0.5">
           {formatCurrency(item.price)}
         </p>
+        {noteOpen && (
+          <textarea
+            value={item.note ?? ''}
+            onChange={event => onNoteChange(item.id, event.target.value)}
+            placeholder={translateText('Contoh: tanpa gula, es sedikit...', localizedLanguage)}
+            rows={2}
+            className="mt-2 w-full max-w-[60vw] resize-x rounded-md border border-gray-200 px-2 py-1.5 text-xs text-gray-800 placeholder:text-gray-400 focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+            aria-label={`${translateText('Catatan', localizedLanguage)} ${item.name}`}
+          />
+        )}
       </div>
 
       {/* Qty Control & Total */}
-      <div className="flex flex-col items-end gap-1.5">
+      <div className="flex flex-shrink-0 self-start flex-col items-end gap-1.5">
         <p className="text-[13px] font-bold text-gray-800">
           {formatCurrency(item.price * item.quantity)}
         </p>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1">
           <button
             onPointerDown={event => handlePointerDown(event, 'decrease')}
             onPointerUp={handlePointerUp}
             onPointerCancel={handlePointerCancel}
             onClick={() => handleQuantityClick('decrease')}
-            className="w-6 h-6 rounded-full border border-gray-400 bg-white flex items-center justify-center hover:bg-gray-100 text-gray-700 select-none touch-none"
+            className="w-5 h-5 rounded-full border border-gray-400 bg-white flex items-center justify-center hover:bg-gray-100 text-gray-700 select-none touch-none"
           >
-            <Minus size={10} />
+            <Minus size={9} />
           </button>
           {editingQuantity ? (
             <input
@@ -175,7 +189,7 @@ export default function CartItem({
                   setEditingQuantity(false)
                 }
               }}
-              className="h-6 w-10 border-b border-indigo-400 bg-white text-center text-[13px] font-semibold text-gray-800 focus:outline-none"
+              className="h-5 w-4 border-b border-indigo-400 bg-white text-center text-xs font-semibold text-gray-800 focus:outline-none"
             />
           ) : (
             <button
@@ -185,7 +199,7 @@ export default function CartItem({
                 setQuantityDraft(String(item.quantity))
                 setEditingQuantity(true)
               }}
-              className="h-6 w-5 bg-transparent p-0 text-center text-[13px] font-semibold text-gray-800 hover:text-indigo-600"
+              className="h-5 w-4 bg-transparent p-0 text-center text-xs font-semibold text-gray-800 hover:text-indigo-600"
             >
               {item.quantity}
             </button>
@@ -196,15 +210,29 @@ export default function CartItem({
             onPointerCancel={handlePointerCancel}
             onClick={() => handleQuantityClick('increase')}
             disabled={item.quantity >= item.stock}
-            className="w-6 h-6 rounded-full border border-gray-400 bg-white flex items-center justify-center hover:bg-gray-100 text-gray-700 disabled:opacity-40 select-none touch-none"
+            className="w-5 h-5 rounded-full border border-gray-400 bg-white flex items-center justify-center hover:bg-gray-100 text-gray-700 disabled:opacity-40 select-none touch-none"
           >
-            <Plus size={10} />
+            <Plus size={9} />
+          </button>
+          <button
+            type="button"
+            onClick={() => setNoteOpen(open => !open)}
+            aria-label={`${translateText(item.note?.trim() ? 'Edit catatan' : 'Tambah catatan', localizedLanguage)} ${item.name}`}
+            aria-expanded={noteOpen}
+            title={translateText(item.note?.trim() ? 'Edit catatan' : 'Tambah catatan', localizedLanguage)}
+            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition-colors ${
+              item.note?.trim() || noteOpen
+                ? 'text-indigo-600'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <Pencil size={12} />
           </button>
           <button
             onClick={() => onRemove(item.id)}
-            className="w-6 h-6 rounded-full flex items-center justify-center text-gray-300 hover:text-red-400 transition-colors ml-1"
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600"
           >
-            <Trash2 size={14} />
+            <Trash2 size={12} />
           </button>
         </div>
       </div>

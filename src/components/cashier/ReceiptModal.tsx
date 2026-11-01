@@ -12,6 +12,7 @@ interface ReceiptItem {
   quantity: number
   unit_price: number
   subtotal: number
+  note?: string | null
 }
 
 interface ReceiptData {
@@ -189,6 +190,11 @@ export default function ReceiptModal({
                     <span>{item.quantity}{<LocalizedText text={"x "} />}{formatCurrency(item.unit_price)}</span>
                     <span>{formatCurrency(item.subtotal)}</span>
                   </div>
+                  {item.note?.trim() && (
+                    <p className="pl-2 whitespace-pre-wrap break-words text-gray-600">
+                      <LocalizedText text="Catatan:" /> {item.note}
+                    </p>
+                  )}
                 </div>
               ))}
 

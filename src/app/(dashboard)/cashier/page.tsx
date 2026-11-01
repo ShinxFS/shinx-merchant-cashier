@@ -27,6 +27,7 @@ interface TableOrder {
     quantity: number
     price: number
     subtotal: number
+    note?: string | null
   }>
   note?: string | null
   created_at: string
@@ -52,6 +53,7 @@ interface ReceiptData {
     quantity: number
     unit_price: number
     subtotal: number
+    note?: string | null
   }>
   subtotal: number
   discount: number
@@ -540,6 +542,10 @@ export default function CashierPage() {
   const setActiveCart = (updater: (prev: CartItemType[]) => CartItemType[]) =>
     setCarts(prev => ({ ...prev, [activeTable]: updater(prev[activeTable] ?? []) }))
 
+  const setItemNote = (id: string, note: string) => {
+    setActiveCart(prev => prev.map(item => item.id === id ? { ...item, note } : item))
+  }
+
   const returnToTakeawayAfterEmptyCart = () => {
     if (activeTable === 'takeaway') return
 
@@ -674,6 +680,7 @@ export default function CashierPage() {
         quantity: item.quantity,
         price: item.price,
         subtotal: item.price * item.quantity,
+        note: item.note?.trim() || null,
       })),
       note: `Order dari meja ${activeTable}`,
     }
@@ -789,6 +796,7 @@ export default function CashierPage() {
           unit_price: item.price,
           cost_price: product?.cost_price ?? 0,
           subtotal: item.subtotal,
+          note: item.note?.trim() || null,
         }
       })
 
@@ -873,7 +881,7 @@ export default function CashierPage() {
       return
     }
 
-    await supabase.from('transaction_items').insert(
+    const { error: itemsError } = await supabase.from('transaction_items').insert(
       cart.map(i => {
         const product = products.find(p => p.id === i.id)
         return {
@@ -884,9 +892,23 @@ export default function CashierPage() {
           unit_price: i.price,
           cost_price: product?.cost_price ?? 0,
           subtotal: i.price * i.quantity,
+          note: i.note?.trim() || null,
         }
       })
     )
+
+    if (itemsError) {
+      const { error: rollbackError } = await supabase
+        .from('transactions')
+        .delete()
+        .eq('id', tx.id)
+      setPaymentLoading(false)
+      setSuccessMsg(rollbackError
+        ? `${translateText('Gagal menyimpan item transaksi:', localizedLanguage)} ${itemsError.message} ${translateText('Transaksi juga gagal dibatalkan:', localizedLanguage)} ${rollbackError.message}`
+        : `${translateText('Gagal menyimpan item transaksi:', localizedLanguage)} ${itemsError.message}`)
+      setTimeout(() => setSuccessMsg(''), 6000)
+      return
+    }
 
     for (const item of cart) {
       const product = products.find(p => p.id === item.id)
@@ -913,6 +935,7 @@ export default function CashierPage() {
         quantity: i.quantity,
         unit_price: i.price,
         subtotal: i.price * i.quantity,
+        note: i.note?.trim() || null,
       })),
       subtotal,
       discount,
@@ -1206,7 +1229,9 @@ export default function CashierPage() {
                       </span>
                     </div>
                     <p className="text-[11px] text-gray-500 mt-1">
-                      {order.items.slice(0, 2).map(item => `${item.name} x${item.quantity}`).join(', ')}
+                      {order.items.slice(0, 2).map(item => (
+                        `${item.name} x${item.quantity}${item.note?.trim() ? ` (${item.note.trim()})` : ''}`
+                      )).join(', ')}
                       {order.items.length > 2 ? <LocalizedText text={" ..."} /> : ""}
                     </p>
                     <div className="mt-2 flex items-center justify-between gap-2">
@@ -1254,6 +1279,7 @@ export default function CashierPage() {
                     onIncrease={increase}
                     onDecrease={decrease}
                     onSetQuantity={setQuantity}
+                    onNoteChange={setItemNote}
                     onRemove={remove}
                   />
                 ))}

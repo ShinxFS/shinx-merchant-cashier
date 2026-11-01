@@ -16,6 +16,7 @@ interface TransactionItem {
   unit_price: number
   cost_price: number
   subtotal: number
+  note?: string | null
 }
 
 interface Transaction {
@@ -404,7 +405,14 @@ export default function TransactionsPage() {
                       <tbody className="divide-y divide-gray-100">
                         {tx.transaction_items?.map(item => (
                           <tr key={item.id}>
-                            <td className="py-2 text-gray-700">{item.product_name}</td>
+                            <td className="py-2 text-gray-700">
+                              <p>{item.product_name}</p>
+                              {item.note?.trim() && (
+                                <p className="mt-0.5 whitespace-pre-wrap break-words text-xs text-gray-500">
+                                  <LocalizedText text="Catatan:" /> {item.note}
+                                </p>
+                              )}
+                            </td>
                             <td className="py-2 text-center text-gray-500">{item.quantity}{<LocalizedText text={"x"} />}</td>
                             {isOwner && (
                               <td className="py-2 text-right text-gray-400 text-xs">

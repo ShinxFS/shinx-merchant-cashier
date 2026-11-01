@@ -13,6 +13,7 @@ interface TableOrderItem {
   quantity: number
   price: number
   subtotal: number
+  note?: string | null
 }
 
 interface TableOrder {
@@ -208,9 +209,14 @@ export default function TableOrdersPage() {
                 <div className="mt-4 grid gap-3 md:grid-cols-[1.3fr_0.7fr]">
                   <div className="space-y-2">
                     {order.items.map(item => (
-                      <div key={item.id} className="flex items-center justify-between text-sm text-gray-700">
-                        <span>
-                          {item.name} <span className="text-gray-400">{<LocalizedText text={"x"} />}{item.quantity}</span>
+                      <div key={item.id} className="flex items-start justify-between gap-3 text-sm text-gray-700">
+                        <span className="min-w-0">
+                          <span>{item.name} <span className="text-gray-400">{<LocalizedText text={"x"} />}{item.quantity}</span></span>
+                          {item.note?.trim() && (
+                            <span className="mt-0.5 block whitespace-pre-wrap break-words text-xs text-gray-500">
+                              <LocalizedText text="Catatan:" /> {item.note}
+                            </span>
+                          )}
                         </span>
                         <span className="font-medium">{formatCurrency(item.subtotal)}</span>
                       </div>

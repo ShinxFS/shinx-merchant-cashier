@@ -338,7 +338,8 @@ create table if not exists public.transaction_items (
   quantity integer not null default 1,
   unit_price numeric not null default 0,
   cost_price numeric not null default 0,
-  subtotal numeric not null default 0
+  subtotal numeric not null default 0,
+  note text
 );
 
 create index if not exists transaction_items_transaction_idx on public.transaction_items (transaction_id);
