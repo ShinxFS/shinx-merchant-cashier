@@ -312,7 +312,7 @@ export default function TransactionsPage() {
           />
         </div>
         <div className="flex gap-2">
-          <label className="flex items-center px-3 py-2 border border-gray-200 rounded-xl bg-white text-sm text-gray-500">
+          <label className="relative flex items-center px-3 py-2 pr-9 border border-gray-200 rounded-xl bg-white text-sm text-gray-500">
             <select
               value={selectedMonth}
               onChange={e => {
@@ -320,14 +320,15 @@ export default function TransactionsPage() {
                 setPage(0)
               }}
               aria-label={translateText("Filter bulan transaksi", localizedLanguage)}
-              className="min-w-0 bg-transparent text-gray-900 focus:outline-none"
+              className="min-w-0 appearance-none bg-transparent text-gray-900 focus:outline-none"
             >
               {recentMonths.map(month => (
                 <option key={month.value} value={month.value}><LocalizedText text={month.label} /></option>
               ))}
             </select>
+            <ChevronDown size={16} aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500" />
           </label>
-          <label className="flex items-center px-3 py-2 border border-gray-200 rounded-xl bg-white text-sm text-gray-500">
+          <label className="relative flex items-center px-3 py-2 pr-9 border border-gray-200 rounded-xl bg-white text-sm text-gray-500">
             <select
               value={selectedYear}
               onChange={e => {
@@ -335,12 +336,13 @@ export default function TransactionsPage() {
                 setPage(0)
               }}
               aria-label={translateText("Filter tahun transaksi", localizedLanguage)}
-              className="min-w-0 bg-transparent text-gray-900 focus:outline-none"
+              className="min-w-0 appearance-none bg-transparent text-gray-900 focus:outline-none"
             >
               {availableYears.map(year => (
                 <option key={year} value={year}>{year}</option>
               ))}
             </select>
+            <ChevronDown size={16} aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500" />
           </label>
         </div>
       </div>

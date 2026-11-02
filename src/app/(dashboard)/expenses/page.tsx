@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useCurrency } from '@/lib/currency'
 import { useRole } from '@/lib/useRole' // Import useRole berhasil ditambahkan
-import { Plus, Trash2, WalletCards, Search } from 'lucide-react'
+import { Plus, Trash2, WalletCards, Search, ChevronDown } from 'lucide-react'
 
 interface Expense {
   id: string
@@ -159,16 +159,19 @@ export default function ExpensesPage() {
             className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
-        <select
-          value={filterCat}
-          onChange={e => setFilterCat(e.target.value)}
-          className="px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-        >
-          <option value="">{<LocalizedText text={"Semua Kategori"} />}</option>
-          {CATEGORIES.map(c => (
-            <option key={c.value} value={c.value}><LocalizedText text={c.label} /></option>
-          ))}
-        </select>
+        <div className="relative">
+          <select
+            value={filterCat}
+            onChange={e => setFilterCat(e.target.value)}
+            className="appearance-none px-3 py-2 pr-9 border border-gray-200 rounded-xl text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            <option value="">{<LocalizedText text={"Semua Kategori"} />}</option>
+            {CATEGORIES.map(c => (
+              <option key={c.value} value={c.value}><LocalizedText text={c.label} /></option>
+            ))}
+          </select>
+          <ChevronDown size={16} aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500" />
+        </div>
       </div>
 
       {/* List */}
@@ -275,15 +278,18 @@ export default function ExpensesPage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">{<LocalizedText text={"Kategori"} />}</label>
-                <select
-                  value={form.category}
-                  onChange={e => setForm(p => ({ ...p, category: e.target.value }))}
-                  className={inputClass}
-                >
-                  {CATEGORIES.map(c => (
-                    <option key={c.value} value={c.value}><LocalizedText text={c.label} /></option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <select
+                    value={form.category}
+                    onChange={e => setForm(p => ({ ...p, category: e.target.value }))}
+                    className={`${inputClass} appearance-none pr-9`}
+                  >
+                    {CATEGORIES.map(c => (
+                      <option key={c.value} value={c.value}><LocalizedText text={c.label} /></option>
+                    ))}
+                  </select>
+                  <ChevronDown size={16} aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                </div>
               </div>
 
               <div>

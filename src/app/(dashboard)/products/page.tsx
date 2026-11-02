@@ -6,7 +6,7 @@ import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useCurrency } from '@/lib/currency'
 import { useRole } from '@/lib/useRole'
-import { Plus, Pencil, Trash2, Package, PackagePlus, Search, Download, Upload, X, Grid2X2, List, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, Pencil, Trash2, Package, PackagePlus, Search, Download, Upload, X, Grid2X2, List, ChevronDown } from 'lucide-react'
 import ProductFormModal from '@/components/products/ProductFormModal'
 
 interface Category {
@@ -562,7 +562,7 @@ export default function ProductsPage() {
             <span className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-orange-700">
               <LocalizedText text={"⚠️ Stok Menipis"} />
               {!lowStockListOpen && (
-                <span className="inline-flex h-5 min-w-5 flex-shrink-0 items-center justify-center rounded-full bg-orange-100 px-2 text-xs font-medium leading-5 not-italic tabular-nums">
+                <span className="inline-flex h-4 min-w-4 flex-shrink-0 items-center justify-center rounded-full bg-orange-100 px-1.5 text-[10px] font-medium leading-4 not-italic tabular-nums">
                   {lowStockProducts.length}
                 </span>
               )}
@@ -575,9 +575,9 @@ export default function ProductsPage() {
                 lowStockListOpen ? "Minimalkan stok menipis" : "Tampilkan daftar stok menipis",
                 localizedLanguage
               )}
-              className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md text-orange-700 hover:bg-orange-100"
+              className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg border border-orange-200 bg-white/70 text-orange-700 transition-colors hover:bg-orange-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400"
             >
-              {lowStockListOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              <ChevronDown size={16} className={`transition-transform duration-200 ${lowStockListOpen ? 'rotate-180' : ''}`} />
             </button>
           </div>
           {lowStockListOpen && (
@@ -599,7 +599,7 @@ export default function ProductsPage() {
             <span className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-red-700">
               <LocalizedText text={"🚫 Stok Habis"} />
               {!outOfStockListOpen && (
-                <span className="inline-flex h-5 min-w-5 flex-shrink-0 items-center justify-center rounded-full bg-red-100 px-2 text-xs font-medium leading-5 not-italic tabular-nums">
+                <span className="inline-flex h-4 min-w-4 flex-shrink-0 items-center justify-center rounded-full bg-red-100 px-1.5 text-[10px] font-medium leading-4 not-italic tabular-nums">
                   {outOfStockProducts.length}
                 </span>
               )}
@@ -612,9 +612,9 @@ export default function ProductsPage() {
                 outOfStockListOpen ? "Minimalkan stok habis" : "Tampilkan daftar stok habis",
                 localizedLanguage
               )}
-              className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md text-red-700 hover:bg-red-100"
+              className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg border border-red-200 bg-white/70 text-red-700 transition-colors hover:bg-red-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
             >
-              {outOfStockListOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              <ChevronDown size={16} className={`transition-transform duration-200 ${outOfStockListOpen ? 'rotate-180' : ''}`} />
             </button>
           </div>
           {outOfStockListOpen && (

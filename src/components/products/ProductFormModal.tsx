@@ -4,7 +4,7 @@ import { LocalizedText, translateText, useLanguage } from '@/lib/language'
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { X, Upload, ScanLine } from 'lucide-react'
+import { X, Upload, ScanLine, ChevronDown } from 'lucide-react'
 import BarcodeScanner from '@/components/cashier/BarcodeScanner'
 
 interface Category {
@@ -357,15 +357,18 @@ export default function ProductFormModal({ product, categories, onClose }: Props
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">{<LocalizedText text={"Satuan"} />}</label>
-              <select
-                value={form.unit}
-                onChange={e => set('unit', e.target.value)}
-                className={inputClass}
-              >
-                {['pcs', 'cup', 'porsi', 'lusin', 'kg', 'gram', 'liter', 'botol', 'pack', 'box'].map(u => (
-                  <option key={u} value={u}>{u}</option>
-                ))}
-              </select>
+              <div className="relative">
+                <select
+                  value={form.unit}
+                  onChange={e => set('unit', e.target.value)}
+                  className={`${inputClass} appearance-none pr-9`}
+                >
+                  {['pcs', 'cup', 'porsi', 'lusin', 'kg', 'gram', 'liter', 'botol', 'pack', 'box'].map(u => (
+                    <option key={u} value={u}>{u}</option>
+                  ))}
+                </select>
+                <ChevronDown size={16} aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500" />
+              </div>
             </div>
           </div>
 
@@ -373,39 +376,49 @@ export default function ProductFormModal({ product, categories, onClose }: Props
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">{<LocalizedText text={"Kategori 1"} />}</label>
-              <select
-                value={form.category_id}
-                onChange={e => {
-                  const val = e.target.value
-                  set('category_id', val)
-                  // Kalau kategori 2 jadi sama dgn kategori 1, kosongkan kategori 2
-                  if (val && val === form.category_id_2) set('category_id_2', '')
-                }}
-                className={inputClass}
-              >
-                <option value="">{<LocalizedText text={"— Tanpa Kategori —"} />}</option>
-                {categories.map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
+              <div className="relative">
+                <select
+                  value={form.category_id}
+                  onChange={e => {
+                    const val = e.target.value
+                    set('category_id', val)
+                    // Kalau kategori 2 jadi sama dgn kategori 1, kosongkan kategori 2
+                    if (val && val === form.category_id_2) set('category_id_2', '')
+                  }}
+                  className={`${inputClass} appearance-none pr-9`}
+                >
+                  <option value="">{<LocalizedText text={"— Tanpa Kategori —"} />}</option>
+                  {categories.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                <ChevronDown size={16} aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500" />
+              </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 {<LocalizedText text={"\r\n                Kategori 2 "} />}<span className="text-gray-400">{<LocalizedText text={"(opsional)"} />}</span>
               </label>
-              <select
-                value={form.category_id_2}
-                onChange={e => set('category_id_2', e.target.value)}
-                disabled={!form.category_id}
-                className={`${inputClass} disabled:bg-gray-50 disabled:text-gray-400`}
-              >
-                <option value="">{<LocalizedText text={"— Tanpa Kategori —"} />}</option>
-                {categories
-                  .filter(c => c.id !== form.category_id)
-                  .map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-              </select>
+              <div className="relative">
+                <select
+                  value={form.category_id_2}
+                  onChange={e => set('category_id_2', e.target.value)}
+                  disabled={!form.category_id}
+                  className={`${inputClass} appearance-none pr-9 disabled:bg-gray-50 disabled:text-gray-400`}
+                >
+                  <option value="">{<LocalizedText text={"— Tanpa Kategori —"} />}</option>
+                  {categories
+                    .filter(c => c.id !== form.category_id)
+                    .map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                </select>
+                <ChevronDown
+                  size={16}
+                  aria-hidden="true"
+                  className={`pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 ${form.category_id ? 'text-gray-500' : 'text-gray-300'}`}
+                />
+              </div>
             </div>
           </div>
 

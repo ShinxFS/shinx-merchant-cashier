@@ -13,6 +13,7 @@ import * as XLSX from 'xlsx'
 import { saveAs } from 'file-saver'
 import {
   Calculator, RotateCcw, Save, Trash2, FileSpreadsheet, Factory, Store, Wrench, PackagePlus,
+  ChevronDown,
 } from 'lucide-react'
 
 interface SavedProduct {
@@ -268,10 +269,17 @@ export default function HppPage() {
     const value = form[f.key] ?? ''
     if (f.kind === 'select') {
       return (
-        <select value={value} onChange={e => setField(f.key, e.target.value)} className={inputClass}>
-          <option value="">{<LocalizedText text={"Pilih "} />}<LocalizedText text={f.label} /></option>
-          {f.options?.map(o => <option key={o} value={o}><LocalizedText text={o} /></option>)}
-        </select>
+        <div className="relative">
+          <select
+            value={value}
+            onChange={e => setField(f.key, e.target.value)}
+            className={`${inputClass} appearance-none pr-9`}
+          >
+            <option value="">{<LocalizedText text={"Pilih "} />}<LocalizedText text={f.label} /></option>
+            {f.options?.map(o => <option key={o} value={o}><LocalizedText text={o} /></option>)}
+          </select>
+          <ChevronDown size={16} aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500" />
+        </div>
       )
     }
     if (f.kind === 'text') {

@@ -16,6 +16,7 @@ import {
   CircleDollarSign,
   Eye,
   EyeOff,
+  ChevronDown,
 } from 'lucide-react'
 
 type CashflowPeriod = 'today' | '7days' | 'month'
@@ -379,17 +380,20 @@ export default function DashboardPage() {
           </div>
           <div className="flex items-center gap-2">
             <div className={`overflow-hidden transition-all duration-500 ease-in-out ${cashflowVisible ? 'max-w-40 opacity-100' : 'max-w-0 opacity-0'}`}>
-              <select
-                value={cashflowPeriod}
-                onChange={e => setCashflowPeriod(e.target.value as CashflowPeriod)}
-                tabIndex={cashflowVisible ? 0 : -1}
-                className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                aria-label={translateText("Periode cash flow", localizedLanguage)}
-              >
-                <option value="today">{<LocalizedText text={"Hari ini"} />}</option>
-                <option value="7days">{<LocalizedText text={"7 Hari"} />}</option>
-                <option value="month">{<LocalizedText text={"Bulan ini"} />}</option>
-              </select>
+              <div className="relative inline-flex">
+                <select
+                  value={cashflowPeriod}
+                  onChange={e => setCashflowPeriod(e.target.value as CashflowPeriod)}
+                  tabIndex={cashflowVisible ? 0 : -1}
+                  className="appearance-none px-3 py-2 pr-9 border border-gray-200 rounded-lg text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  aria-label={translateText("Periode cash flow", localizedLanguage)}
+                >
+                  <option value="today">{<LocalizedText text={"Hari ini"} />}</option>
+                  <option value="7days">{<LocalizedText text={"7 Hari"} />}</option>
+                  <option value="month">{<LocalizedText text={"Bulan ini"} />}</option>
+                </select>
+                <ChevronDown size={16} aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500" />
+              </div>
             </div>
             <button
               type="button"

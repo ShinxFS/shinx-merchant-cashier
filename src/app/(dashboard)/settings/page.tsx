@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Save, Plus, Trash2, QrCode, Upload, Pencil, Check, X } from 'lucide-react'
+import { Save, Plus, Trash2, QrCode, Upload, Pencil, Check, X, ChevronDown } from 'lucide-react'
 import { CURRENCY_OPTIONS, isCurrencyCode, useCurrency } from '@/lib/currency'
 import type { CurrencyCode } from '@/lib/currency'
 import { LanguageToggle, useLanguage, LocalizedText, translateText } from '@/lib/language'
@@ -597,21 +597,24 @@ export default function SettingsPage() {
             <div>
               <label htmlFor="store-currency" className="mb-1 block text-sm font-medium text-gray-700">
                 {<LocalizedText text={"\r\n                Mata uang baru\r\n              "} />}</label>
-              <select
-                id="store-currency"
-                value={selectedCurrency}
-                onChange={event => {
-                  if (isCurrencyCode(event.target.value)) setNextCurrency(event.target.value)
-                  setCurrencyError('')
-                  setCurrencySaved(false)
-                }}
-                className={inputClass}
-                disabled={currencySaving || !!profileCurrencyError}
-              >
-                {CURRENCY_OPTIONS.map(option => (
-                  <option key={option.code} value={option.code}><LocalizedText text={option.label} /></option>
-                ))}
-              </select>
+              <div className="relative">
+                <select
+                  id="store-currency"
+                  value={selectedCurrency}
+                  onChange={event => {
+                    if (isCurrencyCode(event.target.value)) setNextCurrency(event.target.value)
+                    setCurrencyError('')
+                    setCurrencySaved(false)
+                  }}
+                  className={`${inputClass} appearance-none pr-9`}
+                  disabled={currencySaving || !!profileCurrencyError}
+                >
+                  {CURRENCY_OPTIONS.map(option => (
+                    <option key={option.code} value={option.code}><LocalizedText text={option.label} /></option>
+                  ))}
+                </select>
+                <ChevronDown size={16} aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500" />
+              </div>
             </div>
 
             <button
@@ -854,15 +857,18 @@ export default function SettingsPage() {
               </div>
               <div className="w-full max-w-xs">
                 <label className="block text-xs font-medium text-gray-600 mb-1">{<LocalizedText text={"Variasi nada default"} />}</label>
-                <select
-                  value={cashierTone}
-                  onChange={e => void handleToneChange('cashier', e.target.value)}
-                  className={inputClass}
-                >
-                  {toneOptions.map(option => (
-                    <option key={option.value} value={option.value}><LocalizedText text={option.label} /></option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <select
+                    value={cashierTone}
+                    onChange={e => void handleToneChange('cashier', e.target.value)}
+                    className={`${inputClass} appearance-none pr-9`}
+                  >
+                    {toneOptions.map(option => (
+                      <option key={option.value} value={option.value}><LocalizedText text={option.label} /></option>
+                    ))}
+                  </select>
+                  <ChevronDown size={16} aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                </div>
               </div>
             </div>
           </div>
@@ -892,15 +898,18 @@ export default function SettingsPage() {
               </div>
               <div className="w-full max-w-xs">
                 <label className="block text-xs font-medium text-gray-600 mb-1">{<LocalizedText text={"Variasi nada default"} />}</label>
-                <select
-                  value={customerTone}
-                  onChange={e => void handleToneChange('customer', e.target.value)}
-                  className={inputClass}
-                >
-                  {toneOptions.map(option => (
-                    <option key={option.value} value={option.value}><LocalizedText text={option.label} /></option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <select
+                    value={customerTone}
+                    onChange={e => void handleToneChange('customer', e.target.value)}
+                    className={`${inputClass} appearance-none pr-9`}
+                  >
+                    {toneOptions.map(option => (
+                      <option key={option.value} value={option.value}><LocalizedText text={option.label} /></option>
+                    ))}
+                  </select>
+                  <ChevronDown size={16} aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                </div>
               </div>
             </div>
           </div>
