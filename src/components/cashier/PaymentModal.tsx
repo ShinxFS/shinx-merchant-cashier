@@ -4,11 +4,18 @@ import { LocalizedText, translateText, useLanguage } from '@/lib/language'
 
 import { useState } from 'react'
 import { useCurrency } from '@/lib/currency'
-import { X, Banknote, CreditCard, Tag, Percent, QrCode } from 'lucide-react'
+import { X, Banknote, CreditCard, Tag, Percent, QrCode, WalletCards } from 'lucide-react'
 
 interface Props {
   subtotal: number
-  onConfirm: (method: string, amountPaid: number, discount: number, tax: number, paymentAccount: PaymentAccount | null) => void
+  onConfirm: (
+    method: PaymentMethod | 'mixed',
+    amountPaid: number,
+    discount: number,
+    tax: number,
+    paymentAccount: PaymentAccount | null,
+    paymentDetails: PaymentDetail[],
+  ) => void
   onClose: () => void
   loading: boolean
   qrisImageUrl?: string | null
@@ -23,11 +30,20 @@ export interface PaymentAccount {
   account_name: string
 }
 
+export type PaymentMethod = 'cash' | 'transfer' | 'qris'
+
+export interface PaymentDetail {
+  method: PaymentMethod
+  amount: number
+  paymentAccount: PaymentAccount | null
+}
+
 const paymentMethods = [
   { id: 'cash', label: 'Tunai', icon: Banknote },
   { id: 'transfer', label: 'Transfer', icon: CreditCard },
   { id: 'qris', label: 'QRIS', icon: QrCode },
-]
+  { id: 'mixed', label: 'Split', icon: WalletCards },
+] as const
 
 const inputClass = "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
 
@@ -35,12 +51,16 @@ export default function PaymentModal({ subtotal, onConfirm, onClose, loading, qr
   const localizedLanguage = useLanguage().language
 
   const { formatCurrency, currency } = useCurrency()
-  const [method, setMethod] = useState('cash')
+  const [method, setMethod] = useState<PaymentMethod | 'mixed'>('cash')
   const [amountPaid, setAmountPaid] = useState('')
   const [discountType, setDiscountType] = useState<'nominal' | 'percent'>('nominal')
   const [discountValue, setDiscountValue] = useState('')
   const [taxPercent, setTaxPercent] = useState('')
   const [selectedAccountId, setSelectedAccountId] = useState('')
+  const [mixedCashAmount, setMixedCashAmount] = useState('')
+  const [mixedTransferAmount, setMixedTransferAmount] = useState('')
+  const [mixedQrisAmount, setMixedQrisAmount] = useState('')
+  const [mixedCashEdited, setMixedCashEdited] = useState(false)
 
   const discountAmount = discountValue === ''
     ? 0
@@ -55,6 +75,29 @@ export default function PaymentModal({ subtotal, onConfirm, onClose, loading, qr
   const total = Math.max(0, subtotal - discountAmount + taxAmount)
   const paid = Number(amountPaid) || 0
   const change = paid - total
+  const mixedCashPaid = Number(mixedCashAmount) || 0
+  const mixedTransferPaid = Number(mixedTransferAmount) || 0
+  const mixedQrisPaid = Number(mixedQrisAmount) || 0
+  const mixedNonCashPaid = mixedTransferPaid + mixedQrisPaid
+  const mixedCashContribution = Math.max(0, total - mixedNonCashPaid)
+  const mixedAmountPaid = mixedCashPaid + mixedNonCashPaid
+  const mixedChange = Math.max(0, mixedCashPaid - mixedCashContribution)
+  const selectedAccount = paymentAccounts.find(account => account.id === selectedAccountId) ?? null
+  const mixedPaymentDetails: PaymentDetail[] = [
+    ...(mixedCashContribution > 0 ? [{ method: 'cash' as const, amount: mixedCashContribution, paymentAccount: null }] : []),
+    ...(mixedTransferPaid > 0 ? [{ method: 'transfer' as const, amount: mixedTransferPaid, paymentAccount: selectedAccount }] : []),
+    ...(mixedQrisPaid > 0 ? [{ method: 'qris' as const, amount: mixedQrisPaid, paymentAccount: null }] : []),
+  ]
+  const mixedValid =
+    mixedPaymentDetails.length >= 2 &&
+    mixedCashPaid >= 0 &&
+    mixedTransferPaid >= 0 &&
+    mixedQrisPaid >= 0 &&
+    mixedNonCashPaid <= total &&
+    mixedCashPaid + mixedNonCashPaid >= total &&
+    (mixedCashContribution > 0 ? mixedCashPaid >= mixedCashContribution : mixedCashPaid === 0) &&
+    (mixedTransferPaid === 0 || selectedAccount !== null) &&
+    (mixedQrisPaid === 0 || Boolean(qrisImageUrl))
 
   const quickAmounts = (currency === 'IDR'
     ? [Math.ceil(total / 1000) * 1000, 50000, 100000, 200000]
@@ -92,7 +135,7 @@ export default function PaymentModal({ subtotal, onConfirm, onClose, loading, qr
               <p className="text-xs font-semibold text-gray-500 uppercase">{<LocalizedText text={"Diskon"} />}</p>
             </div>
             <div className="flex gap-2">
-              <div className="flex h-[42px] w-24 shrink-0 rounded-lg border border-gray-300 bg-gray-50 p-1 text-xs" role="group" aria-label={translateText("Jenis diskon", localizedLanguage)}>
+              <div className="flex h-[42px] w-24 shrink-0 rounded-lg border border-gray-300 bg-white p-1 text-xs" role="group" aria-label={translateText("Jenis diskon", localizedLanguage)}>
                 <button
                   type="button"
                   onClick={() => {
@@ -183,26 +226,165 @@ export default function PaymentModal({ subtotal, onConfirm, onClose, loading, qr
           {/* Metode Bayar */}
           <div>
             <p className="text-xs font-semibold text-gray-500 uppercase mb-2">{<LocalizedText text={"Metode Bayar"} />}</p>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
               {paymentMethods.map(({ id, label, icon: Icon }) => (
                 <button
                   key={id}
                   onClick={() => {
                     triggerSound()
                     setMethod(id)
+                    if (id === 'mixed' && mixedCashAmount === '') {
+                      setMixedCashAmount(String(total))
+                      setMixedCashEdited(false)
+                    }
                   }}
-                  className={`flex flex-col items-center gap-1.5 py-3 rounded-xl border text-xs font-medium transition-all ${
+                  aria-pressed={method === id}
+                  className={`flex min-w-0 flex-col items-center gap-1 py-2.5 rounded-xl border px-1 text-[9px] font-medium transition-all sm:gap-1.5 sm:px-2 sm:py-3 sm:text-xs ${
                     method === id
                       ? "border-indigo-500 bg-indigo-50 text-indigo-700"
                       : "border-gray-200 text-gray-600 hover:border-gray-300"
                   }`}
                 >
-                  <Icon size={18} />
-                  {label}
+                  <Icon size={16} className="shrink-0 sm:h-[18px] sm:w-[18px]" />
+                  <LocalizedText text={label} />
                 </button>
               ))}
             </div>
           </div>
+
+          {method === 'mixed' && (
+            <div className="space-y-3">
+              <p className="text-xs text-gray-500">
+                <LocalizedText text="Masukkan nominal yang diterima dari tiap metode. Nominal tunai boleh lebih untuk kembalian." />
+              </p>
+              <div className="rounded-xl border border-gray-200 p-3">
+                <label htmlFor="mixed-cash-amount" className="mb-1.5 block text-xs font-semibold text-gray-600">
+                  <LocalizedText text="Tunai diterima" />
+                </label>
+                <input
+                  id="mixed-cash-amount"
+                  type="number"
+                  min={0}
+                  step="any"
+                  value={mixedCashAmount}
+                  onChange={e => {
+                    setMixedCashAmount(e.target.value)
+                    setMixedCashEdited(true)
+                  }}
+                  placeholder="0"
+                  className={inputClass}
+                />
+              </div>
+              <div className="rounded-xl border border-gray-200 p-3">
+                <label htmlFor="mixed-transfer-amount" className="mb-1.5 block text-xs font-semibold text-gray-600">
+                  <LocalizedText text="Nominal transfer" />
+                </label>
+                <input
+                  id="mixed-transfer-amount"
+                  type="number"
+                  min={0}
+                  step="any"
+                  value={mixedTransferAmount}
+                  onChange={e => {
+                    setMixedTransferAmount(e.target.value)
+                    if (!mixedCashEdited) {
+                      setMixedCashAmount(String(Math.max(0, total - (Number(e.target.value) || 0) - mixedQrisPaid)))
+                    }
+                  }}
+                  placeholder="0"
+                  className={inputClass}
+                />
+                {mixedTransferPaid > 0 && (
+                  paymentAccounts.length > 0 ? (
+                    <select
+                      value={selectedAccountId}
+                      onChange={e => setSelectedAccountId(e.target.value)}
+                      aria-label={translateText("Pilih Rekening Tujuan", localizedLanguage)}
+                      className={`${inputClass} mt-2`}
+                    >
+                      <option value="">{translateText("Pilih Rekening Tujuan", localizedLanguage)}</option>
+                      {paymentAccounts.map(account => (
+                        <option key={account.id} value={account.id}>
+                          {account.bank_name} · {account.account_number} · {account.account_name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <p className="mt-2 text-xs text-amber-700">
+                      <LocalizedText text="Belum ada rekening transfer" />
+                    </p>
+                  )
+                )}
+              </div>
+              <div className="rounded-xl border border-gray-200 p-3">
+                <label htmlFor="mixed-qris-amount" className="mb-1.5 block text-xs font-semibold text-gray-600">
+                  <LocalizedText text="Nominal QRIS" />
+                </label>
+                <input
+                  id="mixed-qris-amount"
+                  type="number"
+                  min={0}
+                  step="any"
+                  value={mixedQrisAmount}
+                  onChange={e => {
+                    setMixedQrisAmount(e.target.value)
+                    if (!mixedCashEdited) {
+                      setMixedCashAmount(String(Math.max(0, total - mixedTransferPaid - (Number(e.target.value) || 0))))
+                    }
+                  }}
+                  placeholder="0"
+                  className={inputClass}
+                />
+                {mixedQrisPaid > 0 && (
+                  qrisImageUrl ? (
+                    <div className="mt-3 flex flex-col items-center rounded-lg bg-gray-50 p-3">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={qrisImageUrl}
+                        alt={translateText("QRIS Pembayaran", localizedLanguage)}
+                        className="h-40 w-40 rounded-lg bg-white object-contain"
+                      />
+                      <p className="mt-2 text-xs text-gray-500">
+                        <LocalizedText text="Scan & bayar sejumlah" /> {formatCurrency(mixedQrisPaid)}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-xs text-amber-700">
+                      <LocalizedText text="QRIS belum diatur" />
+                    </p>
+                  )
+                )}
+              </div>
+              <div className="rounded-xl bg-gray-50 px-3 py-2.5 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-500"><LocalizedText text="Total diterima" /></span>
+                  <span className="font-medium text-gray-800">{formatCurrency(mixedAmountPaid)}</span>
+                </div>
+                {mixedAmountPaid >= total && total > 0 && (
+                  <div className="mt-1 flex justify-between text-green-700">
+                    <span><LocalizedText text="Kembalian" /></span>
+                    <span className="font-semibold">{formatCurrency(mixedChange)}</span>
+                  </div>
+                )}
+                {mixedAmountPaid < total && (
+                  <div className="mt-1 flex justify-between text-red-600">
+                    <span><LocalizedText text="Kurang" /></span>
+                    <span className="font-semibold">{formatCurrency(total - mixedAmountPaid)}</span>
+                  </div>
+                )}
+                {mixedNonCashPaid > total && (
+                  <p className="mt-1 text-xs text-red-600">
+                    <LocalizedText text="Nominal transfer dan QRIS tidak boleh melebihi total." />
+                  </p>
+                )}
+                {mixedPaymentDetails.length < 2 && (
+                  <p className="mt-1 text-xs text-amber-700">
+                    <LocalizedText text="Gunakan minimal dua metode pembayaran." />
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Rekening Transfer */}
           {method === 'transfer' && (
@@ -311,12 +493,16 @@ export default function PaymentModal({ subtotal, onConfirm, onClose, loading, qr
           <button
             onClick={() => {
               triggerSound()
+              const details: PaymentDetail[] = method === 'mixed'
+                ? mixedPaymentDetails
+                : [{ method, amount: total, paymentAccount: method === 'transfer' ? selectedAccount : null }]
               onConfirm(
                 method,
-                method === 'cash' ? paid : total,
+                method === 'cash' ? paid : method === 'mixed' ? mixedAmountPaid : total,
                 discountAmount,
                 taxAmount,
-                paymentAccounts.find(account => account.id === selectedAccountId) ?? null,
+                method === 'transfer' ? selectedAccount : null,
+                details,
               )
             }}
             disabled={
@@ -324,13 +510,14 @@ export default function PaymentModal({ subtotal, onConfirm, onClose, loading, qr
               (method === 'cash' && paid < total) ||
               (method === 'qris' && !qrisImageUrl) ||
               (method === 'transfer' && !selectedAccountId) ||
+              (method === 'mixed' && !mixedValid) ||
               total <= 0
             }
             className="w-full bg-indigo-600 text-white py-3 rounded-xl font-semibold text-sm hover:bg-indigo-700 disabled:opacity-50 transition-colors"
           >
             {loading
               ? <LocalizedText text={"Memproses..."} />
-              : method === 'qris'
+              : (method === 'qris' || (method === 'mixed' && mixedValid))
                 ? `${translateText('Sudah Dibayar · ', localizedLanguage)}${formatCurrency(total)}`
                 : `${translateText('Bayar ', localizedLanguage)}${formatCurrency(total)}`}
           </button>

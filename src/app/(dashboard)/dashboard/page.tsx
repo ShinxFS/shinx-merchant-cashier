@@ -259,6 +259,7 @@ export default function DashboardPage() {
     transfer: 'Transfer',
     ewallet: 'E-Wallet',
     qris: 'QRIS',
+    mixed: 'Split',
   }
 
   const cashflowCards = [

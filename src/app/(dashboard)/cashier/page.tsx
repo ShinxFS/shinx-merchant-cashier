@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { generateInvoice } from '@/lib/utils'
 import ProductCard from '@/components/cashier/ProductCard'
 import CartItem, { CartItemType } from '@/components/cashier/CartItem'
-import PaymentModal, { PaymentAccount } from '@/components/cashier/PaymentModal'
+import PaymentModal, { PaymentAccount, PaymentDetail } from '@/components/cashier/PaymentModal'
 import ReceiptModal from '@/components/cashier/ReceiptModal'
 import BarcodeScanner from '@/components/cashier/BarcodeScanner'
 import { Search, ShoppingCart, Trash2, ChevronRight, ChevronLeft, ScanLine, Plus, X, Bell } from 'lucide-react'
@@ -61,6 +61,11 @@ interface ReceiptData {
   total: number
   payment_method: string
   payment_account?: string | null
+  payment_details: Array<{
+    method: string
+    amount: number
+    payment_account: string | null
+  }>
   amount_paid: number
   change_amount: number
   business_name: string
@@ -831,14 +836,19 @@ export default function CashierPage() {
     discount: number,
     tax: number,
     paymentAccount: PaymentAccount | null,
+    paymentDetails: PaymentDetail[],
   ) => {
     playClickSound()
     setPaymentLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    if (!user) {
+      setPaymentLoading(false)
+      setSuccessMsg(translateText('Sesi login tidak ditemukan. Silakan login kembali.', localizedLanguage))
+      return
+    }
 
     const total = subtotal - discount + tax
-    const change = method === 'cash' ? amountPaid - total : 0
+    const change = method === 'cash' || method === 'mixed' ? Math.max(0, amountPaid - total) : 0
     const invoice = generateInvoice()
     const tableNumber = activeTable === 'takeaway' ? null : Number(activeTable)
 
@@ -855,6 +865,13 @@ export default function CashierPage() {
       payment_account: paymentAccount
         ? `${paymentAccount.bank_name} · ${paymentAccount.account_number} · a.n. ${paymentAccount.account_name}`
         : null,
+      payment_details: paymentDetails.map(detail => ({
+        method: detail.method,
+        amount: detail.amount,
+        payment_account: detail.paymentAccount
+          ? `${detail.paymentAccount.bank_name} · ${detail.paymentAccount.account_number} · a.n. ${detail.paymentAccount.account_name}`
+          : null,
+      })),
       amount_paid: amountPaid,
       change_amount: change,
     }
@@ -878,6 +895,8 @@ export default function CashierPage() {
 
     if (error || !tx) {
       setPaymentLoading(false)
+      setSuccessMsg(`${translateText('Gagal menyimpan transaksi:', localizedLanguage)} ${error?.message ?? translateText('Coba lagi.', localizedLanguage)}`)
+      setTimeout(() => setSuccessMsg(''), 6000)
       return
     }
 
@@ -945,6 +964,13 @@ export default function CashierPage() {
       payment_account: paymentAccount
         ? `${paymentAccount.bank_name} · ${paymentAccount.account_number} · a.n. ${paymentAccount.account_name}`
         : null,
+      payment_details: paymentDetails.map(detail => ({
+        method: detail.method,
+        amount: detail.amount,
+        payment_account: detail.paymentAccount
+          ? `${detail.paymentAccount.bank_name} · ${detail.paymentAccount.account_number} · a.n. ${detail.paymentAccount.account_name}`
+          : null,
+      })),
       amount_paid: amountPaid,
       change_amount: change,
       business_name: businessProfile.business_name,

@@ -28,6 +28,11 @@ interface Transaction {
   tax: number
   payment_method: string
   payment_account: string | null
+  payment_details?: Array<{
+    method: string
+    amount: number
+    payment_account: string | null
+  }>
   amount_paid: number
   change_amount: number
   notes: string | null
@@ -260,6 +265,7 @@ export default function TransactionsPage() {
     transfer: '🏦 Transfer',
     ewallet: '📱 E-Wallet',
     qris: '📲 QRIS',
+    mixed: `💳 ${translateText('Split', localizedLanguage)}`,
   }
 
   const toggleExpand = (id: string) =>
@@ -461,10 +467,12 @@ export default function TransactionsPage() {
                         <span className="text-gray-800">{<LocalizedText text={"Total"} />}</span>
                         <span className="text-gray-900">{formatCurrency(tx.total)}</span>
                       </div>
-                      {tx.payment_method === 'cash' && (
+                      {(tx.payment_method === 'cash' || tx.payment_method === 'mixed') && (
                         <>
                           <div className="flex justify-between text-sm">
-                            <span className="text-gray-500">{<LocalizedText text={"Jumlah Dibayar"} />}</span>
+                            <span className="text-gray-500">
+                              <LocalizedText text={tx.payment_method === 'mixed' ? 'Total diterima' : 'Jumlah Dibayar'} />
+                            </span>
                             <span className="text-gray-700">{formatCurrency(tx.amount_paid)}</span>
                           </div>
                           <div className="flex justify-between text-sm">
@@ -477,6 +485,27 @@ export default function TransactionsPage() {
                         <span className="text-gray-500">{<LocalizedText text={"Metode"} />}</span>
                         <span className="text-gray-700">{paymentLabel[tx.payment_method] ?? tx.payment_method}</span>
                       </div>
+                      {tx.payment_method === 'mixed' && tx.payment_details && tx.payment_details.length > 0 && (
+                        <div className="space-y-1 border-t border-gray-200 pt-2">
+                          <p className="text-xs font-semibold uppercase text-gray-500">
+                            <LocalizedText text="Rincian pembayaran" />
+                          </p>
+                          {tx.payment_details.map((detail, index) => (
+                            <div key={`${detail.method}-${index}`}>
+                              <div className="flex justify-between gap-4 text-sm">
+                                <span className="text-gray-500">{paymentLabel[detail.method] ?? detail.method}</span>
+                                <span className="text-gray-700">{formatCurrency(detail.amount)}</span>
+                              </div>
+                              {detail.method === 'transfer' && detail.payment_account && (
+                                <div className="flex justify-between gap-4 text-xs">
+                                  <span className="text-gray-400"><LocalizedText text="Rekening" /></span>
+                                  <span className="text-gray-500 text-right">{detail.payment_account}</span>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                       {tx.payment_method === 'transfer' && tx.payment_account && (
                         <div className="flex justify-between gap-4 text-sm">
                           <span className="text-gray-500">{<LocalizedText text={"Rekening"} />}</span>

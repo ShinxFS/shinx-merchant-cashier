@@ -25,6 +25,11 @@ interface ReceiptData {
   total: number
   payment_method: string
   payment_account?: string | null
+  payment_details: Array<{
+    method: string
+    amount: number
+    payment_account: string | null
+  }>
   amount_paid: number
   change_amount: number
   business_name: string
@@ -59,6 +64,7 @@ export default function ReceiptModal({
     transfer: 'Transfer',
     ewallet: 'E-Wallet',
     qris: 'QRIS',
+    mixed: translateText('Split', localizedLanguage),
   }
 
   // Ambil "foto" dari tampilan preview struk supaya hasil cetak & gambar identik dgn yg di layar
@@ -216,16 +222,41 @@ export default function ReceiptModal({
                 <span>{<LocalizedText text={"TOTAL"} />}</span><span>{formatCurrency(data.total)}</span>
               </div>
               <p className="text-gray-300">{'- '.repeat(16)}</p>
-              <div className="flex justify-between text-gray-600">
-                <span>{<LocalizedText text={"Bayar ("} />}{paymentLabel[data.payment_method]}{<LocalizedText text={")"} />}</span>
-                <span>{formatCurrency(data.amount_paid)}</span>
-              </div>
-              {data.payment_method === 'transfer' && data.payment_account && (
-                <div className="text-gray-600">
-                  <span>{<LocalizedText text={"Rekening: "} />}</span><span>{data.payment_account}</span>
-                </div>
+              {data.payment_method === 'mixed' ? (
+                <>
+                  <p className="font-medium text-gray-700"><LocalizedText text="Rincian pembayaran" /></p>
+                  {data.payment_details.map((detail, index) => (
+                    <div key={`${detail.method}-${index}`}>
+                      <div className="flex justify-between text-gray-600">
+                        <span>{paymentLabel[detail.method] ?? detail.method}</span>
+                        <span>{formatCurrency(detail.amount)}</span>
+                      </div>
+                      {detail.method === 'transfer' && detail.payment_account && (
+                        <p className="text-gray-500">
+                          <LocalizedText text="Rekening:" /> {detail.payment_account}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                  <div className="flex justify-between text-gray-600">
+                    <span><LocalizedText text="Total diterima" /></span>
+                    <span>{formatCurrency(data.amount_paid)}</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex justify-between text-gray-600">
+                    <span>{<LocalizedText text={"Bayar ("} />}{paymentLabel[data.payment_method]}{<LocalizedText text={")"} />}</span>
+                    <span>{formatCurrency(data.amount_paid)}</span>
+                  </div>
+                  {data.payment_method === 'transfer' && data.payment_account && (
+                    <div className="text-gray-600">
+                      <span>{<LocalizedText text={"Rekening: "} />}</span><span>{data.payment_account}</span>
+                    </div>
+                  )}
+                </>
               )}
-              {data.payment_method === 'cash' && (
+              {(data.payment_method === 'cash' || data.payment_method === 'mixed') && (
                 <div className="flex justify-between text-green-600 font-medium">
                   <span>{<LocalizedText text={"Kembali"} />}</span><span>{formatCurrency(data.change_amount)}</span>
                 </div>
