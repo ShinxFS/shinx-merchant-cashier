@@ -6,7 +6,7 @@ import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useCurrency } from '@/lib/currency'
 import { useRole } from '@/lib/useRole'
-import { Plus, Pencil, Trash2, Package, PackagePlus, Search, Download, Upload, X, Grid2X2, List } from 'lucide-react'
+import { Plus, Pencil, Trash2, Package, PackagePlus, Search, Download, Upload, X, Grid2X2, List, ChevronDown, ChevronUp } from 'lucide-react'
 import ProductFormModal from '@/components/products/ProductFormModal'
 
 interface Category {
@@ -48,6 +48,8 @@ export default function ProductsPage() {
   const [loadError, setLoadError] = useState('')
   const [lowStockThreshold, setLowStockThreshold] = useState(5)
   const [lowStockThresholdError, setLowStockThresholdError] = useState('')
+  const [lowStockListOpen, setLowStockListOpen] = useState(false)
+  const [outOfStockListOpen, setOutOfStockListOpen] = useState(false)
   const [compactView, setCompactView] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [editProduct, setEditProduct] = useState<Product | null>(null)
@@ -555,36 +557,76 @@ export default function ProductsPage() {
 
       {/* Notifikasi stok menipis */}
       {lowStockProducts.length > 0 && (
-        <details className="mb-4 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3">
-          <summary className="cursor-pointer text-sm font-semibold text-orange-700">
-            <LocalizedText text={"⚠️ Stok Menipis"} />
-            <span className="ml-2 rounded-full bg-orange-100 px-2 py-0.5 text-xs">{lowStockProducts.length}</span>
-          </summary>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {lowStockProducts.map(p => (
-              <span key={p.id} className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-lg">
-                {p.name} {<LocalizedText text={" — sisa "} />}{p.stock} {p.unit}
-              </span>
-            ))}
+        <section className="mb-4 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-orange-700">
+              <LocalizedText text={"⚠️ Stok Menipis"} />
+              {!lowStockListOpen && (
+                <span className="inline-flex h-5 min-w-5 flex-shrink-0 items-center justify-center rounded-full bg-orange-100 px-2 text-xs font-medium leading-5 not-italic tabular-nums">
+                  {lowStockProducts.length}
+                </span>
+              )}
+            </span>
+            <button
+              type="button"
+              onClick={() => setLowStockListOpen(open => !open)}
+              aria-expanded={lowStockListOpen}
+              aria-label={translateText(
+                lowStockListOpen ? "Minimalkan stok menipis" : "Tampilkan daftar stok menipis",
+                localizedLanguage
+              )}
+              className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md text-orange-700 hover:bg-orange-100"
+            >
+              {lowStockListOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </button>
           </div>
-        </details>
+          {lowStockListOpen && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {lowStockProducts.map(p => (
+                <span key={p.id} className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-lg">
+                  {p.name} {<LocalizedText text={" — sisa "} />}{p.stock} {p.unit}
+                </span>
+              ))}
+            </div>
+          )}
+        </section>
       )}
 
       {/* Notifikasi stok habis */}
       {outOfStockProducts.length > 0 && (
-        <details className="stock-out-alert mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
-          <summary className="cursor-pointer text-sm font-semibold text-red-700">
-            <LocalizedText text={"🚫 Stok Habis"} />
-            <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-xs">{outOfStockProducts.length}</span>
-          </summary>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {outOfStockProducts.map(p => (
-              <span key={p.id} className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded-lg">
-                {p.name}
-              </span>
-            ))}
+        <section className="stock-out-alert mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-red-700">
+              <LocalizedText text={"🚫 Stok Habis"} />
+              {!outOfStockListOpen && (
+                <span className="inline-flex h-5 min-w-5 flex-shrink-0 items-center justify-center rounded-full bg-red-100 px-2 text-xs font-medium leading-5 not-italic tabular-nums">
+                  {outOfStockProducts.length}
+                </span>
+              )}
+            </span>
+            <button
+              type="button"
+              onClick={() => setOutOfStockListOpen(open => !open)}
+              aria-expanded={outOfStockListOpen}
+              aria-label={translateText(
+                outOfStockListOpen ? "Minimalkan stok habis" : "Tampilkan daftar stok habis",
+                localizedLanguage
+              )}
+              className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md text-red-700 hover:bg-red-100"
+            >
+              {outOfStockListOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </button>
           </div>
-        </details>
+          {outOfStockListOpen && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {outOfStockProducts.map(p => (
+                <span key={p.id} className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded-lg">
+                  {p.name}
+                </span>
+              ))}
+            </div>
+          )}
+        </section>
       )}
 
       {/* Tabel */}
