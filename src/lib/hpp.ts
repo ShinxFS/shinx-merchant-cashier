@@ -10,8 +10,8 @@ export interface HppResult {
 }
 
 export interface PriceRecommendation {
-  minPrice: number          // harga minimum (margin 0%)
-  recommendedPrice: number  // harga rekomendasi sesuai target margin
+  minPrice: number          // HPP at 0% markup
+  recommendedPrice: number  // recommended price for the target markup
 }
 
 // Bantu konversi input form (string/number/undefined) ke angka aman.
@@ -82,11 +82,12 @@ export const calcJasa = (i: JasaInput): HppResult => {
   return finalize(tenagaKerja + material + operasional, num(i.jumlahLayanan))
 }
 
-// marginPct = persen margin keuntungan atas harga jual (mis. 20 berarti 20%).
-export const recommendPrice = (hppPerUnit: number, marginPct: number): PriceRecommendation => {
-  const m = Math.min(Math.max(num(marginPct), 0), 95) / 100
+// markupPct is profit as a percentage of HPP (e.g. 20 means 20% above cost).
+export const recommendPrice = (hppPerUnit: number, markupPct: number): PriceRecommendation => {
+  const cost = Math.max(0, num(hppPerUnit))
+  const markup = Math.min(Math.max(num(markupPct), 0), 200) / 100
   return {
-    minPrice: hppPerUnit,
-    recommendedPrice: m < 1 ? hppPerUnit / (1 - m) : hppPerUnit,
+    minPrice: cost,
+    recommendedPrice: cost * (1 + markup),
   }
 }

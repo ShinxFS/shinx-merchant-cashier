@@ -239,7 +239,7 @@ export default function ReceiptModal({
                     </div>
                   ))}
                   <div className="flex justify-between text-gray-600">
-                    <span><LocalizedText text="Total diterima" /></span>
+                    <span><LocalizedText text="Total Diterima" /></span>
                     <span>{formatCurrency(data.amount_paid)}</span>
                   </div>
                 </>

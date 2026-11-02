@@ -70,6 +70,20 @@ html.dark :is([class~="bg-gray-25"], [class~="bg-gray-50"]) {
   background-color: #0f172a !important;
 }
 
+html.dark .hpp-calculator-display {
+  background-color: #0b1120 !important;
+}
+
+html.dark .hpp-calculator-key {
+  background-color: #1f2937 !important;
+  border-color: #374151 !important;
+  color: #e5e7eb !important;
+}
+
+html.dark .hpp-calculator-key:hover {
+  background-color: #374151 !important;
+}
+
 html.dark :is([class~="bg-gray-100"], [class~="bg-gray-200"]) {
   background-color: #1f2937 !important;
 }

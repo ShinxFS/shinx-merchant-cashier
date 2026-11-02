@@ -27,7 +27,7 @@ interface SavedProduct {
   total_cost: number
   hpp_per_unit: number
   break_even_point: number
-  target_margin: number
+  target_margin: number // Legacy database column; stores markup percentage.
   min_price: number
   recommended_price: number
   created_at: string
@@ -36,6 +36,14 @@ interface SavedProduct {
 type FieldKind = 'text' | 'number' | 'select'
 interface FieldDef { key: string; label: string; kind?: FieldKind; options?: string[]; placeholder?: string }
 interface GroupDef { title: string; fields: FieldDef[] }
+type CalculatorOperator = '+' | '−' | '×' | '÷'
+interface CalculatorState {
+  display: string
+  storedValue: number | null
+  operator: CalculatorOperator | null
+  waitingForOperand: boolean
+  hasError: boolean
+}
 
 interface TypeConfig {
   label: string
@@ -128,6 +136,32 @@ const TYPE_ORDER: BusinessType[] = ['manufaktur', 'retail', 'jasa']
 
 const inputClass = "w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
 
+const initialCalculatorState: CalculatorState = {
+  display: '0',
+  storedValue: null,
+  operator: null,
+  waitingForOperand: false,
+  hasError: false,
+}
+
+const calculate = (left: number, right: number, operator: CalculatorOperator) => {
+  if (operator === '÷' && right === 0) return null
+
+  const result = operator === '+' ? left + right
+    : operator === '−' ? left - right
+      : operator === '×' ? left * right
+        : left / right
+
+  return Number.isFinite(result) ? result : null
+}
+
+const formatCalculatorValue = (value: number) => String(Number(value.toPrecision(12)))
+
+const getSavedMarkupPercent = (product: SavedProduct) => {
+  if (product.hpp_per_unit <= 0) return product.target_margin
+  return Number(((product.recommended_price / product.hpp_per_unit - 1) * 100).toFixed(1))
+}
+
 const calcFor = (type: BusinessType, form: Record<string, string>) =>
   type === 'manufaktur' ? calcManufaktur(form)
     : type === 'retail' ? calcRetail(form)
@@ -140,7 +174,8 @@ export default function HppPage() {
   const { formatCurrency, currency } = useCurrency()
   const [businessType, setBusinessType] = useState<BusinessType>('manufaktur')
   const [form, setForm] = useState<Record<string, string>>({})
-  const [margin, setMargin] = useState(20)
+  const [markupPct, setMarkupPct] = useState(20)
+  const [calculator, setCalculator] = useState<CalculatorState>(initialCalculatorState)
   const [saved, setSaved] = useState<SavedProduct[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -162,12 +197,82 @@ export default function HppPage() {
   useEffect(() => { load() }, [])
 
   const result = useMemo(() => calcFor(businessType, form), [businessType, form])
-  const price = useMemo(() => recommendPrice(result.hppPerUnit, margin), [result.hppPerUnit, margin])
+  const price = useMemo(() => recommendPrice(result.hppPerUnit, markupPct), [result.hppPerUnit, markupPct])
 
   const setField = (key: string, value: string) =>
     setForm(prev => ({ ...prev, [key]: value }))
 
-  const resetForm = () => { setForm({}); setMargin(20) }
+  const enterCalculatorDigit = (digit: string) => {
+    setCalculator(current => {
+      const display = current.hasError || current.waitingForOperand
+        ? digit
+        : current.display === '0'
+          ? digit
+          : current.display.length < 15
+            ? current.display + digit
+            : current.display
+      return { ...current, display, waitingForOperand: false, hasError: false }
+    })
+  }
+
+  const enterCalculatorDecimal = () => {
+    setCalculator(current => {
+      if (current.hasError || current.waitingForOperand) {
+        return { ...current, display: '0.', waitingForOperand: false, hasError: false }
+      }
+      if (current.display.includes('.')) return current
+      return { ...current, display: `${current.display}.` }
+    })
+  }
+
+  const setCalculatorOperator = (operator: CalculatorOperator) => {
+    setCalculator(current => {
+      if (current.hasError) return initialCalculatorState
+      if (current.operator && current.storedValue !== null && !current.waitingForOperand) {
+        const result = calculate(current.storedValue, Number(current.display), current.operator)
+        if (result === null) {
+          return { ...initialCalculatorState, display: 'Error', waitingForOperand: true, hasError: true }
+        }
+        return {
+          display: formatCalculatorValue(result),
+          storedValue: result,
+          operator,
+          waitingForOperand: true,
+          hasError: false,
+        }
+      }
+      return {
+        ...current,
+        storedValue: current.operator ? current.storedValue : Number(current.display),
+        operator,
+        waitingForOperand: true,
+      }
+    })
+  }
+
+  const calculateCalculatorResult = () => {
+    setCalculator(current => {
+      if (current.hasError || !current.operator || current.storedValue === null || current.waitingForOperand) return current
+      const result = calculate(current.storedValue, Number(current.display), current.operator)
+      if (result === null) {
+        return { ...initialCalculatorState, display: 'Error', waitingForOperand: true, hasError: true }
+      }
+      return {
+        ...initialCalculatorState,
+        display: formatCalculatorValue(result),
+        waitingForOperand: true,
+      }
+    })
+  }
+
+  const applyCalculatorUnary = (operation: (value: number) => number) => {
+    setCalculator(current => {
+      if (current.hasError || current.waitingForOperand) return current
+      return { ...current, display: formatCalculatorValue(operation(Number(current.display))) }
+    })
+  }
+
+  const resetForm = () => { setForm({}); setMarkupPct(20) }
 
   // Kumpulkan field biaya + identitas non-kolom ke dalam jsonb `inputs`.
   const collectInputs = (): Record<string, string> => {
@@ -201,7 +306,7 @@ export default function HppPage() {
       total_cost: result.totalCost,
       hpp_per_unit: result.hppPerUnit,
       break_even_point: result.breakEvenPoint,
-      target_margin: margin,
+      target_margin: markupPct,
       min_price: price.minPrice,
       recommended_price: price.recommendedPrice,
     })
@@ -253,7 +358,7 @@ export default function HppPage() {
       'Total Biaya': p.total_cost,
       'HPP per Unit': p.hpp_per_unit,
       'Break Even Point': p.break_even_point,
-      'Target Margin (%)': p.target_margin,
+      'Markup dari HPP (%)': getSavedMarkupPercent(p),
       'Harga Minimum': p.min_price,
       'Harga Rekomendasi': p.recommended_price,
     }))
@@ -389,46 +494,172 @@ export default function HppPage() {
 
         {/* Kolom hasil */}
         <div className="lg:col-span-2 space-y-4">
-          <div className="bg-white rounded-xl border border-gray-200 p-5 lg:sticky lg:top-4">
-            <h3 className="text-sm font-bold text-gray-800 mb-4">{<LocalizedText text={"Hasil Perhitungan"} />}</h3>
+          <div className="rounded-xl border border-gray-200 bg-white p-4">
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-gray-800">
+              <Calculator size={16} className="text-indigo-600" />
+              <LocalizedText text="Kalkulator" />
+            </h3>
+            <div className="hpp-calculator-display mb-3 rounded-lg bg-gray-50 px-3 py-2 text-right" aria-live="polite">
+              <p className="min-h-4 truncate text-xs text-gray-500">
+                {calculator.operator && calculator.storedValue !== null
+                  ? `${formatCalculatorValue(calculator.storedValue)} ${calculator.operator}`
+                  : '\u00a0'}
+              </p>
+              <p className="truncate text-xl font-semibold text-gray-900">{calculator.display}</p>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              <button
+                type="button"
+                onClick={() => setCalculator(initialCalculatorState)}
+                aria-label={translateText("Hapus kalkulator", localizedLanguage)}
+                className="min-h-10 rounded-lg bg-gray-100 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200"
+              >
+                AC
+              </button>
+              <button
+                type="button"
+                onClick={() => applyCalculatorUnary(value => value * -1)}
+                aria-label={translateText("Ubah tanda", localizedLanguage)}
+                className="min-h-10 rounded-lg bg-gray-100 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200"
+              >
+                +/−
+              </button>
+              <button
+                type="button"
+                onClick={() => applyCalculatorUnary(value => value / 100)}
+                aria-label={translateText("Persen", localizedLanguage)}
+                className="min-h-10 rounded-lg bg-gray-100 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200"
+              >
+                %
+              </button>
+              <button
+                type="button"
+                onClick={() => setCalculatorOperator('÷')}
+                aria-label={translateText("Bagi", localizedLanguage)}
+                className="min-h-10 rounded-lg bg-indigo-600 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
+              >
+                ÷
+              </button>
+              {(['7', '8', '9'] as const).map(digit => (
+                <button
+                  key={digit}
+                  type="button"
+                  onClick={() => enterCalculatorDigit(digit)}
+                  className="hpp-calculator-key min-h-10 rounded-lg border border-gray-200 bg-gray-50 text-sm font-medium text-gray-800 transition-colors hover:bg-gray-100"
+                >
+                  {digit}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setCalculatorOperator('×')}
+                aria-label={translateText("Kali", localizedLanguage)}
+                className="min-h-10 rounded-lg bg-indigo-600 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
+              >
+                ×
+              </button>
+              {(['4', '5', '6'] as const).map(digit => (
+                <button
+                  key={digit}
+                  type="button"
+                  onClick={() => enterCalculatorDigit(digit)}
+                  className="hpp-calculator-key min-h-10 rounded-lg border border-gray-200 bg-gray-50 text-sm font-medium text-gray-800 transition-colors hover:bg-gray-100"
+                >
+                  {digit}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setCalculatorOperator('−')}
+                aria-label={translateText("Kurang", localizedLanguage)}
+                className="min-h-10 rounded-lg bg-indigo-600 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
+              >
+                −
+              </button>
+              {(['1', '2', '3'] as const).map(digit => (
+                <button
+                  key={digit}
+                  type="button"
+                  onClick={() => enterCalculatorDigit(digit)}
+                  className="hpp-calculator-key min-h-10 rounded-lg border border-gray-200 bg-gray-50 text-sm font-medium text-gray-800 transition-colors hover:bg-gray-100"
+                >
+                  {digit}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setCalculatorOperator('+')}
+                aria-label={translateText("Tambah", localizedLanguage)}
+                className="min-h-10 rounded-lg bg-indigo-600 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
+              >
+                +
+              </button>
+              <button
+                type="button"
+                onClick={() => enterCalculatorDigit('0')}
+                className="hpp-calculator-key col-span-2 min-h-10 rounded-lg border border-gray-200 bg-gray-50 text-sm font-medium text-gray-800 transition-colors hover:bg-gray-100"
+              >
+                0
+              </button>
+              <button
+                type="button"
+                onClick={enterCalculatorDecimal}
+                aria-label={translateText("Desimal", localizedLanguage)}
+                className="hpp-calculator-key min-h-10 rounded-lg border border-gray-200 bg-gray-50 text-sm font-medium text-gray-800 transition-colors hover:bg-gray-100"
+              >
+                .
+              </button>
+              <button
+                type="button"
+                onClick={calculateCalculatorResult}
+                aria-label={translateText("Sama dengan", localizedLanguage)}
+                className="min-h-10 rounded-lg bg-indigo-600 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
+              >
+                =
+              </button>
+            </div>
+          </div>
 
-            <div className="space-y-3">
-              <div className="flex justify-between items-center py-2 border-b border-gray-50">
+          <div className="bg-white rounded-xl border border-gray-200 p-4 lg:sticky lg:top-4">
+            <h3 className="text-sm font-bold text-gray-800 mb-2">{<LocalizedText text={"Hasil Perhitungan"} />}</h3>
+
+            <div className="space-y-1">
+              <div className="flex justify-between items-center py-1 border-b border-gray-50">
                 <span className="text-sm text-gray-500">{<LocalizedText text={"Total Biaya"} />}</span>
                 <span className="text-sm font-bold text-gray-800">{formatCurrency(result.totalCost)}</span>
               </div>
-              <div className="flex justify-between items-center py-2 border-b border-gray-50">
+              <div className="flex justify-between items-center py-1 border-b border-gray-50">
                 <span className="text-sm text-gray-500">{<LocalizedText text={"HPP per Unit"} />}</span>
                 <span className="text-base font-bold text-indigo-600">{formatCurrency(result.hppPerUnit)}</span>
               </div>
-              <div className="flex justify-between items-center py-2">
+              <div className="flex justify-between items-center py-1">
                 <span className="text-sm text-gray-500">{<LocalizedText text={"Break Even Point"} />}</span>
                 <span className="text-sm font-bold text-gray-800">{formatCurrency(result.breakEvenPoint)}</span>
               </div>
             </div>
 
             {/* Rekomendasi harga */}
-            <div className="mt-4 pt-4 border-t border-gray-100">
-              <div className="flex justify-between items-center mb-2">
-                <label className="text-sm font-medium text-gray-700">{<LocalizedText text={"Target Margin"} />}</label>
-                <span className="text-sm font-bold text-green-600">{margin}{<LocalizedText text={"%"} />}</span>
+            <div className="mt-3 pt-3 border-t border-gray-100">
+              <div className="flex justify-between items-center mb-1">
+                <label className="text-sm font-medium text-gray-700"><LocalizedText text="Markup dari HPP" /></label>
+                <span className="text-sm font-bold text-green-600">{markupPct}{<LocalizedText text={"%"} />}</span>
               </div>
               <input
                 type="range"
                 min={0}
-                max={90}
+                max={200}
                 step={1}
-                value={margin}
-                onChange={e => setMargin(Number(e.target.value))}
+                value={markupPct}
+                onChange={e => setMarkupPct(Number(e.target.value))}
                 className="w-full accent-indigo-600"
               />
 
-              <div className="grid grid-cols-2 gap-3 mt-4">
-                <div className="bg-gray-50 rounded-lg p-3">
+              <div className="grid grid-cols-2 gap-2 mt-3">
+                <div className="bg-gray-50 rounded-lg p-2">
                   <p className="text-xs text-gray-500 mb-1">{<LocalizedText text={"Harga Minimum"} />}</p>
                   <p className="text-sm font-bold text-gray-800">{formatCurrency(price.minPrice)}</p>
                 </div>
-                <div className="bg-green-50 rounded-lg p-3">
+                <div className="bg-green-50 rounded-lg p-2">
                   <p className="text-xs text-green-600 mb-1">{<LocalizedText text={"Harga Rekomendasi"} />}</p>
                   <p className="text-sm font-bold text-green-700">{formatCurrency(price.recommendedPrice)}</p>
                 </div>
@@ -466,7 +697,7 @@ export default function HppPage() {
                   <th className="px-4 py-3 font-medium">{<LocalizedText text={"Jenis"} />}</th>
                   <th className="px-4 py-3 font-medium text-right">{<LocalizedText text={"HPP/Unit"} />}</th>
                   <th className="px-4 py-3 font-medium text-right">{<LocalizedText text={"Rekomendasi"} />}</th>
-                  <th className="px-4 py-3 font-medium text-center">{<LocalizedText text={"Margin"} />}</th>
+                  <th className="px-4 py-3 font-medium text-center"><LocalizedText text="Markup" /></th>
                   <th className="px-4 py-3"></th>
                 </tr>
               </thead>
@@ -480,7 +711,7 @@ export default function HppPage() {
                     <td className="px-4 py-3 text-gray-500">{CONFIG[p.business_type]?.label ?? p.business_type}</td>
                     <td className="px-4 py-3 text-right font-semibold text-indigo-600">{formatCurrency(p.hpp_per_unit)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-green-600">{formatCurrency(p.recommended_price)}</td>
-                    <td className="px-4 py-3 text-center text-gray-500">{p.target_margin}{<LocalizedText text={"%"} />}</td>
+                    <td className="px-4 py-3 text-center text-gray-500">{getSavedMarkupPercent(p)}{<LocalizedText text={"%"} />}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
                         <button
@@ -494,7 +725,7 @@ export default function HppPage() {
                         <button
                           onClick={() => handleDelete(p.id)}
                           title={translateText("Hapus", localizedLanguage)}
-                          className="text-gray-300 hover:text-red-400 transition-colors p-1"
+                          className="text-gray-400 hover:text-red-400 transition-colors p-1"
                         >
                           <Trash2 size={15} />
                         </button>

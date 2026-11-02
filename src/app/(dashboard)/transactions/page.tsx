@@ -473,7 +473,7 @@ export default function TransactionsPage() {
                         <>
                           <div className="flex justify-between text-sm">
                             <span className="text-gray-500">
-                              <LocalizedText text={tx.payment_method === 'mixed' ? 'Total diterima' : 'Jumlah Dibayar'} />
+                              <LocalizedText text={tx.payment_method === 'mixed' ? 'Total Diterima' : 'Jumlah Dibayar'} />
                             </span>
                             <span className="text-gray-700">{formatCurrency(tx.amount_paid)}</span>
                           </div>

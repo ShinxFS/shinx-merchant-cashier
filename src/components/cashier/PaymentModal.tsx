@@ -259,7 +259,7 @@ export default function PaymentModal({ subtotal, onConfirm, onClose, loading, qr
               </p>
               <div className="rounded-xl border border-gray-200 p-3">
                 <label htmlFor="mixed-cash-amount" className="mb-1.5 block text-xs font-semibold text-gray-600">
-                  <LocalizedText text="Tunai diterima" />
+                  <LocalizedText text="Tunai Diterima" />
                 </label>
                 <input
                   id="mixed-cash-amount"
@@ -277,7 +277,7 @@ export default function PaymentModal({ subtotal, onConfirm, onClose, loading, qr
               </div>
               <div className="rounded-xl border border-gray-200 p-3">
                 <label htmlFor="mixed-transfer-amount" className="mb-1.5 block text-xs font-semibold text-gray-600">
-                  <LocalizedText text="Nominal transfer" />
+                  <LocalizedText text="Nominal Transfer" />
                 </label>
                 <input
                   id="mixed-transfer-amount"
@@ -357,7 +357,7 @@ export default function PaymentModal({ subtotal, onConfirm, onClose, loading, qr
               </div>
               <div className="rounded-xl bg-gray-50 px-3 py-2.5 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-gray-500"><LocalizedText text="Total diterima" /></span>
+                  <span className="text-gray-500"><LocalizedText text="Total Diterima" /></span>
                   <span className="font-medium text-gray-800">{formatCurrency(mixedAmountPaid)}</span>
                 </div>
                 {mixedAmountPaid >= total && total > 0 && (

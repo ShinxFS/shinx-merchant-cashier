@@ -335,7 +335,7 @@ export default function DashboardPage() {
             return (
               <div
                 key={comparison.label}
-                className="px-4 py-3 first:border-b first:border-gray-200 sm:first:border-b-0 sm:first:border-r sm:first:border-gray-200"
+                className="border-gray-200 px-4 py-3 first:border-b first:border-gray-200 sm:first:border-b-0 sm:first:border-r sm:first:border-gray-200"
               >
                 <div className="mb-2 flex items-center justify-between gap-2 border-b border-gray-200 pb-2">
                   <h3 className="text-sm font-medium text-gray-800">
