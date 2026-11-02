@@ -46,6 +46,8 @@ export default function ProductsPage() {
   const [stockFilter, setStockFilter] = useState<'all' | 'low' | 'out'>('all')
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
+  const [lowStockThreshold, setLowStockThreshold] = useState(5)
+  const [lowStockThresholdError, setLowStockThresholdError] = useState('')
   const [compactView, setCompactView] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [editProduct, setEditProduct] = useState<Product | null>(null)
@@ -60,6 +62,40 @@ export default function ProductsPage() {
       setLoadError(translateText("Sesi login tidak ditemukan. Silakan masuk kembali.", localizedLanguage))
       setLoading(false)
       return
+    }
+
+    const { data: userProfile, error: userProfileError } = await supabase
+      .from('profiles')
+      .select('role, owner_id')
+      .eq('id', user.id)
+      .single()
+
+    if (userProfileError || !userProfile) {
+      setLowStockThresholdError(
+        `${translateText("Gagal memuat batas stok menipis:", localizedLanguage)} ${userProfileError?.message ?? translateText("Profil pemilik toko tidak ditemukan.", localizedLanguage)}`
+      )
+    } else {
+      const settingsProfileId = userProfile.role === 'staff' ? userProfile.owner_id : user.id
+      if (settingsProfileId) {
+        const { data: settingsProfile, error: settingsError } = await supabase
+          .from('profiles')
+          .select('low_stock_threshold')
+          .eq('id', settingsProfileId)
+          .single()
+
+        if (settingsError) {
+          setLowStockThresholdError(
+            `${translateText("Gagal memuat batas stok menipis:", localizedLanguage)} ${settingsError.message} ${translateText("Jalankan supabase/add_low_stock_threshold.sql di Supabase SQL Editor.", localizedLanguage)}`
+          )
+        } else if (settingsProfile && Number.isSafeInteger(settingsProfile.low_stock_threshold) && settingsProfile.low_stock_threshold >= 1) {
+          setLowStockThreshold(settingsProfile.low_stock_threshold)
+          setLowStockThresholdError('')
+        } else {
+          setLowStockThresholdError(translateText("Batas stok menipis tidak valid. Muat ulang halaman atau hubungi dukungan.", localizedLanguage))
+        }
+      } else {
+        setLowStockThresholdError(translateText("Profil pemilik toko tidak ditemukan.", localizedLanguage))
+      }
     }
 
     const [{ data: prods, error: productsError }, { data: cats }] = await Promise.all([
@@ -108,11 +144,13 @@ export default function ProductsPage() {
       product.category_id_2 === activeCategory
     const matchesStock =
       stockFilter === 'all' ||
-      (stockFilter === 'low' && product.stock > 0 && product.stock <= 5) ||
+      (stockFilter === 'low' && product.stock > 0 && product.stock <= lowStockThreshold) ||
       (stockFilter === 'out' && product.stock <= 0)
 
     return matchesSearch && matchesCategory && matchesStock
   })
+  const lowStockProducts = products.filter(product => product.stock > 0 && product.stock <= lowStockThreshold)
+  const outOfStockProducts = products.filter(product => product.stock === 0)
 
   const handleDelete = async (id: string) => {
     if (!confirm(translateText("Hapus produk ini?", localizedLanguage))) return
@@ -320,7 +358,7 @@ export default function ProductsPage() {
       <p className="w-16 flex-shrink-0 text-right text-[11px] font-semibold text-gray-800 sm:w-20 sm:text-xs">
         {formatCurrency(product.price)}
       </p>
-      <p className={`hidden w-14 flex-shrink-0 border-l border-gray-100 pl-2 text-right text-[11px] font-medium sm:block sm:text-xs ${product.stock <= 5 ? 'text-red-500' : 'text-gray-700'}`}>
+      <p className={`hidden w-14 flex-shrink-0 border-l border-gray-100 pl-2 text-right text-[11px] font-medium sm:block sm:text-xs ${product.stock <= lowStockThreshold ? 'text-red-500' : 'text-gray-700'}`}>
         {product.stock} {product.unit}
       </p>
       {isOwner && (
@@ -509,32 +547,44 @@ export default function ProductsPage() {
       )}
       </div>
 
+      {lowStockThresholdError && (
+        <p role="alert" className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          {lowStockThresholdError}
+        </p>
+      )}
+
       {/* Notifikasi stok menipis */}
-      {products.filter(p => p.stock <= 5 && p.stock > 0).length > 0 && (
-        <div className="mb-4 bg-orange-50 border border-orange-200 rounded-xl px-4 py-3">
-          <p className="text-sm font-semibold text-orange-700 mb-1">{<LocalizedText text={"⚠️ Stok Menipis"} />}</p>
-          <div className="flex flex-wrap gap-2">
-            {products.filter(p => p.stock <= 5 && p.stock > 0).map(p => (
+      {lowStockProducts.length > 0 && (
+        <details className="mb-4 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3">
+          <summary className="cursor-pointer text-sm font-semibold text-orange-700">
+            <LocalizedText text={"⚠️ Stok Menipis"} />
+            <span className="ml-2 rounded-full bg-orange-100 px-2 py-0.5 text-xs">{lowStockProducts.length}</span>
+          </summary>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {lowStockProducts.map(p => (
               <span key={p.id} className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-lg">
                 {p.name} {<LocalizedText text={" — sisa "} />}{p.stock} {p.unit}
               </span>
             ))}
           </div>
-        </div>
+        </details>
       )}
 
       {/* Notifikasi stok habis */}
-      {products.filter(p => p.stock === 0).length > 0 && (
-        <div className="stock-out-alert mb-4 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-          <p className="text-sm font-semibold text-red-700 mb-1">{<LocalizedText text={"🚫 Stok Habis"} />}</p>
-          <div className="flex flex-wrap gap-2">
-            {products.filter(p => p.stock === 0).map(p => (
+      {outOfStockProducts.length > 0 && (
+        <details className="stock-out-alert mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+          <summary className="cursor-pointer text-sm font-semibold text-red-700">
+            <LocalizedText text={"🚫 Stok Habis"} />
+            <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-xs">{outOfStockProducts.length}</span>
+          </summary>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {outOfStockProducts.map(p => (
               <span key={p.id} className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded-lg">
                 {p.name}
               </span>
             ))}
           </div>
-        </div>
+        </details>
       )}
 
       {/* Tabel */}
@@ -629,7 +679,7 @@ export default function ProductsPage() {
                     <p className="text-sm font-semibold text-gray-800">{formatCurrency(product.price)}</p>
                   </td>
                   <td className="px-4 py-3 text-right hidden md:table-cell">
-                    <span className={`text-sm font-medium ${product.stock <= 5 ? "text-red-500" : "text-gray-700"}`}>
+                    <span className={`text-sm font-medium ${product.stock <= lowStockThreshold ? "text-red-500" : "text-gray-700"}`}>
                       {product.stock} {product.unit}
                     </span>
                   </td>

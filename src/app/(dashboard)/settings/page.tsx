@@ -67,6 +67,11 @@ export default function SettingsPage() {
   const [cashierCompactModeReady, setCashierCompactModeReady] = useState(false)
   const [cashierCompactModeSaving, setCashierCompactModeSaving] = useState(false)
   const [cashierCompactModeError, setCashierCompactModeError] = useState('')
+  const [lowStockThreshold, setLowStockThreshold] = useState('5')
+  const [lowStockThresholdReady, setLowStockThresholdReady] = useState(false)
+  const [lowStockThresholdSaving, setLowStockThresholdSaving] = useState(false)
+  const [lowStockThresholdError, setLowStockThresholdError] = useState('')
+  const [lowStockThresholdSaved, setLowStockThresholdSaved] = useState(false)
   const [soundUploading, setSoundUploading] = useState<'cashier' | 'customer' | null>(null)
   const [tableQrLinks, setTableQrLinks] = useState<Record<number, string>>({})
   const [qrReady, setQrReady] = useState(false)
@@ -96,6 +101,30 @@ export default function SettingsPage() {
             'Pengaturan ini memerlukan pembaruan database. Jalankan supabase/add_cashier_compact_mode.sql di Supabase SQL Editor.'
           )
         }
+        if (prof.role === 'staff' && !prof.owner_id) {
+          setLowStockThresholdError(translateText("Profil pemilik toko tidak ditemukan.", localizedLanguage))
+        } else {
+          const lowStockProfile = prof.role === 'staff'
+            ? await supabase.from('profiles').select('low_stock_threshold').eq('id', prof.owner_id).single()
+            : { data: prof, error: null }
+          if (lowStockProfile.error) {
+            setLowStockThresholdError(
+              `${translateText("Gagal memuat batas stok menipis:", localizedLanguage)} ${lowStockProfile.error.message} ${translateText("Jalankan supabase/add_low_stock_threshold.sql di Supabase SQL Editor.", localizedLanguage)}`
+            )
+          } else if (lowStockProfile.data) {
+            const hasThresholdSetting = Object.prototype.hasOwnProperty.call(lowStockProfile.data, 'low_stock_threshold')
+            setLowStockThresholdReady(hasThresholdSetting)
+            if (hasThresholdSetting && Number.isSafeInteger(lowStockProfile.data.low_stock_threshold) && lowStockProfile.data.low_stock_threshold >= 1) {
+              setLowStockThreshold(String(lowStockProfile.data.low_stock_threshold))
+            } else if (!hasThresholdSetting) {
+              setLowStockThresholdError(
+                translateText("Pengaturan ini memerlukan pembaruan database. Jalankan supabase/add_low_stock_threshold.sql di Supabase SQL Editor.", localizedLanguage)
+              )
+            } else {
+              setLowStockThresholdError(translateText("Batas stok menipis tidak valid. Muat ulang halaman atau hubungi dukungan.", localizedLanguage))
+            }
+          }
+        }
         setProfile({
           business_name: prof.business_name ?? '',
           owner_name: prof.owner_name ?? '',
@@ -122,7 +151,7 @@ export default function SettingsPage() {
       setQrReady(true)
     }
     load()
-  }, [supabase])
+  }, [supabase, localizedLanguage])
 
   const handleCurrencyChange = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -176,6 +205,43 @@ export default function SettingsPage() {
       setCashierCompactMode(nextValue)
     }
     setCashierCompactModeSaving(false)
+  }
+
+  const handleLowStockThresholdSave = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    if (!isOwner || !lowStockThresholdReady || lowStockThresholdSaving) return
+
+    const threshold = Number(lowStockThreshold)
+    if (!Number.isSafeInteger(threshold) || threshold < 1 || threshold > 2147483647) {
+      setLowStockThresholdError(translateText("Masukkan batas stok berupa bilangan bulat lebih dari 0.", localizedLanguage))
+      setLowStockThresholdSaved(false)
+      return
+    }
+
+    setLowStockThresholdSaving(true)
+    setLowStockThresholdError('')
+    setLowStockThresholdSaved(false)
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError || !user) {
+      setLowStockThresholdError(
+        `${translateText("Gagal menyimpan batas stok menipis:", localizedLanguage)} ${userError?.message ?? translateText('Sesi pengguna tidak ditemukan.', localizedLanguage)}`
+      )
+      setLowStockThresholdSaving(false)
+      return
+    }
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({ low_stock_threshold: threshold })
+      .eq('id', user.id)
+
+    if (error) {
+      setLowStockThresholdError(`${translateText("Gagal menyimpan batas stok menipis:", localizedLanguage)} ${error.message}`)
+    } else {
+      setLowStockThreshold(String(threshold))
+      setLowStockThresholdSaved(true)
+    }
+    setLowStockThresholdSaving(false)
   }
 
   const handleSaveProfile = async (e: React.FormEvent) => {
@@ -600,6 +666,59 @@ export default function SettingsPage() {
         )}
         {cashierCompactModeSaving && (
           <p className="mt-2 text-xs text-gray-400">{<LocalizedText text={"Menyimpan pengaturan..."} />}</p>
+        )}
+      </div>
+
+      {/* Peringatan Stok Menipis */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <h2 className="font-semibold text-gray-800 mb-1"><LocalizedText text={"Batas Stok Menipis"} /></h2>
+        <p className="text-sm text-gray-500 mb-4">
+          <LocalizedText text={"Peringatan muncul saat stok produk tersisa pada atau di bawah batas ini."} />
+        </p>
+        {!isOwner ? (
+          <p className="text-sm text-gray-500"><LocalizedText text={"Batas stok mengikuti pengaturan pemilik toko."} /></p>
+        ) : (
+          <form onSubmit={handleLowStockThresholdSave} className="space-y-3">
+            {lowStockThresholdSaved && (
+              <p className="rounded-lg border border-green-200 bg-green-50 px-3 py-2.5 text-sm text-green-700">
+                <LocalizedText text={"Batas stok menipis berhasil disimpan."} />
+              </p>
+            )}
+            {lowStockThresholdError && (
+              <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700">
+                {lowStockThresholdError}
+              </p>
+            )}
+            <div>
+              <label htmlFor="low-stock-threshold" className="mb-1 block text-sm font-medium text-gray-700">
+                <LocalizedText text={"Tampilkan peringatan saat stok tersisa"} />
+              </label>
+              <input
+                id="low-stock-threshold"
+                type="number"
+                min={1}
+                max={2147483647}
+                step={1}
+                required
+                value={lowStockThreshold}
+                onChange={event => {
+                  setLowStockThreshold(event.target.value)
+                  setLowStockThresholdError('')
+                  setLowStockThresholdSaved(false)
+                }}
+                disabled={!lowStockThresholdReady || lowStockThresholdSaving}
+                className={inputClass}
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={!lowStockThresholdReady || lowStockThresholdSaving}
+              className="flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Save size={15} />
+              {lowStockThresholdSaving ? <LocalizedText text={"Menyimpan..."} /> : <LocalizedText text={"Simpan Batas Stok"} />}
+            </button>
+          </form>
         )}
       </div>
 
