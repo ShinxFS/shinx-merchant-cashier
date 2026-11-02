@@ -461,6 +461,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
           <div className="max-h-[60vh] divide-y divide-gray-100 overflow-y-auto px-4">
             <article className="py-3">
+              <p className="text-sm font-medium text-gray-800"><LocalizedText text={"Pembayaran Split"} /></p>
+              <p className="mt-0.5 text-sm text-gray-600"><LocalizedText text={"Gabungkan tunai, transfer, dan QRIS dalam satu transaksi."} /></p>
+            </article>
+            <article className="py-3">
+              <p className="text-sm font-medium text-gray-800"><LocalizedText text={"Perbandingan Penjualan Harian & Bulanan"} /></p>
+              <p className="mt-0.5 text-sm text-gray-600"><LocalizedText text={"Bandingkan penjualan harian dan bulanan."} /></p>
+            </article>
+            <article className="py-3">
               <p className="text-sm font-medium text-gray-800">{<LocalizedText text={"Bahasa Toko"} />}</p>
               <p className="mt-0.5 text-sm text-gray-600">{<LocalizedText text={"Pilih Bahasa Indonesia atau English untuk aplikasi dan halaman QR meja."} />}</p>
             </article>
