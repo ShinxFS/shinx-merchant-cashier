@@ -21,6 +21,64 @@ interface NotificationLog {
   created_at: string
 }
 
+const CHANGELOG_ENTRIES = [
+  {
+    title: 'Pembayaran Split',
+    description: 'Gabungkan tunai, transfer, dan QRIS dalam satu transaksi.',
+    date: '2026-11-02',
+  },
+  {
+    title: 'Catatan per Item',
+    description: 'Tambahkan catatan khusus untuk setiap item pesanan.',
+    date: '2026-11-02',
+  },
+  {
+    title: 'Perbandingan Penjualan Harian & Bulanan',
+    description: 'Bandingkan penjualan harian dan bulanan.',
+    date: '2026-11-02',
+  },
+  {
+    title: 'Bahasa Toko',
+    description: 'Pilih Bahasa Indonesia atau English untuk aplikasi dan halaman QR meja.',
+    date: '2026-10-29',
+  },
+  {
+    title: 'Mata Uang Toko',
+    description: 'Atur mata uang tampilan tanpa mengonversi otomatis nilai yang sudah tersimpan.',
+    date: '2026-10-30',
+  },
+  {
+    title: 'Dark Mode',
+    description: 'Menambahkan tampilan gelap untuk mengurangi kelelahan mata.',
+    date: '2026-10-24',
+  },
+  {
+    title: 'Mode Compact',
+    description: 'Sembunyikan gambar produk agar lebih banyak item terlihat di layar kasir.',
+    date: '2026-10-24',
+  },
+  {
+    title: 'Restock Produk',
+    description: 'Tambah stok langsung dari daftar produk.',
+    date: '2026-10-01',
+  },
+  {
+    title: 'Status Produk',
+    description: 'Badge Aktif dan Nonaktif terlihat di daftar produk.',
+    date: '2026-10-30',
+  },
+  {
+    title: 'Riwayat Transaksi',
+    description: 'Filter transaksi menurut bulan dan tahun.',
+    date: '2026-10-28',
+  },
+  {
+    title: 'Log Notifikasi',
+    description: 'Catatan produk baru, stok menipis, dan perubahan nama toko.',
+    date: '2026-10-03',
+  },
+] as const
+
 const getLastSeenAt = (key: string) => {
   try {
     return window.localStorage.getItem(key)
@@ -222,6 +280,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     new Date(date).toLocaleString(localizedLanguage === 'en' ? 'en-US' : 'id-ID', {
       day: 'numeric', month: 'short', year: 'numeric',
       hour: '2-digit', minute: '2-digit',
+    })
+
+  const formatChangelogDate = (date: string) =>
+    new Date(`${date}T00:00:00`).toLocaleDateString(localizedLanguage === 'en' ? 'en-US' : 'id-ID', {
+      day: 'numeric', month: 'long', year: 'numeric',
     })
 
   const toggleSidebarMenu = () => {
@@ -460,46 +523,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </button>
           </div>
           <div className="max-h-[60vh] divide-y divide-gray-100 overflow-y-auto px-4">
-            <article className="py-3">
-              <p className="text-sm font-medium text-gray-800"><LocalizedText text={"Pembayaran Split"} /></p>
-              <p className="mt-0.5 text-sm text-gray-600"><LocalizedText text={"Gabungkan tunai, transfer, dan QRIS dalam satu transaksi."} /></p>
-            </article>
-            <article className="py-3">
-              <p className="text-sm font-medium text-gray-800"><LocalizedText text={"Perbandingan Penjualan Harian & Bulanan"} /></p>
-              <p className="mt-0.5 text-sm text-gray-600"><LocalizedText text={"Bandingkan penjualan harian dan bulanan."} /></p>
-            </article>
-            <article className="py-3">
-              <p className="text-sm font-medium text-gray-800">{<LocalizedText text={"Bahasa Toko"} />}</p>
-              <p className="mt-0.5 text-sm text-gray-600">{<LocalizedText text={"Pilih Bahasa Indonesia atau English untuk aplikasi dan halaman QR meja."} />}</p>
-            </article>
-            <article className="py-3">
-              <p className="text-sm font-medium text-gray-800">{<LocalizedText text={"Mata Uang Toko"} />}</p>
-              <p className="mt-0.5 text-sm text-gray-600">{<LocalizedText text={"Atur mata uang tampilan tanpa mengonversi otomatis nilai yang sudah tersimpan."} />}</p>
-            </article>
-             <article className="py-3">
-              <p className="text-sm font-medium text-gray-800">{<LocalizedText text={"Dark Mode"} />}</p>
-              <p className="mt-0.5 text-sm text-gray-600">{<LocalizedText text={"Menambahkan tampilan gelap untuk mengurangi kelelahan mata."} />}</p>
-            </article>
-            <article className="py-3">
-              <p className="text-sm font-medium text-gray-800">{<LocalizedText text={"Mode Compact"} />}</p>
-              <p className="mt-0.5 text-sm text-gray-600">{<LocalizedText text={"Sembunyikan gambar produk agar lebih banyak item terlihat di layar kasir."} />}</p>
-            </article>
-            <article className="py-3">
-              <p className="text-sm font-medium text-gray-800">{<LocalizedText text={"Restock Produk"} />}</p>
-              <p className="mt-0.5 text-sm text-gray-600">{<LocalizedText text={"Tambah stok langsung dari daftar produk."} />}</p>
-            </article>
-            <article className="py-3">
-              <p className="text-sm font-medium text-gray-800">{<LocalizedText text={"Status Produk"} />}</p>
-              <p className="mt-0.5 text-sm text-gray-600">{<LocalizedText text={"Badge Aktif dan Nonaktif terlihat di daftar produk."} />}</p>
-            </article>
-            <article className="py-3">
-              <p className="text-sm font-medium text-gray-800">{<LocalizedText text={"Riwayat Transaksi"} />}</p>
-              <p className="mt-0.5 text-sm text-gray-600">{<LocalizedText text={"Filter transaksi menurut bulan dan tahun."} />}</p>
-            </article>
-            <article className="py-3">
-              <p className="text-sm font-medium text-gray-800">{<LocalizedText text={"Log Notifikasi"} />}</p>
-              <p className="mt-0.5 text-sm text-gray-600">{<LocalizedText text={"Catatan produk baru, stok menipis, dan perubahan nama toko."} />}</p>
-            </article>
+            {CHANGELOG_ENTRIES.map(entry => (
+              <article key={entry.title} className="py-3">
+                <p className="text-sm font-medium text-gray-800"><LocalizedText text={entry.title} /></p>
+                <p className="mt-0.5 text-sm text-gray-600"><LocalizedText text={entry.description} /></p>
+                <time dateTime={entry.date} className="mt-1 block text-xs text-gray-400">
+                  {formatChangelogDate(entry.date)}
+                </time>
+              </article>
+            ))}
           </div>
         </section>
       )}

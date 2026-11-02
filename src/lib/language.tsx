@@ -115,6 +115,8 @@ const translations: Array<[string, string]> = [
   ['Changelog', 'Changelog'],
   ['Pembayaran Split', 'Split Payments'],
   ['Gabungkan tunai, transfer, dan QRIS dalam satu transaksi.', 'Combine cash, bank transfer, and QRIS in a single transaction.'],
+  ['Catatan per Item', 'Item Notes'],
+  ['Tambahkan catatan khusus untuk setiap item pesanan.', 'Add a specific note to each order item.'],
   ['Perbandingan Penjualan Harian & Bulanan', 'Daily & Monthly Sales Comparison'],
   ['Bandingkan penjualan harian dan bulanan.', 'Compare daily and monthly sales.'],
   ['Keluar', 'Sign out'],
