@@ -123,8 +123,7 @@ export default function CashierPage() {
 
   const audioContextRef = useRef<AudioContext | null>(null)
   const hasUserInteractionRef = useRef(false)
-  const lastOrderSnapshotRef = useRef<string[]>([])
-  const lastOrderStatusRef = useRef<Record<string, TableOrder['status']>>({})
+  const tableOrdersRef = useRef<TableOrder[]>([])
   const notifiedOrderIdsRef = useRef<Set<string>>(new Set())
 
   const unlockAudio = async () => {
@@ -330,87 +329,116 @@ export default function CashierPage() {
   useEffect(() => {
     if (!effectiveUserId) return
 
-    const loadTableOrders = async () => {
-      const { data, error } = await supabase
-        .from('table_orders')
-        .select('*')
-        .eq('user_id', effectiveUserId)
-        .order('created_at', { ascending: false })
+    type OrderChange =
+      | { eventType: 'INSERT' | 'UPDATE'; row: TableOrder }
+      | { eventType: 'DELETE'; row: Pick<TableOrder, 'id'> & Partial<TableOrder> }
 
-      if (error) return
+    let isSubscribed = false
+    let hasInitialSync = false
+    let isSyncing = false
+    let syncRequested = false
+    let pendingChanges: OrderChange[] = []
 
-      const loadedOrders = (data as TableOrder[]) ?? []
-      const currentIds = loadedOrders.map(order => order.id)
-      const previousIds = lastOrderSnapshotRef.current
-      const previousStatuses = lastOrderStatusRef.current
+    const showOrderNotification = (order: Pick<TableOrder, 'id' | 'table_number'>, kind: 'new' | 'completed') => {
+      if (!order.table_number) return
+      const notificationKey = `${order.id}:${kind}`
+      if (notifiedOrderIdsRef.current.has(notificationKey)) return
 
-      const newOrderIds = currentIds.filter(id => !previousIds.includes(id))
-      const justCompleted = loadedOrders.filter(order => {
-        const prevStatus = previousStatuses[order.id]
-        return prevStatus && prevStatus !== 'done' && order.status === 'done'
-      })
+      setTableNotification({ table: order.table_number, kind })
+      notifiedOrderIdsRef.current.add(notificationKey)
+      playCashierTone()
+      setTimeout(() => setTableNotification(null), 4000)
+    }
 
-      setTableOrders(loadedOrders)
-      lastOrderSnapshotRef.current = currentIds
-      lastOrderStatusRef.current = Object.fromEntries(loadedOrders.map(order => [order.id, order.status]))
-
+    const updateTableStates = (orders: TableOrder[]) => {
       const nextState = {} as Record<string, 'empty' | 'occupied'>
       for (const tableNumber of tablesRef.current) {
         nextState[String(tableNumber)] = 'empty'
       }
 
-      for (const order of loadedOrders) {
+      for (const order of orders) {
         if (order.status !== 'done') {
           nextState[String(order.table_number)] = 'occupied'
         }
       }
 
       setTableStates(nextState)
-
-      if (newOrderIds.length > 0) {
-        const newestNewOrder = loadedOrders.find(order => newOrderIds.includes(order.id))
-        if (newestNewOrder?.id && newestNewOrder.table_number && !notifiedOrderIdsRef.current.has(newestNewOrder.id)) {
-          setTableNotification({ table: newestNewOrder.table_number, kind: 'new' })
-          notifiedOrderIdsRef.current.add(newestNewOrder.id)
-          playCashierTone()
-          setTimeout(() => setTableNotification(null), 4000)
-        }
-      }
-
-      if (justCompleted.length > 0) {
-        const newestCompleted = justCompleted[0]
-        if (newestCompleted.id && newestCompleted.table_number && !notifiedOrderIdsRef.current.has(newestCompleted.id)) {
-          setTableNotification({ table: newestCompleted.table_number, kind: 'completed' })
-          notifiedOrderIdsRef.current.add(newestCompleted.id)
-          playCashierTone()
-          setTimeout(() => setTableNotification(null), 4000)
-        }
-      }
     }
 
-    const refreshAndNotify = async (eventType: 'insert' | 'update' | 'delete', row?: Partial<TableOrder>) => {
-      await loadTableOrders()
-
-      if (eventType === 'insert' && row?.id && row?.table_number && !notifiedOrderIdsRef.current.has(row.id)) {
-        setTableNotification({ table: row.table_number, kind: 'new' })
-        notifiedOrderIdsRef.current.add(row.id)
-        playCashierTone()
-        setTimeout(() => setTableNotification(null), 4000)
+    const applyOrderChange = (orders: TableOrder[], change: OrderChange) => {
+      const { eventType, row } = change
+      if (eventType === 'DELETE') {
+        return orders.filter(order => order.id !== row.id)
       }
 
-      if (eventType === 'update' && row?.id && row?.table_number && row.status === 'done' && !notifiedOrderIdsRef.current.has(row.id)) {
-        setTableNotification({ table: row.table_number, kind: 'completed' })
-        notifiedOrderIdsRef.current.add(row.id)
-        playCashierTone()
-        setTimeout(() => setTableNotification(null), 4000)
+      const previous = orders.find(order => order.id === row.id)
+      if (eventType === 'INSERT' && !previous) {
+        showOrderNotification(row, 'new')
+      } else if (eventType === 'UPDATE' && row.status === 'done' && previous?.status !== 'done') {
+        showOrderNotification(row, 'completed')
       }
+
+      const updatedOrder = previous ? { ...previous, ...row } : row
+      return [...orders.filter(order => order.id !== row.id), updatedOrder]
+        .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
     }
 
-    loadTableOrders()
+    const handleOrderChange = (change: OrderChange) => {
+      if (isSyncing) pendingChanges.push(change)
+      const updatedOrders = applyOrderChange(tableOrdersRef.current, change)
+      tableOrdersRef.current = updatedOrders
+      setTableOrders(updatedOrders)
+      updateTableStates(updatedOrders)
+    }
 
-    const intervalId = window.setInterval(() => {
-      void loadTableOrders()
-    }, 4000)
+    const syncTableOrders = async () => {
+      if (isSyncing) {
+        syncRequested = true
+        return
+      }
+
+      isSyncing = true
+      try {
+        do {
+          syncRequested = false
+          pendingChanges = []
+          const knownOrders = tableOrdersRef.current
+          const { data, error } = await supabase
+            .from('table_orders')
+            .select('*')
+            .eq('user_id', effectiveUserId)
+            .order('created_at', { ascending: false })
+
+          if (error) {
+            console.error('Gagal menyinkronkan pesanan meja:', error)
+            break
+          }
+
+          let syncedOrders = (data as TableOrder[]) ?? []
+          const changesDuringSync = pendingChanges
+          for (const change of changesDuringSync) {
+            syncedOrders = applyOrderChange(syncedOrders, change)
+          }
+
+          if (hasInitialSync) {
+            for (const order of syncedOrders) {
+              const previous = knownOrders.find(item => item.id === order.id)
+              if (!previous) showOrderNotification(order, 'new')
+              else if (previous.status !== 'done' && order.status === 'done') {
+                showOrderNotification(order, 'completed')
+              }
+            }
+          }
+
+          tableOrdersRef.current = syncedOrders
+          setTableOrders(syncedOrders)
+          updateTableStates(syncedOrders)
+          hasInitialSync = true
+        } while (syncRequested)
+      } finally {
+        isSyncing = false
+      }
+    }
 
     const channel = supabase.channel(`table-orders-${effectiveUserId}`)
       .on(
@@ -422,7 +450,7 @@ export default function CashierPage() {
           filter: `user_id=eq.${effectiveUserId}`,
         },
         payload => {
-          void refreshAndNotify('insert', payload.new as Partial<TableOrder>)
+          handleOrderChange({ eventType: 'INSERT', row: payload.new as TableOrder })
         }
       )
       .on(
@@ -434,7 +462,7 @@ export default function CashierPage() {
           filter: `user_id=eq.${effectiveUserId}`,
         },
         payload => {
-          void refreshAndNotify('update', payload.new as Partial<TableOrder>)
+          handleOrderChange({ eventType: 'UPDATE', row: payload.new as TableOrder })
         }
       )
       .on(
@@ -446,17 +474,30 @@ export default function CashierPage() {
           filter: `user_id=eq.${effectiveUserId}`,
         },
         payload => {
-          void loadTableOrders()
-          const deleted = payload.old as Partial<TableOrder>
-          if (deleted.table_number) {
-            setTableStates(prev => ({ ...prev, [String(deleted.table_number)]: 'empty' }))
-          }
+          handleOrderChange({ eventType: 'DELETE', row: payload.old as Pick<TableOrder, 'id'> & Partial<TableOrder> })
         }
       )
-      .subscribe()
+      .subscribe(status => {
+        if (status === 'SUBSCRIBED') {
+          isSubscribed = true
+          void syncTableOrders()
+        } else {
+          isSubscribed = false
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            console.error('Koneksi Realtime pesanan meja bermasalah:', status)
+          }
+        }
+      })
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && isSubscribed) {
+        void syncTableOrders()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
 
     return () => {
-      window.clearInterval(intervalId)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
       supabase.removeChannel(channel)
     }
   }, [effectiveUserId])

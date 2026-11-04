@@ -46,6 +46,8 @@ const translations: Array<[string, string]> = [
   ['Ringkasan pendapatan, biaya, dan laba bersih', 'Summary of revenue, expenses, and net profit'],
   ['Hari ini', 'Today'],
   ['7 Hari', '7 Days'],
+  ['15 Hari', '15 Days'],
+  ['30 Hari', '30 Days'],
   ['Bulan ini', 'This Month'],
   ['Transaksi Terbaru', 'Recent Transactions'],
   ['Lihat semua', 'View all'],

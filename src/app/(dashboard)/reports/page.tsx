@@ -366,7 +366,7 @@ export default function ReportsPage() {
           type="button"
           onClick={exportExcel}
           disabled={!!loadError}
-          className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex translate-y-1 items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <FileSpreadsheet size={16} />
           {<LocalizedText text={"\r\n          Export ke Excel\r\n        "} />}</button>
@@ -424,7 +424,7 @@ export default function ReportsPage() {
                 : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
             }`}
           >
-            {label}
+            {<LocalizedText text={label} />}
           </button>
         ))}
       </div>
