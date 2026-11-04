@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
 import { CurrencyCode, formatCurrency as formatStoreCurrency, isCurrencyCode } from '@/lib/currency'
 import { isLanguageCode, useLanguage, LocalizedText, translateText } from '@/lib/language'
+import { isSupabaseServerId, type SupabaseServerId } from '@/lib/supabase/config'
 import { Minus, Plus, ShoppingCart, CheckCircle2, AlertCircle, Wallet, X, ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface Product {
@@ -18,16 +18,27 @@ interface Product {
   category2?: { name: string; color: string } | null
 }
 
+interface TableQrProfile {
+  business_name: string | null
+  qris_image_url: string | null
+  customer_sound_url: string | null
+  customer_tone: string | null
+  currency_code: string | null
+  language_code: string | null
+}
+
 export default function TableOrderPage() {
   const localizedLanguage = useLanguage().language
 
   const params = useParams()
   const searchParams = useSearchParams()
-  const supabase = createClient()
   const { applyProfileLanguage } = useLanguage()
 
   const tableNumber = Number(params.tableNumber)
-  const ownerId = searchParams.get('owner') ?? ''
+  const tableToken = searchParams.get('token') ?? ''
+  const serverParam = searchParams.get('server')
+  const serverId: SupabaseServerId = isSupabaseServerId(serverParam) ? serverParam : '0'
+  const serverQuery = `server=${encodeURIComponent(serverId)}`
 
   const [products, setProducts] = useState<Product[]>([])
   const [activeCategory, setActiveCategory] = useState('all')
@@ -58,7 +69,7 @@ export default function TableOrderPage() {
   const orderDetailUserOverrideRef = useRef(false)
   const categorySliderRef = useRef<HTMLDivElement>(null)
 
-  const unlockAudio = async () => {
+  const unlockAudio = useCallback(async () => {
     if (hasUserInteractionRef.current) return
 
     try {
@@ -74,7 +85,7 @@ export default function TableOrderPage() {
     } catch {
       // ignored on unsupported browsers
     }
-  }
+  }, [])
 
   useEffect(() => {
     const onUserInteraction = () => {
@@ -90,9 +101,9 @@ export default function TableOrderPage() {
       window.removeEventListener('keydown', onUserInteraction)
       window.removeEventListener('touchstart', onUserInteraction)
     }
-  }, [])
+  }, [unlockAudio])
 
-  const playReadyTone = () => {
+  const playReadyTone = useCallback(() => {
     const fallbackTone = () => {
       try {
         const AudioCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
@@ -149,47 +160,64 @@ export default function TableOrderPage() {
     } catch {
       fallbackTone()
     }
-  }
+  }, [customerSoundUrl, customerTone, unlockAudio])
+
+  const playReadyToneRef = useRef(playReadyTone)
+  useEffect(() => {
+    playReadyToneRef.current = playReadyTone
+  }, [playReadyTone])
 
   useEffect(() => {
     const load = async () => {
-      if (!ownerId) {
-        setError('Link pesanan tidak valid. Hubungi kasir untuk mendapatkan QR meja.')
+      if (!tableToken) {
+        setError(translateText('Link pesanan tidak valid. Hubungi kasir untuk mendapatkan QR meja.', localizedLanguage))
         setLoading(false)
         return
       }
 
-      const [{ data: profile }, { data: items }] = await Promise.all([
-        supabase.from('profiles').select('business_name, qris_image_url, customer_sound_url, customer_tone, currency_code, language_code').eq('id', ownerId).single(),
-        supabase
-          .from('products')
-          .select('*, category:categories!category_id(name, color), category2:categories!category_id_2(name, color)')
-          .eq('user_id', ownerId)
-          .eq('is_active', true)
-          .order('name'),
-      ])
+      try {
+        const response = await fetch(
+          `/api/table-menu?${serverQuery}&token=${encodeURIComponent(tableToken)}&table=${tableNumber}`,
+          { cache: 'no-store' }
+        )
+        const result = await response.json() as {
+          error?: string
+          profile?: TableQrProfile
+          products?: Product[]
+        }
 
-      if (profile?.business_name) setBusinessName(profile.business_name)
-      if (profile?.currency_code && isCurrencyCode(profile.currency_code)) {
-        setCurrencyCode(profile.currency_code)
+        if (!response.ok || !result.profile) {
+          setError(result.error ?? translateText('Gagal memuat menu meja.', localizedLanguage))
+          return
+        }
+
+        const profile = result.profile
+        if (profile.business_name) setBusinessName(profile.business_name)
+        if (profile.currency_code && isCurrencyCode(profile.currency_code)) {
+          setCurrencyCode(profile.currency_code)
+        }
+        if (profile.language_code && isLanguageCode(profile.language_code)) {
+          applyProfileLanguage(profile.language_code)
+        }
+        if (profile.qris_image_url) setQrisImageUrl(profile.qris_image_url)
+        if (profile.customer_sound_url) setCustomerSoundUrl(profile.customer_sound_url)
+        setCustomerTone(profile.customer_tone ?? 'classic')
+        setProducts(result.products ?? [])
+      } catch {
+        setError(translateText('Gagal memuat menu meja. Periksa koneksi lalu coba lagi.', localizedLanguage))
+      } finally {
+        setLoading(false)
       }
-      if (profile?.language_code && isLanguageCode(profile.language_code)) {
-        applyProfileLanguage(profile.language_code)
-      }
-      if (profile?.qris_image_url) setQrisImageUrl(profile.qris_image_url)
-      if (profile?.customer_sound_url) setCustomerSoundUrl(profile.customer_sound_url)
-      setCustomerTone(profile?.customer_tone ?? 'classic')
-      setProducts(items ?? [])
-      setLoading(false)
     }
 
-    load()
-  }, [ownerId])
+    void load()
+  }, [tableToken, tableNumber, serverQuery, applyProfileLanguage, localizedLanguage])
 
   const formatCurrency = (amount: number) => formatStoreCurrency(amount, currencyCode)
 
   useEffect(() => {
-    if (!ownerId || !tableNumber) return
+    if (!tableToken || !tableNumber) return
+    let active = true
 
     const normalizeOrderItems = (items: unknown) => {
       if (!Array.isArray(items)) return []
@@ -238,100 +266,87 @@ export default function TableOrderPage() {
     }
 
     const loadLatestOrderStatus = async () => {
-      const { data, error: orderError } = await supabase
-        .from('table_orders')
-        .select('id, status, table_number, items, total, payment_method, note, updated_at, created_at')
-        .eq('user_id', ownerId)
-        .eq('table_number', tableNumber)
-        .order('updated_at', { ascending: false })
-
-      if (orderError) {
-        setError('Status pesanan belum bisa dimuat. Periksa koneksi atau policy table_orders di Supabase.')
-        return
-      }
-
-      const latest = pickLatestTableOrder((data ?? []) as Array<{ id?: string; status?: 'pending' | 'processing' | 'ready' | 'done'; items?: unknown; total?: number; payment_method?: 'cash' | 'qris'; note?: string; updated_at?: string; created_at?: string }>)
-
-      if (latest) {
-        const items = normalizeOrderItems(latest.items)
-        const nextStatus = latest.status ?? 'pending'
-        const nextOrderId = latest.id ?? null
-
-        setOrderId(nextOrderId)
-        setOrderStatus(nextStatus)
-        if (nextStatus === 'ready' && (lastStatusRef.current !== 'ready' || lastOrderIdRef.current !== nextOrderId)) {
-          playReadyTone()
+      try {
+        const response = await fetch(
+          `/api/table-orders?${serverQuery}&token=${encodeURIComponent(tableToken)}&table=${tableNumber}`,
+          { cache: 'no-store' }
+        )
+        const result = await response.json() as {
+          error?: string
+          order?: {
+            id?: string
+            status?: 'pending' | 'processing' | 'ready' | 'done'
+            items?: unknown
+            total?: number
+            payment_method?: 'cash' | 'qris'
+            note?: string
+            updated_at?: string
+            created_at?: string
+          } | null
         }
-        lastStatusRef.current = nextStatus
-        lastOrderIdRef.current = nextOrderId
-        setPaymentMethod(latest.payment_method ?? 'cash')
-        setLatestOrderItems(items)
-        setLatestOrderTotal(Number(latest.total ?? items.reduce((sum, item) => sum + item.subtotal, 0)))
-        setLatestOrderNote(latest.note?.split(' — ').slice(1).join(' — ') ?? '')
-        setLatestOrderCreatedAt(latest.created_at ?? null)
 
-        if (nextStatus === 'done') {
+        if (!active) return
+        if (!response.ok) {
+          setError(result.error ?? translateText('Status pesanan belum bisa dimuat.', localizedLanguage))
+          return
+        }
+
+        const latest = pickLatestTableOrder(result.order ? [result.order] : [])
+
+        if (latest) {
+          const items = normalizeOrderItems(latest.items)
+          const nextStatus = latest.status ?? 'pending'
+          const nextOrderId = latest.id ?? null
+
+          setOrderId(nextOrderId)
+          setOrderStatus(nextStatus)
+          if (nextStatus === 'ready' && (lastStatusRef.current !== 'ready' || lastOrderIdRef.current !== nextOrderId)) {
+            playReadyToneRef.current()
+          }
+          lastStatusRef.current = nextStatus
+          lastOrderIdRef.current = nextOrderId
+          setPaymentMethod(latest.payment_method ?? 'cash')
+          setLatestOrderItems(items)
+          setLatestOrderTotal(Number(latest.total ?? items.reduce((sum, item) => sum + item.subtotal, 0)))
+          setLatestOrderNote(latest.note?.split(' — ').slice(1).join(' — ') ?? '')
+          setLatestOrderCreatedAt(latest.created_at ?? null)
+
+          if (nextStatus === 'done') {
+            orderDetailUserOverrideRef.current = false
+            setShowOrderDetail(false)
+          } else if (!orderDetailUserOverrideRef.current) {
+            setShowOrderDetail(Boolean(latest.id))
+          }
+        } else {
+          setOrderId(null)
+          setOrderStatus(null)
+          lastStatusRef.current = null
+          lastOrderIdRef.current = null
+          setLatestOrderItems([])
+          setLatestOrderTotal(0)
+          setLatestOrderNote('')
+          setLatestOrderCreatedAt(null)
           orderDetailUserOverrideRef.current = false
           setShowOrderDetail(false)
-        } else if (!orderDetailUserOverrideRef.current) {
-          setShowOrderDetail(Boolean(latest.id))
         }
-      } else {
-        setOrderId(null)
-        setOrderStatus(null)
-        lastStatusRef.current = null
-        lastOrderIdRef.current = null
-        setLatestOrderItems([])
-        setLatestOrderTotal(0)
-        setLatestOrderNote('')
-        setLatestOrderCreatedAt(null)
-        orderDetailUserOverrideRef.current = false
-        setShowOrderDetail(false)
+      } catch {
+        if (active) {
+          setError(translateText('Status pesanan belum bisa dimuat. Periksa koneksi lalu coba lagi.', localizedLanguage))
+        }
       }
     }
 
-    loadLatestOrderStatus()
+    void loadLatestOrderStatus()
 
     const intervalId = window.setInterval(() => {
-      loadLatestOrderStatus()
+      void loadLatestOrderStatus()
     }, 4000)
 
-    const channel = supabase.channel(`table-status-${ownerId}-${tableNumber}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'table_orders',
-          filter: `user_id=eq.${ownerId}`,
-        },
-        async payload => {
-          const updated = payload.new as { table_number?: number }
-          if (updated.table_number !== tableNumber) return
-          await loadLatestOrderStatus()
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'table_orders',
-          filter: `user_id=eq.${ownerId}`,
-        },
-        async payload => {
-          const updated = payload.new as { table_number?: number }
-          if (updated.table_number !== tableNumber) return
-          await loadLatestOrderStatus()
-        }
-      )
-      .subscribe()
-
     return () => {
+      active = false
       window.clearInterval(intervalId)
-      supabase.removeChannel(channel)
     }
-  }, [ownerId, tableNumber])
+  }, [tableToken, tableNumber, serverQuery, localizedLanguage])
 
   const totalItems = Object.values(cart).reduce((sum, qty) => sum + qty, 0)
   const subtotal = useMemo(
@@ -426,7 +441,7 @@ export default function TableOrderPage() {
       return
     }
 
-    if (!ownerId || !tableNumber || totalItems === 0) return
+    if (!tableToken || !tableNumber || totalItems === 0) return
 
     const orderItems = products
       .filter(product => (cart[product.id] ?? 0) > 0)
@@ -443,57 +458,34 @@ export default function TableOrderPage() {
     setSuccess('')
 
     const trimmedNote = customerNote.trim()
-    const qrText = paymentMethod === 'qris'
-      ? `Order via QR Meja ${tableNumber} - menunggu konfirmasi pembayaran QRIS`
-      : `Order via QR Meja ${tableNumber}`
-    const noteText = trimmedNote ? `${qrText} — ${trimmedNote}` : qrText
+    try {
+      const response = await fetch('/api/table-orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: tableToken,
+          serverId,
+          tableNumber,
+          items: orderItems.map(item => ({ productId: item.id, quantity: item.quantity })),
+          note: trimmedNote,
+          paymentMethod,
+        }),
+      })
+      const result = await response.json() as { id?: string; error?: string }
 
-    const payload = {
-      user_id: ownerId,
-      table_number: tableNumber,
-      customer_name: `Pelanggan Meja ${tableNumber}`,
-      total: subtotal,
-      status: 'pending',
-      items: orderItems,
-      note: noteText,
-      payment_method: paymentMethod,
-    }
-
-    let createdOrderId: string | null = null
-
-    const { data, error: insertErr } = await supabase
-      .from('table_orders')
-      .insert(payload)
-      .select('id')
-      .single()
-
-    if (insertErr) {
-      const fallback = await supabase
-        .from('table_orders')
-        .insert({
-          user_id: ownerId,
-          table_number: tableNumber,
-          customer_name: `Pelanggan Meja ${tableNumber}`,
-          total: subtotal,
-          status: 'pending',
-          items: orderItems,
-          note: noteText,
-        })
-        .select('id')
-        .single()
-
-      if (fallback.error || !fallback.data) {
-        setError(translateText("Gagal mengirim order. Coba ulang sebentar lagi.", localizedLanguage))
+      if (!response.ok || !result.id) {
+        setError(result.error ?? translateText('Gagal mengirim order. Coba ulang sebentar lagi.', localizedLanguage))
         setSubmitting(false)
         return
       }
 
-      createdOrderId = fallback.data.id ?? null
-    } else {
-      createdOrderId = data?.id ?? null
+      setOrderId(result.id)
+    } catch {
+      setError(translateText('Gagal mengirim order. Periksa koneksi lalu coba lagi.', localizedLanguage))
+      setSubmitting(false)
+      return
     }
 
-    setOrderId(createdOrderId)
     setCart({})
     setOrderStatus('pending')
     setLatestOrderItems(orderItems)
@@ -517,18 +509,23 @@ export default function TableOrderPage() {
       return
     }
 
-    if (!ownerId || !tableNumber || !orderId) {
+    if (!tableToken || !tableNumber || !orderId) {
       setError(translateText("Belum ada pesanan yang bisa dibatalkan.", localizedLanguage))
       return
     }
 
-    const { error } = await supabase
-      .from('table_orders')
-      .delete()
-      .eq('id', orderId)
-
-    if (error) {
-      setError(translateText("Gagal membatalkan pesanan. Coba ulang sebentar lagi.", localizedLanguage))
+    try {
+      const response = await fetch(
+        `/api/table-orders/${encodeURIComponent(orderId)}?${serverQuery}&token=${encodeURIComponent(tableToken)}&table=${tableNumber}`,
+        { method: 'DELETE' }
+      )
+      const result = await response.json() as { error?: string }
+      if (!response.ok) {
+        setError(result.error ?? translateText("Gagal membatalkan pesanan. Coba ulang sebentar lagi.", localizedLanguage))
+        return
+      }
+    } catch {
+      setError(translateText("Gagal membatalkan pesanan. Periksa koneksi lalu coba lagi.", localizedLanguage))
       return
     }
 
@@ -551,7 +548,7 @@ export default function TableOrderPage() {
     )
   }
 
-  if (!ownerId || Number.isNaN(tableNumber) || tableNumber < 1) {
+  if (!tableToken || Number.isNaN(tableNumber) || tableNumber < 1 || tableNumber > 4) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
         <div className="bg-white border border-red-200 rounded-2xl px-6 py-5 max-w-md text-sm text-red-700 shadow-sm">

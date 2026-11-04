@@ -1,4 +1,5 @@
 -- Tabel order dari pelanggan yang order lewat meja
+-- Untuk QR meja yang aman, jalankan juga secure_table_order_qr.sql setelah script ini.
 create table if not exists public.table_orders (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.profiles(id) on delete cascade,
@@ -16,12 +17,9 @@ create table if not exists public.table_orders (
 create index if not exists table_orders_user_id_idx on public.table_orders (user_id);
 create index if not exists table_orders_status_idx on public.table_orders (status);
 create index if not exists table_orders_created_at_idx on public.table_orders (created_at desc);
+create index if not exists table_orders_table_updated_idx on public.table_orders (user_id, table_number, updated_at desc);
 
 alter table public.table_orders enable row level security;
-
--- Public insert dari QR meja pelanggan
-create policy "table_orders_public_insert" on public.table_orders
-  for insert with check (user_id is not null);
 
 alter table public.profiles
   add column if not exists cashier_sound_url text,
@@ -29,16 +27,10 @@ alter table public.profiles
   add column if not exists cashier_tone text not null default 'classic',
   add column if not exists customer_tone text not null default 'classic';
 
--- Public read untuk QR meja pelanggan agar status tetap tampil setelah refresh
-create policy "table_orders_public_read" on public.table_orders
-  for select using (true);
-
--- Customer QR boleh membatalkan pesanan miliknya saat belum selesai
-create policy "table_orders_public_delete" on public.table_orders
-  for delete using (true);
-
-create policy "table_orders_public_update" on public.table_orders
-  for update using (true) with check (user_id is not null);
+drop policy if exists "table_orders_public_insert" on public.table_orders;
+drop policy if exists "table_orders_public_read" on public.table_orders;
+drop policy if exists "table_orders_public_delete" on public.table_orders;
+drop policy if exists "table_orders_public_update" on public.table_orders;
 
 -- Owner bisa full access
  drop policy if exists "table_orders_owner" on public.table_orders;
@@ -65,14 +57,20 @@ create policy "table_orders_staff" on public.table_orders
     )
   );
 
+revoke all on public.table_orders from anon;
+grant select, insert, update, delete on public.table_orders to authenticated;
+
 -- Trigger auto-update updated_at
 create or replace function public.touch_table_order_updated_at()
-returns trigger as $$
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
 begin
   new.updated_at = now();
   return new;
 end;
-$$ language plpgsql;
+$$;
 
 drop trigger if exists table_orders_updated_at on public.table_orders;
 create trigger table_orders_updated_at
@@ -84,6 +82,7 @@ create or replace function public.apply_table_order_stock_delta()
 returns trigger
 language plpgsql
 security definer
+set search_path = public, pg_temp
 as $$
 declare
   item_record jsonb;

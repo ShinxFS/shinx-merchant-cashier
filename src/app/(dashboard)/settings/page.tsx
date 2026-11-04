@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Save, Plus, Trash2, QrCode, Upload, Pencil, Check, X, ChevronDown } from 'lucide-react'
+import QRCode from 'qrcode'
 import { CURRENCY_OPTIONS, isCurrencyCode, useCurrency } from '@/lib/currency'
 import type { CurrencyCode } from '@/lib/currency'
 import { LanguageToggle, useLanguage, LocalizedText, translateText } from '@/lib/language'
@@ -75,6 +76,7 @@ export default function SettingsPage() {
   const [soundUploading, setSoundUploading] = useState<'cashier' | 'customer' | null>(null)
   const [tableQrLinks, setTableQrLinks] = useState<Record<number, string>>({})
   const [qrReady, setQrReady] = useState(false)
+  const [qrError, setQrError] = useState('')
   const [isOwner, setIsOwner] = useState(false)
   const [nextCurrency, setNextCurrency] = useState<CurrencyCode | null>(null)
   const [currencySaving, setCurrencySaving] = useState(false)
@@ -140,17 +142,36 @@ export default function SettingsPage() {
       setCategories(cats ?? [])
       setPaymentAccounts(accounts ?? [])
 
-      const links = Object.fromEntries(
-        [1, 2, 3, 4].map(table => {
-          const target = `${window.location.origin}/table/${table}?owner=${user.id}`
-          return [table, `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(target)}`]
-        })
-      ) as Record<number, string>
+      try {
+        const response = await fetch('/api/table-qr', { method: 'POST' })
+        const result = await response.json() as {
+          tokens?: Record<number, string>
+          serverId?: string
+          error?: string
+        }
+        if (!response.ok || !result.tokens) {
+          setQrError(result.error ?? translateText('Gagal menyiapkan QR meja.', localizedLanguage))
+          setQrReady(true)
+          return
+        }
 
-      setTableQrLinks(links)
-      setQrReady(true)
+        const links = Object.fromEntries(await Promise.all(
+          [1, 2, 3, 4].map(async table => {
+            const token = result.tokens?.[table]
+            if (!token) throw new Error(`Missing QR token for table ${table}.`)
+            const target = `${window.location.origin}/table/${table}?server=${encodeURIComponent(result.serverId ?? '0')}&token=${encodeURIComponent(token)}`
+            return [table, await QRCode.toDataURL(target, { width: 180, margin: 1 })]
+          })
+        )) as Record<number, string>
+
+        setTableQrLinks(links)
+      } catch {
+        setQrError(translateText('Gagal menyiapkan QR meja. Periksa konfigurasi API dan coba lagi.', localizedLanguage))
+      } finally {
+        setQrReady(true)
+      }
     }
-    load()
+    void load()
   }, [supabase, localizedLanguage])
 
   const handleCurrencyChange = async (e: React.FormEvent) => {
@@ -924,19 +945,23 @@ export default function SettingsPage() {
         </div>
 
         {qrReady ? (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {[1, 2, 3, 4].map(tableNumber => (
-              <div key={tableNumber} className="flex flex-col items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 p-3">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={tableQrLinks[tableNumber]}
-                  alt={`${translateText('QR Meja ', localizedLanguage)}${tableNumber}`}
-                  className="w-24 h-24 rounded-lg bg-white border border-gray-200"
-                />
-                <span className="text-xs font-medium text-gray-700">{<LocalizedText text={"Meja "} />}{tableNumber}</span>
-              </div>
-            ))}
-          </div>
+          qrError ? (
+            <p role="alert" className="text-sm text-red-600">{qrError}</p>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[1, 2, 3, 4].map(tableNumber => (
+                <div key={tableNumber} className="flex flex-col items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 p-3">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={tableQrLinks[tableNumber]}
+                    alt={`${translateText('QR Meja ', localizedLanguage)}${tableNumber}`}
+                    className="w-24 h-24 rounded-lg bg-white border border-gray-200"
+                  />
+                  <span className="text-xs font-medium text-gray-700">{<LocalizedText text={"Meja "} />}{tableNumber}</span>
+                </div>
+              ))}
+            </div>
+          )
         ) : (
           <div className="text-sm text-gray-400">{<LocalizedText text={"Menyiapkan QR meja..."} />}</div>
         )}

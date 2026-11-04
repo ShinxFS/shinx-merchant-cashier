@@ -1,13 +1,26 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import {
+  getSelectedSupabaseServerId,
+  getSupabaseServerConfig,
+  SUPABASE_SERVER_COOKIE,
+} from '@/lib/supabase/config'
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
+  const serverId = getSelectedSupabaseServerId(request.cookies.get(SUPABASE_SERVER_COOKIE)?.value)
+  const config = getSupabaseServerConfig(serverId)
+  const isPublicRoute =
+    request.nextUrl.pathname.startsWith('/login') ||
+    request.nextUrl.pathname.startsWith('/register') ||
+    request.nextUrl.pathname.startsWith('/table') ||
+    request.nextUrl.pathname.startsWith('/api/table-menu') ||
+    request.nextUrl.pathname.startsWith('/api/table-orders') ||
+    request.nextUrl.pathname.startsWith('/api/table-qr')
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
+  let userExists = false
+  if (config) {
+    const supabase = createServerClient(config.url, config.anonKey, {
       cookies: {
         getAll() { return request.cookies.getAll() },
         setAll(cookiesToSet) {
@@ -18,24 +31,17 @@ export async function middleware(request: NextRequest) {
           )
         },
       },
-    }
-  )
+    })
 
-  const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await supabase.auth.getUser()
+    userExists = Boolean(user)
+  }
 
-  // Route publik untuk scan QR pelanggan / table order
-  const isPublicRoute =
-    request.nextUrl.pathname.startsWith('/login') ||
-    request.nextUrl.pathname.startsWith('/register') ||
-    request.nextUrl.pathname.startsWith('/table')
-
-  // Redirect ke login jika belum auth dan bukan halaman publik
-  if (!user && !isPublicRoute) {
+  if (!userExists && !isPublicRoute) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // Redirect ke dashboard jika sudah login
-  if (user && (request.nextUrl.pathname === '/login' || 
+  if (userExists && (request.nextUrl.pathname === '/login' ||
       request.nextUrl.pathname === '/register')) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
