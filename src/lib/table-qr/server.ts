@@ -16,6 +16,18 @@ function getServiceRoleKey(serverId: SupabaseServerId) {
       return process.env.SUPABASE_SERVICE_ROLE_KEY_3
     case '4':
       return process.env.SUPABASE_SERVICE_ROLE_KEY_4
+    case '5':
+      return process.env.SUPABASE_SERVICE_ROLE_KEY_5
+    case '6':
+      return process.env.SUPABASE_SERVICE_ROLE_KEY_6
+    case '7':
+      return process.env.SUPABASE_SERVICE_ROLE_KEY_7
+    case '8':
+      return process.env.SUPABASE_SERVICE_ROLE_KEY_8
+    case '9':
+      return process.env.SUPABASE_SERVICE_ROLE_KEY_9
+    case '10':
+      return process.env.SUPABASE_SERVICE_ROLE_KEY_10
   }
 }
 
@@ -31,6 +43,18 @@ function getQrSecret(serverId: SupabaseServerId) {
       return process.env.TABLE_QR_TOKEN_SECRET_3
     case '4':
       return process.env.TABLE_QR_TOKEN_SECRET_4
+    case '5':
+      return process.env.TABLE_QR_TOKEN_SECRET_5
+    case '6':
+      return process.env.TABLE_QR_TOKEN_SECRET_6
+    case '7':
+      return process.env.TABLE_QR_TOKEN_SECRET_7
+    case '8':
+      return process.env.TABLE_QR_TOKEN_SECRET_8
+    case '9':
+      return process.env.TABLE_QR_TOKEN_SECRET_9
+    case '10':
+      return process.env.TABLE_QR_TOKEN_SECRET_10
   }
 }
 

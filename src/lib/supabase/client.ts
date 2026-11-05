@@ -6,6 +6,23 @@ import {
   type SupabaseServerId,
 } from './config'
 
+const globalForSupabase = globalThis as typeof globalThis & {
+  __shinxSupabaseBrowserClients?: Map<string, unknown>
+}
+
+const browserClients =
+  globalForSupabase.__shinxSupabaseBrowserClients ??
+  (globalForSupabase.__shinxSupabaseBrowserClients = new Map())
+
+function getOrCreateBrowserClient<T>(storageKey: string, create: () => T): T {
+  const existingClient = browserClients.get(storageKey)
+  if (existingClient !== undefined) return existingClient as T
+
+  const client = create()
+  browserClients.set(storageKey, client)
+  return client
+}
+
 export function getSelectedServerIdFromCookie(): SupabaseServerId {
   if (typeof document === 'undefined') return '0'
   const cookie = document.cookie
@@ -32,5 +49,14 @@ export function createClient(serverId?: SupabaseServerId) {
     throw new Error(`Supabase Server ${selectedServerId} is not configured.`)
   }
 
-  return createBrowserClient(config.url, config.anonKey, { isSingleton: false })
+  if (typeof window === 'undefined') {
+    return createBrowserClient(config.url, config.anonKey, { isSingleton: false })
+  }
+
+  // Supabase's auth storage key is based on the project ref, not the server selector.
+  const projectRef = new URL(config.url).hostname.split('.')[0]
+  const storageKey = `sb-${projectRef}-auth-token`
+  return getOrCreateBrowserClient(storageKey, () =>
+    createBrowserClient(config.url, config.anonKey, { isSingleton: false })
+  )
 }

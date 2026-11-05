@@ -1,12 +1,14 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Save, Plus, Trash2, QrCode, Upload, Pencil, Check, X, ChevronDown } from 'lucide-react'
+import { Save, Plus, Trash2, QrCode, Upload, Pencil, Check, X, ChevronDown, Download, FileUp } from 'lucide-react'
 import QRCode from 'qrcode'
+import { saveAs } from 'file-saver'
 import { CURRENCY_OPTIONS, isCurrencyCode, useCurrency } from '@/lib/currency'
 import type { CurrencyCode } from '@/lib/currency'
 import { LanguageToggle, useLanguage, LocalizedText, translateText } from '@/lib/language'
+import { createOwnerBackup, importOwnerBackup } from '@/lib/backup/export'
 interface Category {
   id: string
   name: string
@@ -77,6 +79,11 @@ export default function SettingsPage() {
   const [tableQrLinks, setTableQrLinks] = useState<Record<number, string>>({})
   const [qrReady, setQrReady] = useState(false)
   const [qrError, setQrError] = useState('')
+  const [backupDownloading, setBackupDownloading] = useState(false)
+  const [backupImporting, setBackupImporting] = useState(false)
+  const [backupError, setBackupError] = useState('')
+  const [backupMessage, setBackupMessage] = useState('')
+  const backupFileInputRef = useRef<HTMLInputElement>(null)
   const [isOwner, setIsOwner] = useState(false)
   const [nextCurrency, setNextCurrency] = useState<CurrencyCode | null>(null)
   const [currencySaving, setCurrencySaving] = useState(false)
@@ -415,6 +422,56 @@ export default function SettingsPage() {
     gain.connect(context.destination)
     oscillator.start()
     oscillator.stop(context.currentTime + 0.2)
+  }
+
+  const handleDownloadBackup = async () => {
+    if (backupDownloading || backupImporting) return
+
+    setBackupDownloading(true)
+    setBackupError('')
+    setBackupMessage('')
+
+    try {
+      const { blob, filename } = await createOwnerBackup(supabase)
+      saveAs(blob, filename)
+      setBackupMessage(translateText('Backup berhasil diunduh. Simpan file ZIP ini di tempat yang aman.', localizedLanguage))
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error.'
+      console.error('Unable to create store backup:', error)
+      setBackupError(`${translateText('Backup gagal dibuat:', localizedLanguage)} ${message}`)
+    } finally {
+      setBackupDownloading(false)
+    }
+  }
+
+  const handleImportBackup = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+
+    if (!confirm(translateText(
+      'Impor backup hanya bisa dilakukan ke akun owner yang masih kosong. Lanjutkan?',
+      localizedLanguage
+    ))) return
+
+    setBackupImporting(true)
+    setBackupError('')
+    setBackupMessage(translateText('Memulai impor backup...', localizedLanguage))
+
+    try {
+      const result = await importOwnerBackup(supabase, file, message => {
+        setBackupMessage(translateText(message, localizedLanguage))
+      })
+      setBackupMessage(
+        `${translateText('Impor berhasil.', localizedLanguage)} ${result.recordCount} ${translateText('data dan', localizedLanguage)} ${result.mediaCount} ${translateText('file media dipulihkan. Buat ulang QR meja dari halaman ini.', localizedLanguage)}`
+      )
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error.'
+      console.error('Unable to import store backup:', error)
+      setBackupError(`${translateText('Impor backup gagal:', localizedLanguage)} ${message}`)
+    } finally {
+      setBackupImporting(false)
+    }
   }
 
   const handleToneChange = async (kind: 'cashier' | 'customer', value: string) => {
@@ -966,6 +1023,64 @@ export default function SettingsPage() {
           <div className="text-sm text-gray-400">{<LocalizedText text={"Menyiapkan QR meja..."} />}</div>
         )}
       </div>
+
+      {isOwner && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="max-w-lg">
+              <h2 className="font-semibold text-gray-800 mb-2">
+                <LocalizedText text="Backup Data Toko" />
+              </h2>
+              <p className="text-sm text-gray-500">
+                <LocalizedText text="Unduh salinan data toko dan seluruh file foto produk. Kredensial login tidak disertakan." />
+              </p>
+              <p className="mt-2 text-xs text-amber-700">
+                <LocalizedText text="Backup berisi data bisnis dan transaksi. QR meja perlu dibuat ulang setelah pemulihan." />
+              </p>
+              <p className="mt-1 text-xs text-gray-500">
+                <LocalizedText text="Impor hanya untuk akun owner baru yang belum memiliki data. Akun karyawan dan kredensial login harus dibuat ulang." />
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-col gap-2 sm:items-end">
+              <button
+                type="button"
+                onClick={() => void handleDownloadBackup()}
+                disabled={backupDownloading || backupImporting}
+                className="flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Download size={16} />
+                {backupDownloading
+                  ? <LocalizedText text="Membuat backup..." />
+                  : <LocalizedText text="Unduh Backup" />}
+              </button>
+              <button
+                type="button"
+                onClick={() => backupFileInputRef.current?.click()}
+                disabled={backupDownloading || backupImporting}
+                className="flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <FileUp size={16} />
+                {backupImporting
+                  ? <LocalizedText text="Mengimpor backup..." />
+                  : <LocalizedText text="Impor Backup ZIP" />}
+              </button>
+              <input
+                ref={backupFileInputRef}
+                type="file"
+                accept=".zip,application/zip"
+                onChange={event => void handleImportBackup(event)}
+                className="hidden"
+              />
+            </div>
+          </div>
+          {backupMessage && (
+            <p role="status" className="mt-3 text-sm text-green-700">{backupMessage}</p>
+          )}
+          {backupError && (
+            <p role="alert" className="mt-3 text-sm text-red-600">{backupError}</p>
+          )}
+        </div>
+      )}
 
       {/* Kategori */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">

@@ -82,6 +82,14 @@ drop policy if exists "notification_logs_shop_read" on public.notification_logs;
 create policy "notification_logs_shop_read" on public.notification_logs
   for select using (user_id = public.current_user_owner_id());
 
+drop policy if exists "notification_logs_owner_insert" on public.notification_logs;
+create policy "notification_logs_owner_insert" on public.notification_logs
+  for insert with check (user_id = auth.uid());
+
+drop policy if exists "notification_logs_owner_delete" on public.notification_logs;
+create policy "notification_logs_owner_delete" on public.notification_logs
+  for delete using (user_id = auth.uid());
+
 create or replace function public.log_product_added_notification()
 returns trigger
 language plpgsql

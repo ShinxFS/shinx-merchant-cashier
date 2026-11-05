@@ -1,6 +1,10 @@
 export const SUPABASE_SERVER_COOKIE = 'shinx_supabase_server'
 
-export type SupabaseServerId = '0' | '1' | '2' | '3' | '4'
+export const SUPABASE_SERVER_IDS = [
+  '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10',
+] as const
+
+export type SupabaseServerId = (typeof SUPABASE_SERVER_IDS)[number]
 
 export interface SupabaseServerConfig {
   id: SupabaseServerId
@@ -44,10 +48,52 @@ const serverConfigs: Record<SupabaseServerId, SupabaseServerConfig | null> = {
         anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY_4,
       }
     : null,
+  '5': process.env.NEXT_PUBLIC_SUPABASE_URL_5 && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY_5
+    ? {
+        id: '5',
+        url: process.env.NEXT_PUBLIC_SUPABASE_URL_5,
+        anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY_5,
+      }
+    : null,
+  '6': process.env.NEXT_PUBLIC_SUPABASE_URL_6 && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY_6
+    ? {
+        id: '6',
+        url: process.env.NEXT_PUBLIC_SUPABASE_URL_6,
+        anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY_6,
+      }
+    : null,
+  '7': process.env.NEXT_PUBLIC_SUPABASE_URL_7 && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY_7
+    ? {
+        id: '7',
+        url: process.env.NEXT_PUBLIC_SUPABASE_URL_7,
+        anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY_7,
+      }
+    : null,
+  '8': process.env.NEXT_PUBLIC_SUPABASE_URL_8 && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY_8
+    ? {
+        id: '8',
+        url: process.env.NEXT_PUBLIC_SUPABASE_URL_8,
+        anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY_8,
+      }
+    : null,
+  '9': process.env.NEXT_PUBLIC_SUPABASE_URL_9 && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY_9
+    ? {
+        id: '9',
+        url: process.env.NEXT_PUBLIC_SUPABASE_URL_9,
+        anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY_9,
+      }
+    : null,
+  '10': process.env.NEXT_PUBLIC_SUPABASE_URL_10 && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY_10
+    ? {
+        id: '10',
+        url: process.env.NEXT_PUBLIC_SUPABASE_URL_10,
+        anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY_10,
+      }
+    : null,
 }
 
 export function isSupabaseServerId(value: unknown): value is SupabaseServerId {
-  return value === '0' || value === '1' || value === '2' || value === '3' || value === '4'
+  return typeof value === 'string' && SUPABASE_SERVER_IDS.some(serverId => serverId === value)
 }
 
 export function getSupabaseServerConfig(serverId: SupabaseServerId) {

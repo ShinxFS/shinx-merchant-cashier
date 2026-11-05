@@ -1,7 +1,8 @@
 -- ============================================================
 -- SHINX MERCHANT CASHIER — Full Database Setup
 -- Jalankan di: Supabase Dashboard > SQL Editor > New query
--- Setelah selesai, jalankan juga secure_table_order_qr.sql untuk mengaktifkan QR meja aman.
+-- Untuk project Supabase baru, cukup jalankan file ini.
+-- secure_table_order_qr.sql tetap tersedia sebagai upgrade untuk database lama.
 -- ============================================================
 
 -- =============================================
@@ -208,6 +209,14 @@ $$;
 drop policy if exists "notification_logs_shop_read" on public.notification_logs;
 create policy "notification_logs_shop_read" on public.notification_logs
   for select using (user_id = public.current_user_owner_id());
+
+drop policy if exists "notification_logs_owner_insert" on public.notification_logs;
+create policy "notification_logs_owner_insert" on public.notification_logs
+  for insert with check (user_id = auth.uid());
+
+drop policy if exists "notification_logs_owner_delete" on public.notification_logs;
+create policy "notification_logs_owner_delete" on public.notification_logs
+  for delete using (user_id = auth.uid());
 
 create or replace function public.log_product_added_notification()
 returns trigger
@@ -631,6 +640,230 @@ drop trigger if exists table_orders_stock_adjustment on public.table_orders;
 create trigger table_orders_stock_adjustment
   after insert or delete on public.table_orders
   for each row execute function public.apply_table_order_stock_delta();
+
+-- =============================================
+-- 10. TOKEN QR MEJA DAN ORDER AMAN
+-- =============================================
+create table if not exists public.table_qr_tokens (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  table_number integer not null check (table_number between 1 and 4),
+  token_version integer not null default 1 check (token_version > 0),
+  token_hash text not null,
+  created_at timestamptz not null default now(),
+  unique (user_id, table_number),
+  unique (table_number, token_hash)
+);
+
+alter table public.table_qr_tokens enable row level security;
+revoke all on public.table_qr_tokens from anon, authenticated;
+grant all on public.table_qr_tokens to service_role;
+
+create or replace function public.create_table_order_from_qr(
+  p_token_hash text,
+  p_table_number integer,
+  p_items jsonb,
+  p_customer_note text,
+  p_payment_method text
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  owner_id uuid;
+  requested_item record;
+  product_record record;
+  order_items jsonb := '[]'::jsonb;
+  order_total numeric := 0;
+  order_note text;
+  order_id uuid;
+begin
+  if p_table_number not between 1 and 4
+    or p_payment_method not in ('cash', 'qris')
+    or p_customer_note is null
+    or length(p_customer_note) > 500
+    or jsonb_typeof(p_items) is distinct from 'array' then
+    raise exception 'INVALID_ORDER';
+  end if;
+
+  if jsonb_array_length(p_items) = 0 or jsonb_array_length(p_items) > 100 then
+    raise exception 'INVALID_ORDER';
+  end if;
+
+  if exists (
+    select 1
+    from jsonb_array_elements(p_items) as entry(value)
+    where jsonb_typeof(entry.value) <> 'object'
+      or coalesce(entry.value->>'productId', '') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+      or coalesce(entry.value->>'quantity', '') !~ '^[1-9][0-9]{0,2}$'
+  ) then
+    raise exception 'INVALID_ORDER';
+  end if;
+
+  select token.user_id into owner_id
+  from public.table_qr_tokens token
+  where token.table_number = p_table_number
+    and token.token_hash = p_token_hash;
+
+  if owner_id is null then
+    raise exception 'INVALID_QR_TOKEN';
+  end if;
+
+  for requested_item in
+    select entry.value->>'productId' as product_id,
+      sum((entry.value->>'quantity')::integer)::integer as quantity
+    from jsonb_array_elements(p_items) as entry(value)
+    group by entry.value->>'productId'
+    order by entry.value->>'productId'
+  loop
+    select product.id, product.name, product.price, product.stock
+      into product_record
+    from public.products product
+    where product.id = requested_item.product_id::uuid
+      and product.user_id = owner_id
+      and product.is_active
+    for update;
+
+    if not found then
+      raise exception 'PRODUCT_UNAVAILABLE';
+    end if;
+
+    if product_record.stock < requested_item.quantity then
+      raise exception 'INSUFFICIENT_STOCK';
+    end if;
+
+    order_items := order_items || jsonb_build_array(jsonb_build_object(
+      'id', product_record.id,
+      'name', product_record.name,
+      'quantity', requested_item.quantity,
+      'price', product_record.price,
+      'subtotal', product_record.price * requested_item.quantity
+    ));
+    order_total := order_total + product_record.price * requested_item.quantity;
+  end loop;
+
+  order_note := case
+    when p_payment_method = 'qris'
+      then 'Order via QR Meja ' || p_table_number || ' - menunggu konfirmasi pembayaran QRIS'
+    else 'Order via QR Meja ' || p_table_number
+  end;
+  if btrim(p_customer_note) <> '' then
+    order_note := order_note || ' — ' || btrim(p_customer_note);
+  end if;
+
+  insert into public.table_orders (
+    user_id, table_number, customer_name, total, status, items, note, payment_method
+  ) values (
+    owner_id, p_table_number, 'Pelanggan Meja ' || p_table_number,
+    order_total, 'pending', order_items, order_note, p_payment_method
+  )
+  returning id into order_id;
+
+  return order_id;
+end;
+$$;
+
+create or replace function public.cancel_table_order_from_qr(
+  p_token_hash text,
+  p_table_number integer,
+  p_order_id uuid
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  owner_id uuid;
+begin
+  select token.user_id into owner_id
+  from public.table_qr_tokens token
+  where token.table_number = p_table_number
+    and token.token_hash = p_token_hash;
+
+  if owner_id is null then
+    raise exception 'INVALID_QR_TOKEN';
+  end if;
+
+  delete from public.table_orders
+  where id = p_order_id
+    and user_id = owner_id
+    and table_number = p_table_number
+    and status = 'pending';
+
+  if not found then
+    raise exception 'ORDER_NOT_CANCELLABLE';
+  end if;
+
+  return true;
+end;
+$$;
+
+revoke all on function public.create_table_order_from_qr(text, integer, jsonb, text, text) from public, anon, authenticated;
+revoke all on function public.cancel_table_order_from_qr(text, integer, uuid) from public, anon, authenticated;
+grant execute on function public.create_table_order_from_qr(text, integer, jsonb, text, text) to service_role;
+grant execute on function public.cancel_table_order_from_qr(text, integer, uuid) to service_role;
+
+-- =============================================
+-- 11. ANALITIK TRANSAKSI
+-- =============================================
+create or replace function public.get_top_selling_products()
+returns table(name text, qty bigint, revenue numeric)
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select
+    item.product_name as name,
+    sum(item.quantity)::bigint as qty,
+    sum(item.subtotal) as revenue
+  from public.transaction_items as item
+  join public.transactions as transaction_record
+    on transaction_record.id = item.transaction_id
+  where transaction_record.user_id = auth.uid()
+  group by item.product_name
+  order by sum(item.quantity) desc, item.product_name asc
+  limit 10;
+$$;
+
+revoke all on function public.get_top_selling_products() from public, anon;
+grant execute on function public.get_top_selling_products() to authenticated;
+
+create or replace function public.get_staff_transaction_stats()
+returns table(
+  staff_id uuid,
+  total_transactions bigint,
+  total_revenue numeric,
+  total_profit numeric
+)
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select
+    transaction_record.created_by as staff_id,
+    count(*) as total_transactions,
+    sum(transaction_record.total) as total_revenue,
+    sum(transaction_record.total) - sum(coalesce(item_totals.total_cost, 0)) as total_profit
+  from public.transactions as transaction_record
+  left join lateral (
+    select sum(coalesce(item.cost_price, 0) * item.quantity) as total_cost
+    from public.transaction_items as item
+    where item.transaction_id = transaction_record.id
+  ) as item_totals on true
+  where transaction_record.user_id = auth.uid()
+    and transaction_record.created_by is not null
+  group by transaction_record.created_by;
+$$;
+
+revoke all on function public.get_staff_transaction_stats() from public, anon;
+grant execute on function public.get_staff_transaction_stats() to authenticated;
+
+notify pgrst, 'reload schema';
 
 -- =============================================
 -- DONE! Semua tabel, RLS, trigger, dan storage siap.

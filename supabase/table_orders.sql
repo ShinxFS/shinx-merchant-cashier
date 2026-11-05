@@ -1,5 +1,7 @@
 -- Tabel order dari pelanggan yang order lewat meja
--- Untuk QR meja yang aman, jalankan juga secure_table_order_qr.sql setelah script ini.
+-- Script lama untuk menyiapkan tabel order saja.
+-- Untuk project baru, gunakan full_schema.sql yang sudah mencakup setup QR aman.
+-- Untuk database lama, jalankan secure_table_order_qr.sql setelah script ini.
 create table if not exists public.table_orders (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.profiles(id) on delete cascade,

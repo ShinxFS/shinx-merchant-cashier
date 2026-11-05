@@ -1,4 +1,5 @@
--- Secure QR table orders. Run this after full_schema.sql or table_orders.sql.
+-- Upgrade script for existing databases only.
+-- New Supabase projects should run full_schema.sql, which includes this setup.
 -- Public QR requests must use the application API, not direct Supabase table access.
 
 alter table public.profiles
