@@ -23,6 +23,11 @@ interface NotificationLog {
 
 const CHANGELOG_ENTRIES = [
   {
+    title: 'Impor & Ekspor',
+    description: 'Ekspor backup data toko dan impor kembali ke akun owner baru.',
+    date: '2026-11-05',
+  },
+  {
     title: 'Pembayaran Split',
     description: 'Gabungkan tunai, transfer, dan QRIS dalam satu transaksi.',
     date: '2026-11-02',

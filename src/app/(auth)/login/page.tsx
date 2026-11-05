@@ -8,6 +8,7 @@ import {
   isSupabaseServerId,
   SUPABASE_SERVER_IDS,
 } from '@/lib/supabase/config'
+import { ChevronDown } from 'lucide-react'
 import Link from 'next/link'
 import { LanguageToggle, useLanguage, LocalizedText, translateText } from '@/lib/language'
 export default function LoginPage() {
@@ -78,29 +79,36 @@ export default function LoginPage() {
             <label htmlFor="server" className="block text-sm font-medium text-gray-700 mb-1">
               {translate('Pilih Server')}
             </label>
-            <select
-              id="server"
-              value={selectedServer}
-              onChange={event => {
-                const nextServer = event.target.value
-                if (!isSupabaseServerId(nextServer) || !isSupabaseServerConfigured(nextServer)) return
-                selectSupabaseServer(nextServer)
-              }}
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
-              {SUPABASE_SERVER_IDS.map(serverId => {
-                const configured = isSupabaseServerConfigured(serverId)
-                const label = configured
-                  ? `Server ${serverId} (Aktif)`
-                  : `Server ${serverId} (Belum dikonfigurasi)`
+            <div className="relative">
+              <select
+                id="server"
+                value={selectedServer}
+                onChange={event => {
+                  const nextServer = event.target.value
+                  if (!isSupabaseServerId(nextServer) || !isSupabaseServerConfigured(nextServer)) return
+                  selectSupabaseServer(nextServer)
+                }}
+                className="w-full appearance-none px-3 py-2.5 pr-10 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                {SUPABASE_SERVER_IDS.map(serverId => {
+                  const configured = isSupabaseServerConfigured(serverId)
+                  const label = configured
+                    ? `Server ${serverId} (Aktif)`
+                    : `Server ${serverId} (Belum dikonfigurasi)`
 
-                return (
-                  <option key={serverId} value={serverId} disabled={!configured}>
-                    {translate(label)}
-                  </option>
-                )
-              })}
-            </select>
+                  return (
+                    <option key={serverId} value={serverId} disabled={!configured}>
+                      {translate(label)}
+                    </option>
+                  )
+                })}
+              </select>
+              <ChevronDown
+                size={16}
+                aria-hidden="true"
+                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
+              />
+            </div>
             <p className="mt-1 text-xs text-gray-500">
               {translate(selectedServer === '0' ? 'Server 0 menggunakan database saat ini.' : `Server ${selectedServer} menggunakan database terpisah.`)}
             </p>

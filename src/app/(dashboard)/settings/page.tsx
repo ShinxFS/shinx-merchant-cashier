@@ -1029,7 +1029,7 @@ export default function SettingsPage() {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="max-w-lg">
               <h2 className="font-semibold text-gray-800 mb-2">
-                <LocalizedText text="Backup Data Toko" />
+                <LocalizedText text="Impor & Ekspor" />
               </h2>
               <p className="text-sm text-gray-500">
                 <LocalizedText text="Unduh salinan data toko dan seluruh file foto produk. Kredensial login tidak disertakan." />
@@ -1046,23 +1046,23 @@ export default function SettingsPage() {
                 type="button"
                 onClick={() => void handleDownloadBackup()}
                 disabled={backupDownloading || backupImporting}
-                className="flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex w-24 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-3 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Download size={16} />
                 {backupDownloading
                   ? <LocalizedText text="Membuat backup..." />
-                  : <LocalizedText text="Unduh Backup" />}
+                  : <LocalizedText text="Ekspor" />}
               </button>
               <button
                 type="button"
                 onClick={() => backupFileInputRef.current?.click()}
                 disabled={backupDownloading || backupImporting}
-                className="flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex w-24 items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <FileUp size={16} />
                 {backupImporting
                   ? <LocalizedText text="Mengimpor backup..." />
-                  : <LocalizedText text="Impor Backup ZIP" />}
+                  : <LocalizedText text="Impor" />}
               </button>
               <input
                 ref={backupFileInputRef}

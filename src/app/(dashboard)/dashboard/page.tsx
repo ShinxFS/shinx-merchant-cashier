@@ -2,8 +2,12 @@
 import { LocalizedText, translateText, useLanguage } from '@/lib/language'
 
 
-import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { useEffect, useState, useSyncExternalStore } from 'react'
+import {
+  createClient,
+  getSelectedServerIdFromCookie,
+  subscribeToSupabaseServer,
+} from '@/lib/supabase/client'
 import { useCurrency } from '@/lib/currency'
 import {
   ShoppingCart,
@@ -58,6 +62,11 @@ export default function DashboardPage() {
   const localizedLanguage = useLanguage().language
 
   const supabase = createClient()
+  const activeServerId = useSyncExternalStore(
+    subscribeToSupabaseServer,
+    getSelectedServerIdFromCookie,
+    () => '0' as const
+  )
   const { formatCurrency } = useCurrency()
   const [stats, setStats] = useState<Stats>({
     todayRevenue: 0,
@@ -281,11 +290,19 @@ export default function DashboardPage() {
   return (
     <div className="p-6 max-w-5xl mx-auto">
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-gray-900">{<LocalizedText text={"Dashboard"} />}</h1>
-        <p className="text-gray-500 text-sm mt-0.5">
-          {<LocalizedText text={"\r\n          Selamat datang kembali, "} />}<span className="font-medium text-gray-700">{businessName}</span>
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">{<LocalizedText text={"Dashboard"} />}</h1>
+          <p className="text-gray-500 text-sm mt-0.5">
+            {<LocalizedText text={"\r\n          Selamat datang kembali, "} />}<span className="font-medium text-gray-700">{businessName}</span>
+          </p>
+        </div>
+        <span
+          aria-label={translateText('Server aktif', localizedLanguage)}
+          className="shrink-0 rounded-full bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700"
+        >
+          Server {activeServerId}
+        </span>
       </div>
       {loadError && (
         <p role="alert" className="mb-6 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">
