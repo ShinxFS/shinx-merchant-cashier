@@ -15,12 +15,17 @@ const LANGUAGE_STORAGE_KEY = 'shinx-language'
 
 const translations: Array<[string, string]> = [
   ['Masuk ke akun kamu', 'Sign in to your account'],
+  ['Email atau password salah.', 'Incorrect email or password.'],
   ['Masuk', 'Sign in'],
   ['Memuat...', 'Loading...'],
   ['Belum punya akun?', "Don't have an account?"],
   ['Daftar sekarang', 'Sign up now'],
   ['Buat Akun Baru', 'Create a New Account'],
   ['Daftarkan bisnis kamu', 'Register your business'],
+  ['Daftar', 'Sign up'],
+  ['Mendaftar...', 'Signing up...'],
+  ['Pendaftaran sementara tidak tersedia.', 'Registration is temporarily unavailable.'],
+  ['DM untuk informasi:', 'DM for Information:'],
   ['Pilih Server', 'Choose Server'],
   ['Server aktif', 'Active server'],
   ...Array.from({ length: 11 }, (_, serverId): [string, string][] => [
@@ -273,6 +278,9 @@ const translations: Array<[string, string]> = [
   ['Kelola Karyawan', 'Manage Staff'],
   ['karyawan terdaftar', 'staff members listed'],
   ['Tambah Karyawan', 'Add Staff Member'],
+  ['Akun staff tersedia di paket lanjutan.', 'Staff accounts are available on an upgraded plan.'],
+  ['Fitur Paket Lanjutan', 'Upgrade Plan Feature'],
+  ['Tutup', 'Close'],
   ['🔒 Hak Akses Karyawan', '🔒 Staff Permissions'],
   ['✅ Bisa menggunakan kasir', '✅ Can use the cashier'],
   ['✅ Bisa melihat produk & transaksi', '✅ Can view products & transactions'],

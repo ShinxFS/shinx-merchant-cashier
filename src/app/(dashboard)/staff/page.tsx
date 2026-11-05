@@ -5,7 +5,7 @@ import { LocalizedText, translateText, useLanguage } from '@/lib/language'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useCurrency } from '@/lib/currency'
-import { Plus, Trash2, Users, TrendingUp, ShoppingCart, Wallet } from 'lucide-react'
+import { Plus, Trash2, Users, TrendingUp, ShoppingCart, Wallet, X } from 'lucide-react'
 
 interface Staff {
   id: string
@@ -27,6 +27,8 @@ interface StaffTransactionStatsRow {
   total_profit: number
 }
 
+const STAFF_AVAILABLE = false
+
 const inputClass = "w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
 
 export default function StaffPage() {
@@ -39,6 +41,7 @@ export default function StaffPage() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [showForm, setShowForm] = useState(false)
+  const [showStaffInfo, setShowStaffInfo] = useState(false)
   const [formLoading, setFormLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -91,6 +94,11 @@ export default function StaffPage() {
 
   const handleAddStaff = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!STAFF_AVAILABLE) {
+      setShowStaffInfo(true)
+      return
+    }
+
     setFormLoading(true)
     setError('')
 
@@ -136,10 +144,12 @@ export default function StaffPage() {
           <p className="text-sm text-gray-500 mt-0.5">{staffList.length} {<LocalizedText text={" karyawan terdaftar"} />}</p>
         </div>
         <button
-          onClick={() => setShowForm(true)}
-          className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-indigo-700 transition-colors"
+          type="button"
+          onClick={() => STAFF_AVAILABLE ? setShowForm(true) : setShowStaffInfo(true)}
+          className="flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
         >
-          <Plus size={16} /> {<LocalizedText text={" Tambah Karyawan\r\n        "} />}</button>
+          <Plus size={16} /> {<LocalizedText text={" Tambah Karyawan\r\n        "} />}
+        </button>
       </div>
 
       {success && (
@@ -264,7 +274,35 @@ export default function StaffPage() {
         </div>
       )}
 
-      {showForm && (
+      {showStaffInfo && !STAFF_AVAILABLE && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="staff-plan-dialog-title"
+            className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <h2 id="staff-plan-dialog-title" className="text-base font-semibold text-gray-900">
+                {<LocalizedText text="Fitur Paket Lanjutan" />}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowStaffInfo(false)}
+                aria-label={translateText('Tutup', localizedLanguage)}
+                className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <p className="mt-3 text-sm text-gray-600">
+              {<LocalizedText text="Akun staff tersedia di paket lanjutan." />}
+            </p>
+          </section>
+        </div>
+      )}
+
+      {showForm && STAFF_AVAILABLE && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <div className="bg-white rounded-2xl w-full max-w-md">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">

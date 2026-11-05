@@ -4,8 +4,11 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
-import { LanguageToggle, useLanguage, LocalizedText, translateText } from '@/lib/language'
-export default function RegisterPage() {
+import { LanguageToggle, useLanguage, translateText } from '@/lib/language'
+
+const REGISTRATION_AVAILABLE = false
+
+function RegistrationForm() {
   const localizedLanguage = useLanguage().language
 
   const router = useRouter()
@@ -37,7 +40,6 @@ export default function RegisterPage() {
       return
     }
 
-    // Update business name di profile
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
       const { error: profileError } = await supabase
@@ -63,9 +65,6 @@ export default function RegisterPage() {
         </div>
 
         <div className="text-center mb-8">
-          <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center mx-auto mb-3">
-            <span className="text-white text-xl font-bold">{<LocalizedText text={"S"} />}</span>
-          </div>
           <h1 className="text-xl font-bold text-gray-900">{translate('Buat Akun Baru')}</h1>
           <p className="text-gray-500 text-sm mt-1">{translate('Daftarkan bisnis kamu')}</p>
         </div>
@@ -132,4 +131,45 @@ export default function RegisterPage() {
       </div>
     </div>
   )
+}
+
+function RegistrationUnavailable() {
+  const { t: translate } = useLanguage()
+
+  return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 w-full max-w-md p-8">
+        <div className="mb-5 flex justify-start">
+          <LanguageToggle localOnly />
+        </div>
+
+        <div className="text-center">
+          <h1 className="text-xl font-bold text-gray-900">
+            <span className="uppercase">
+              {translate('Pendaftaran sementara tidak tersedia.')}
+            </span>
+          </h1>
+          <p className="mt-2 text-xs text-gray-500">
+            {translate('DM for Information:')}{' '}
+            <a
+              href="mailto:shinxmerchant@gmail.com"
+              className="text-indigo-600 hover:underline"
+            >
+              shinxmerchant@gmail.com
+            </a>
+          </p>
+          <Link
+            href="/login"
+            className="mt-6 inline-block text-sm font-medium text-indigo-600 hover:underline"
+          >
+            {translate('Masuk di sini')}
+          </Link>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default function RegisterPage() {
+  return REGISTRATION_AVAILABLE ? <RegistrationForm /> : <RegistrationUnavailable />
 }
