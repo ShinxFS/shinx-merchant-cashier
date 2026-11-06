@@ -29,6 +29,20 @@ create index if not exists table_orders_table_updated_idx on public.table_orders
 
 alter table public.table_orders enable row level security;
 
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
+    and not exists (
+      select 1 from pg_publication_tables
+      where pubname = 'supabase_realtime'
+        and schemaname = 'public'
+        and tablename = 'table_orders'
+    ) then
+    alter publication supabase_realtime add table public.table_orders;
+  end if;
+end
+$$;
+
 drop policy if exists "table_orders_public_insert" on public.table_orders;
 drop policy if exists "table_orders_public_read" on public.table_orders;
 drop policy if exists "table_orders_public_delete" on public.table_orders;

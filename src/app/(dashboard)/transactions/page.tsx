@@ -5,7 +5,8 @@ import { LocalizedText, translateText, useLanguage } from '@/lib/language'
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useCurrency } from '@/lib/currency'
-import { Receipt, Search, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, TrendingUp, Trash2 } from 'lucide-react'
+import { Receipt, Search, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, TrendingUp, Trash2 } from 'lucide-react'
+import CustomSelect from '@/components/ui/CustomSelect'
 
 const PAGE_SIZE = 20
 
@@ -312,38 +313,31 @@ export default function TransactionsPage() {
           />
         </div>
         <div className="flex gap-2">
-          <label className="relative flex items-center px-3 py-2 pr-9 border border-gray-200 rounded-xl bg-white text-sm text-gray-500">
-            <select
-              value={selectedMonth}
-              onChange={e => {
-                setSelectedMonth(e.target.value)
-                setPage(0)
-              }}
-              aria-label={translateText("Filter bulan transaksi", localizedLanguage)}
-              className="min-w-0 appearance-none bg-transparent text-gray-900 focus:outline-none"
-            >
-              {recentMonths.map(month => (
-                <option key={month.value} value={month.value}><LocalizedText text={month.label} /></option>
-              ))}
-            </select>
-            <ChevronDown size={16} aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500" />
-          </label>
-          <label className="relative flex items-center px-3 py-2 pr-9 border border-gray-200 rounded-xl bg-white text-sm text-gray-500">
-            <select
-              value={selectedYear}
-              onChange={e => {
-                setSelectedYear(e.target.value)
-                setPage(0)
-              }}
-              aria-label={translateText("Filter tahun transaksi", localizedLanguage)}
-              className="min-w-0 appearance-none bg-transparent text-gray-900 focus:outline-none"
-            >
-              {availableYears.map(year => (
-                <option key={year} value={year}>{year}</option>
-              ))}
-            </select>
-            <ChevronDown size={16} aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500" />
-          </label>
+          <CustomSelect
+            ariaLabel={translateText('Filter bulan transaksi', localizedLanguage)}
+            value={selectedMonth}
+            onValueChange={value => {
+              setSelectedMonth(value)
+              setPage(0)
+            }}
+            options={recentMonths.map(month => ({
+              value: month.value,
+              label: <LocalizedText text={month.label} />,
+            }))}
+            containerClassName="w-auto"
+            className="min-w-0 max-w-[180px] whitespace-nowrap rounded-xl border border-gray-200 bg-white px-3 py-2 pr-9 text-left text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+          <CustomSelect
+            ariaLabel={translateText('Filter tahun transaksi', localizedLanguage)}
+            value={selectedYear}
+            onValueChange={value => {
+              setSelectedYear(value)
+              setPage(0)
+            }}
+            options={availableYears.map(year => ({ value: String(year), label: String(year) }))}
+            containerClassName="w-auto"
+            className="min-w-[88px] whitespace-nowrap rounded-xl border border-gray-200 bg-white px-3 py-2 pr-9 text-left text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
         </div>
       </div>
 

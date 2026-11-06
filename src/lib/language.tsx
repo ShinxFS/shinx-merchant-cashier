@@ -28,6 +28,7 @@ const translations: Array<[string, string]> = [
   ['DM untuk informasi:', 'DM for Information:'],
   ['Pilih Server', 'Choose Server'],
   ['Server aktif', 'Active server'],
+  ['Server Saat Ini:', 'Current Server:'],
   ...Array.from({ length: 11 }, (_, serverId): [string, string][] => [
     [`Server ${serverId} (Aktif)`, `Server ${serverId} (Active)`],
     [`Server ${serverId} (Belum dikonfigurasi)`, `Server ${serverId} (Not configured)`],

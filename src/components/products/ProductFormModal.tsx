@@ -4,8 +4,9 @@ import { LocalizedText, translateText, useLanguage } from '@/lib/language'
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { X, Upload, ScanLine, ChevronDown } from 'lucide-react'
+import { X, Upload, ScanLine } from 'lucide-react'
 import BarcodeScanner from '@/components/cashier/BarcodeScanner'
+import CustomSelect from '@/components/ui/CustomSelect'
 
 interface Category {
   id: string
@@ -356,69 +357,59 @@ export default function ProductFormModal({ product, categories, onClose }: Props
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{<LocalizedText text={"Satuan"} />}</label>
-              <div className="relative">
-                <select
-                  value={form.unit}
-                  onChange={e => set('unit', e.target.value)}
-                  className={`${inputClass} appearance-none pr-9`}
-                >
-                  {['pcs', 'cup', 'porsi', 'lusin', 'kg', 'gram', 'liter', 'botol', 'pack', 'box'].map(u => (
-                    <option key={u} value={u}>{u}</option>
-                  ))}
-                </select>
-                <ChevronDown size={16} aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500" />
-              </div>
+              <label htmlFor="product-unit" className="block text-sm font-medium text-gray-700 mb-1">{<LocalizedText text={"Satuan"} />}</label>
+              <CustomSelect
+                id="product-unit"
+                ariaLabel={translateText('Satuan', localizedLanguage)}
+                value={form.unit}
+                onValueChange={value => set('unit', value)}
+                options={['pcs', 'cup', 'porsi', 'lusin', 'kg', 'gram', 'liter', 'botol', 'pack', 'box'].map(unit => ({
+                  value: unit,
+                  label: unit,
+                }))}
+                className={`${inputClass} pr-9 text-left`}
+              />
             </div>
           </div>
 
           {/* Kategori (bisa sampai 2) */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{<LocalizedText text={"Kategori 1"} />}</label>
-              <div className="relative">
-                <select
-                  value={form.category_id}
-                  onChange={e => {
-                    const val = e.target.value
-                    set('category_id', val)
-                    // Kalau kategori 2 jadi sama dgn kategori 1, kosongkan kategori 2
-                    if (val && val === form.category_id_2) set('category_id_2', '')
-                  }}
-                  className={`${inputClass} appearance-none pr-9`}
-                >
-                  <option value="">{<LocalizedText text={"— Tanpa Kategori —"} />}</option>
-                  {categories.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-                <ChevronDown size={16} aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500" />
-              </div>
+              <label htmlFor="product-category-1" className="block text-sm font-medium text-gray-700 mb-1">{<LocalizedText text={"Kategori 1"} />}</label>
+              <CustomSelect
+                id="product-category-1"
+                ariaLabel={translateText('Kategori 1', localizedLanguage)}
+                value={form.category_id}
+                onValueChange={value => {
+                  set('category_id', value)
+                  // Kalau kategori 2 jadi sama dgn kategori 1, kosongkan kategori 2
+                  if (value && value === form.category_id_2) set('category_id_2', '')
+                }}
+                options={[
+                  { value: '', label: <LocalizedText text="— Tanpa Kategori —" /> },
+                  ...categories.map(category => ({ value: category.id, label: category.name })),
+                ]}
+                className={`${inputClass} pr-9 text-left`}
+              />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="product-category-2" className="block text-sm font-medium text-gray-700 mb-1">
                 {<LocalizedText text={"\r\n                Kategori 2 "} />}<span className="text-gray-400">{<LocalizedText text={"(opsional)"} />}</span>
               </label>
-              <div className="relative">
-                <select
-                  value={form.category_id_2}
-                  onChange={e => set('category_id_2', e.target.value)}
-                  disabled={!form.category_id}
-                  className={`${inputClass} appearance-none pr-9 disabled:bg-gray-50 disabled:text-gray-400`}
-                >
-                  <option value="">{<LocalizedText text={"— Tanpa Kategori —"} />}</option>
-                  {categories
+              <CustomSelect
+                id="product-category-2"
+                ariaLabel={translateText('Kategori 2', localizedLanguage)}
+                value={form.category_id_2}
+                onValueChange={value => set('category_id_2', value)}
+                disabled={!form.category_id}
+                options={[
+                  { value: '', label: <LocalizedText text="— Tanpa Kategori —" /> },
+                  ...categories
                     .filter(c => c.id !== form.category_id)
-                    .map(c => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                </select>
-                <ChevronDown
-                  size={16}
-                  aria-hidden="true"
-                  className={`pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 ${form.category_id ? 'text-gray-500' : 'text-gray-300'}`}
-                />
-              </div>
+                    .map(category => ({ value: category.id, label: category.name })),
+                ]}
+                className={`${inputClass} pr-9 text-left disabled:bg-gray-50 disabled:text-gray-400`}
+              />
             </div>
           </div>
 

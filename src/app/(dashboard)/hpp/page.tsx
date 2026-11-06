@@ -13,8 +13,8 @@ import * as XLSX from 'xlsx'
 import { saveAs } from 'file-saver'
 import {
   Calculator, RotateCcw, Save, Trash2, FileSpreadsheet, Factory, Store, Wrench, PackagePlus,
-  ChevronDown,
 } from 'lucide-react'
+import CustomSelect from '@/components/ui/CustomSelect'
 
 interface SavedProduct {
   id: string
@@ -374,17 +374,19 @@ export default function HppPage() {
     const value = form[f.key] ?? ''
     if (f.kind === 'select') {
       return (
-        <div className="relative">
-          <select
-            value={value}
-            onChange={e => setField(f.key, e.target.value)}
-            className={`${inputClass} appearance-none pr-9`}
-          >
-            <option value="">{<LocalizedText text={"Pilih "} />}<LocalizedText text={f.label} /></option>
-            {f.options?.map(o => <option key={o} value={o}><LocalizedText text={o} /></option>)}
-          </select>
-          <ChevronDown size={16} aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500" />
-        </div>
+        <CustomSelect
+          ariaLabel={translateText(f.label, localizedLanguage)}
+          value={value}
+          onValueChange={selectedValue => setField(f.key, selectedValue)}
+          options={[
+            { value: '', label: <><LocalizedText text="Pilih " /><LocalizedText text={f.label} /></> },
+            ...(f.options ?? []).map(option => ({
+              value: option,
+              label: <LocalizedText text={option} />,
+            })),
+          ]}
+          className={`${inputClass} pr-9 text-left`}
+        />
       )
     }
     if (f.kind === 'text') {

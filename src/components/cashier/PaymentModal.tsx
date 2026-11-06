@@ -5,6 +5,7 @@ import { LocalizedText, translateText, useLanguage } from '@/lib/language'
 import { useState } from 'react'
 import { useCurrency } from '@/lib/currency'
 import { X, Banknote, CreditCard, Tag, Percent, QrCode, WalletCards } from 'lucide-react'
+import CustomSelect from '@/components/ui/CustomSelect'
 
 interface Props {
   subtotal: number
@@ -296,19 +297,22 @@ export default function PaymentModal({ subtotal, onConfirm, onClose, loading, qr
                 />
                 {mixedTransferPaid > 0 && (
                   paymentAccounts.length > 0 ? (
-                    <select
+                    <CustomSelect
                       value={selectedAccountId}
-                      onChange={e => setSelectedAccountId(e.target.value)}
-                      aria-label={translateText("Pilih Rekening Tujuan", localizedLanguage)}
-                      className={`${inputClass} mt-2`}
-                    >
-                      <option value="">{translateText("Pilih Rekening Tujuan", localizedLanguage)}</option>
-                      {paymentAccounts.map(account => (
-                        <option key={account.id} value={account.id}>
-                          {account.bank_name} · {account.account_number} · {account.account_name}
-                        </option>
-                      ))}
-                    </select>
+                      onValueChange={setSelectedAccountId}
+                      ariaLabel={translateText('Pilih Rekening Tujuan', localizedLanguage)}
+                      options={[
+                        {
+                          value: '',
+                          label: translateText('Pilih Rekening Tujuan', localizedLanguage),
+                        },
+                        ...paymentAccounts.map(account => ({
+                          value: account.id,
+                          label: `${account.bank_name} · ${account.account_number} · ${account.account_name}`,
+                        })),
+                      ]}
+                      className={`${inputClass} mt-2 pr-9 text-left`}
+                    />
                   ) : (
                     <p className="mt-2 text-xs text-amber-700">
                       <LocalizedText text="Belum ada rekening transfer" />

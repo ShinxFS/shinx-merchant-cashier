@@ -149,6 +149,11 @@ html.dark [class~="text-indigo-600"] {
   color: #a5b4fc !important;
 }
 
+html.dark .dashboard-server-indicator {
+  background-color: #252044 !important;
+  color: #c7d2fe !important;
+}
+
 html.dark [class~="hover:text-indigo-600"]:hover {
   color: #c7d2fe !important;
 }

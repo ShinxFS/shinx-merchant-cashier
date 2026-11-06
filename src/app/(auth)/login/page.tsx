@@ -1,12 +1,12 @@
 'use client'
 
-import { useMemo, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient, getSelectedServerIdFromCookie, selectSupabaseServer, subscribeToSupabaseServer } from '@/lib/supabase/client'
 import {
   isSupabaseServerConfigured,
-  isSupabaseServerId,
   SUPABASE_SERVER_IDS,
+  type SupabaseServerId,
 } from '@/lib/supabase/config'
 import { ChevronDown } from 'lucide-react'
 import Link from 'next/link'
@@ -27,6 +27,63 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [serverDropdownOpen, setServerDropdownOpen] = useState(false)
+  const [activeServerOption, setActiveServerOption] = useState<SupabaseServerId>(selectedServer)
+  const serverDropdownRef = useRef<HTMLDivElement>(null)
+  const configuredServerIds = SUPABASE_SERVER_IDS.filter(isSupabaseServerConfigured)
+
+  useEffect(() => {
+    if (!serverDropdownOpen) return
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (event.target instanceof Node && !serverDropdownRef.current?.contains(event.target)) {
+        setServerDropdownOpen(false)
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    return () => document.removeEventListener('pointerdown', handlePointerDown)
+  }, [serverDropdownOpen])
+
+  const selectServer = (serverId: SupabaseServerId) => {
+    if (!isSupabaseServerConfigured(serverId)) return
+    selectSupabaseServer(serverId)
+    setActiveServerOption(serverId)
+    setServerDropdownOpen(false)
+  }
+
+  const handleServerKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (configuredServerIds.length === 0) return
+
+    const currentIndex = configuredServerIds.indexOf(activeServerOption)
+
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      if (!serverDropdownOpen) {
+        setActiveServerOption(selectedServer)
+        setServerDropdownOpen(true)
+        return
+      }
+      const direction = event.key === 'ArrowDown' ? 1 : -1
+      const nextIndex = (Math.max(currentIndex, 0) + direction + configuredServerIds.length) % configuredServerIds.length
+      setActiveServerOption(configuredServerIds[nextIndex])
+    } else if (event.key === 'Home' || event.key === 'End') {
+      event.preventDefault()
+      if (!serverDropdownOpen) setServerDropdownOpen(true)
+      const nextIndex = event.key === 'Home' ? 0 : configuredServerIds.length - 1
+      setActiveServerOption(configuredServerIds[nextIndex])
+    } else if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      if (serverDropdownOpen) selectServer(activeServerOption)
+      else {
+        setActiveServerOption(selectedServer)
+        setServerDropdownOpen(true)
+      }
+    } else if (event.key === 'Escape' && serverDropdownOpen) {
+      event.preventDefault()
+      setServerDropdownOpen(false)
+    }
+  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -79,16 +136,41 @@ export default function LoginPage() {
             <label htmlFor="server" className="block text-sm font-medium text-gray-700 mb-1">
               {translate('Pilih Server')}
             </label>
-            <div className="relative">
-              <select
+            <div className="relative" ref={serverDropdownRef}>
+              <button
+                type="button"
                 id="server"
-                value={selectedServer}
-                onChange={event => {
-                  const nextServer = event.target.value
-                  if (!isSupabaseServerId(nextServer) || !isSupabaseServerConfigured(nextServer)) return
-                  selectSupabaseServer(nextServer)
+                role="combobox"
+                aria-haspopup="listbox"
+                aria-expanded={serverDropdownOpen}
+                aria-controls="server-options"
+                aria-activedescendant={serverDropdownOpen ? `server-option-${activeServerOption}` : undefined}
+                onClick={() => {
+                  setActiveServerOption(selectedServer)
+                  setServerDropdownOpen(open => !open)
                 }}
-                className="w-full appearance-none px-3 py-2.5 pr-10 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                onKeyDown={handleServerKeyDown}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 pr-10 text-left text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                {translate(isSupabaseServerConfigured(selectedServer)
+                  ? `Server ${selectedServer} (Aktif)`
+                  : `Server ${selectedServer} (Belum dikonfigurasi)`)}
+                <ChevronDown
+                  size={16}
+                  aria-hidden="true"
+                  className={`pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 transition-transform ${serverDropdownOpen ? 'rotate-180' : ''}`}
+                />
+              </button>
+              <div
+                id="server-options"
+                role="listbox"
+                aria-label={translate('Pilih Server')}
+                aria-hidden={!serverDropdownOpen}
+                className={`absolute left-0 right-0 top-full z-20 mt-1 overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg transition-[max-height,opacity,transform] duration-200 ease-out motion-reduce:transition-opacity motion-reduce:duration-100 ${
+                  serverDropdownOpen
+                    ? 'max-h-60 translate-y-0 opacity-100'
+                    : 'pointer-events-none max-h-0 -translate-y-1 opacity-0'
+                }`}
               >
                 {SUPABASE_SERVER_IDS.map(serverId => {
                   const configured = isSupabaseServerConfigured(serverId)
@@ -97,17 +179,27 @@ export default function LoginPage() {
                     : `Server ${serverId} (Belum dikonfigurasi)`
 
                   return (
-                    <option key={serverId} value={serverId} disabled={!configured}>
+                    <div
+                      key={serverId}
+                      id={`server-option-${serverId}`}
+                      role="option"
+                      aria-selected={selectedServer === serverId}
+                      aria-disabled={!configured}
+                      onMouseEnter={() => configured && setActiveServerOption(serverId)}
+                      onClick={() => configured && selectServer(serverId)}
+                      className={`px-3 py-2 text-sm ${
+                        !configured
+                          ? 'cursor-not-allowed text-gray-400'
+                          : activeServerOption === serverId
+                            ? 'cursor-pointer bg-indigo-50 text-indigo-600'
+                            : 'cursor-pointer text-gray-900 hover:bg-gray-50'
+                      }`}
+                    >
                       {translate(label)}
-                    </option>
+                    </div>
                   )
                 })}
-              </select>
-              <ChevronDown
-                size={16}
-                aria-hidden="true"
-                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
-              />
+              </div>
             </div>
             <p className="mt-1 text-xs text-gray-500">
               {translate(selectedServer === '0' ? 'Server 0 menggunakan database saat ini.' : `Server ${selectedServer} menggunakan database terpisah.`)}

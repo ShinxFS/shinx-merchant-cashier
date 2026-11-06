@@ -2,7 +2,7 @@
 import { LocalizedText, translateText, useLanguage } from '@/lib/language'
 
 
-import { useEffect, useState, useSyncExternalStore } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import {
   createClient,
   getSelectedServerIdFromCookie,
@@ -24,6 +24,12 @@ import {
 } from 'lucide-react'
 
 type CashflowPeriod = 'today' | '7days' | 'month'
+
+const CASHFLOW_PERIOD_OPTIONS: { value: CashflowPeriod; label: string }[] = [
+  { value: 'today', label: 'Hari ini' },
+  { value: '7days', label: '7 Hari' },
+  { value: 'month', label: 'Bulan ini' },
+]
 
 interface Stats {
   todayRevenue: number
@@ -81,8 +87,67 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [cashflowPeriod, setCashflowPeriod] = useState<CashflowPeriod>('month')
+  const [cashflowPeriodDropdownOpen, setCashflowPeriodDropdownOpen] = useState(false)
+  const [activeCashflowPeriod, setActiveCashflowPeriod] = useState<CashflowPeriod>('month')
   const [cashflow, setCashflow] = useState<CashflowStats>({ revenue: 0, expenses: 0, cogs: 0, netProfit: 0 })
   const [cashflowVisible, setCashflowVisible] = useState(false)
+  const [cashflowHidePending, setCashflowHidePending] = useState(false)
+  const cashflowControlsRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!cashflowPeriodDropdownOpen) return
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (event.target instanceof Node && !cashflowControlsRef.current?.contains(event.target)) {
+        setCashflowPeriodDropdownOpen(false)
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    return () => document.removeEventListener('pointerdown', handlePointerDown)
+  }, [cashflowPeriodDropdownOpen])
+
+  const selectCashflowPeriod = (period: CashflowPeriod) => {
+    setCashflowPeriod(period)
+    setActiveCashflowPeriod(period)
+    setCashflowPeriodDropdownOpen(false)
+  }
+
+  const openCashflowPeriodDropdown = () => {
+    setActiveCashflowPeriod(cashflowPeriod)
+    setCashflowPeriodDropdownOpen(true)
+  }
+
+  const closeCashflowPeriodDropdown = () => {
+    setCashflowPeriodDropdownOpen(false)
+  }
+
+  const handleCashflowPeriodKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    const currentIndex = CASHFLOW_PERIOD_OPTIONS.findIndex(option => option.value === activeCashflowPeriod)
+
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      if (!cashflowPeriodDropdownOpen) {
+        openCashflowPeriodDropdown()
+        return
+      }
+      const direction = event.key === 'ArrowDown' ? 1 : -1
+      const nextIndex = (currentIndex + direction + CASHFLOW_PERIOD_OPTIONS.length) % CASHFLOW_PERIOD_OPTIONS.length
+      setActiveCashflowPeriod(CASHFLOW_PERIOD_OPTIONS[nextIndex].value)
+    } else if (event.key === 'Home' || event.key === 'End') {
+      event.preventDefault()
+      if (!cashflowPeriodDropdownOpen) openCashflowPeriodDropdown()
+      const nextIndex = event.key === 'Home' ? 0 : CASHFLOW_PERIOD_OPTIONS.length - 1
+      setActiveCashflowPeriod(CASHFLOW_PERIOD_OPTIONS[nextIndex].value)
+    } else if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      if (cashflowPeriodDropdownOpen) selectCashflowPeriod(activeCashflowPeriod)
+      else openCashflowPeriodDropdown()
+    } else if (event.key === 'Escape' && cashflowPeriodDropdownOpen) {
+      event.preventDefault()
+      closeCashflowPeriodDropdown()
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -299,9 +364,9 @@ export default function DashboardPage() {
         </div>
         <span
           aria-label={translateText('Server aktif', localizedLanguage)}
-          className="shrink-0 rounded-full bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700"
+          className="dashboard-server-indicator mt-1 shrink-0 rounded-full bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700"
         >
-          Server {activeServerId}
+          {translateText('Server Saat Ini:', localizedLanguage)} {activeServerId}
         </span>
       </div>
       {loadError && (
@@ -395,27 +460,88 @@ export default function DashboardPage() {
             <p className="text-xs text-gray-400 mt-0.5">
               {<LocalizedText text={"\r\n              Ringkasan pendapatan, biaya, dan laba bersih\r\n            "} />}</p>
           </div>
-          <div className="flex items-center gap-2">
-            <div className={`overflow-hidden transition-all duration-500 ease-in-out ${cashflowVisible ? 'max-w-40 opacity-100' : 'max-w-0 opacity-0'}`}>
-              <div className="relative inline-flex">
-                <select
-                  value={cashflowPeriod}
-                  onChange={e => setCashflowPeriod(e.target.value as CashflowPeriod)}
-                  tabIndex={cashflowVisible ? 0 : -1}
-                  className="appearance-none px-3 py-2 pr-9 border border-gray-200 rounded-lg text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          <div className="flex items-center gap-2" ref={cashflowControlsRef}>
+            <div className={`relative min-w-0 transition-all duration-500 ease-in-out ${cashflowVisible ? 'max-w-40 opacity-100' : 'max-w-0 overflow-hidden pointer-events-none opacity-0'}`}>
+              <div className="relative w-40 shrink-0">
+                <button
+                  type="button"
+                  role="combobox"
                   aria-label={translateText("Periode cash flow", localizedLanguage)}
+                  aria-haspopup="listbox"
+                  aria-expanded={cashflowPeriodDropdownOpen}
+                  aria-controls="cashflow-period-options"
+                  aria-activedescendant={cashflowPeriodDropdownOpen ? `cashflow-period-option-${activeCashflowPeriod}` : undefined}
+                  tabIndex={cashflowVisible ? 0 : -1}
+                  onClick={() => {
+                    if (cashflowPeriodDropdownOpen) closeCashflowPeriodDropdown()
+                    else openCashflowPeriodDropdown()
+                  }}
+                  onKeyDown={handleCashflowPeriodKeyDown}
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 pr-9 text-left text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
-                  <option value="today">{<LocalizedText text={"Hari ini"} />}</option>
-                  <option value="7days">{<LocalizedText text={"7 Hari"} />}</option>
-                  <option value="month">{<LocalizedText text={"Bulan ini"} />}</option>
-                </select>
-                <ChevronDown size={16} aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                  {translateText(
+                    CASHFLOW_PERIOD_OPTIONS.find(option => option.value === cashflowPeriod)?.label ?? 'Bulan ini',
+                    localizedLanguage,
+                  )}
+                  <ChevronDown
+                    size={16}
+                    aria-hidden="true"
+                    className={`pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 transition-transform duration-200 ${cashflowPeriodDropdownOpen ? 'rotate-180' : ''}`}
+                  />
+                </button>
+                <div
+                  id="cashflow-period-options"
+                  role="listbox"
+                  aria-label={translateText("Periode cash flow", localizedLanguage)}
+                  aria-hidden={!cashflowPeriodDropdownOpen}
+                  onTransitionEnd={event => {
+                    if (event.propertyName === 'opacity' && !cashflowPeriodDropdownOpen && cashflowHidePending) {
+                      setCashflowVisible(false)
+                      setCashflowHidePending(false)
+                    }
+                  }}
+                  className={`absolute left-0 right-0 top-full z-30 mt-1 overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg transition-[max-height,opacity,transform] duration-200 ease-out motion-reduce:transition-opacity motion-reduce:duration-100 ${
+                    cashflowPeriodDropdownOpen
+                      ? 'max-h-40 translate-y-0 opacity-100'
+                      : 'pointer-events-none max-h-0 -translate-y-1 opacity-0'
+                  }`}
+                >
+                  {CASHFLOW_PERIOD_OPTIONS.map(option => (
+                    <div
+                      key={option.value}
+                      id={`cashflow-period-option-${option.value}`}
+                      role="option"
+                      aria-selected={cashflowPeriod === option.value}
+                      onMouseEnter={() => setActiveCashflowPeriod(option.value)}
+                      onClick={() => selectCashflowPeriod(option.value)}
+                      className={`cursor-pointer px-3 py-2 text-sm ${
+                        activeCashflowPeriod === option.value
+                          ? 'bg-indigo-50 text-indigo-600'
+                          : 'bg-white text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      <LocalizedText text={option.label} />
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
             <button
               type="button"
-              onClick={() => setCashflowVisible(visible => !visible)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-gray-600 border border-gray-200 hover:bg-gray-50 transition-colors"
+              onClick={() => {
+                if (!cashflowVisible) {
+                  setCashflowVisible(true)
+                  return
+                }
+
+                if (cashflowPeriodDropdownOpen) {
+                  setCashflowHidePending(true)
+                  setCashflowPeriodDropdownOpen(false)
+                } else {
+                  setCashflowVisible(false)
+                }
+              }}
+              className="relative z-10 flex shrink-0 items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-gray-600 border border-gray-200 hover:bg-gray-50 transition-colors"
               aria-expanded={cashflowVisible}
               aria-label={cashflowVisible ? translateText("Sembunyikan Cash Flow", localizedLanguage) : translateText("Tampilkan Cash Flow", localizedLanguage)}
               title={cashflowVisible ? translateText("Sembunyikan Cash Flow", localizedLanguage) : translateText("Tampilkan Cash Flow", localizedLanguage)}

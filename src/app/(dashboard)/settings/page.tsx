@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Save, Plus, Trash2, QrCode, Upload, Pencil, Check, X, ChevronDown, Download, FileUp } from 'lucide-react'
+import { Save, Plus, Trash2, QrCode, Upload, Pencil, Check, X, Download, FileUp } from 'lucide-react'
 import QRCode from 'qrcode'
 import { saveAs } from 'file-saver'
 import { CURRENCY_OPTIONS, isCurrencyCode, useCurrency } from '@/lib/currency'
 import type { CurrencyCode } from '@/lib/currency'
 import { LanguageToggle, useLanguage, LocalizedText, translateText } from '@/lib/language'
 import { createOwnerBackup, importOwnerBackup } from '@/lib/backup/export'
+import CustomSelect from '@/components/ui/CustomSelect'
 interface Category {
   id: string
   name: string
@@ -34,6 +35,11 @@ const toneOptions = [
   { value: 'soft', label: 'Soft' },
   { value: 'success', label: 'Success' },
 ]
+
+const normalizeTone = (value: unknown) =>
+  typeof value === 'string' && toneOptions.some(option => option.value === value)
+    ? value
+    : toneOptions[0].value
 
 const inputClass = "w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
 
@@ -143,8 +149,8 @@ export default function SettingsPage() {
         setQrisUrl(prof.qris_image_url ?? null)
         setCashierSoundUrl(prof.cashier_sound_url ?? null)
         setCustomerSoundUrl(prof.customer_sound_url ?? null)
-        setCashierTone(prof.cashier_tone ?? 'classic')
-        setCustomerTone(prof.customer_tone ?? 'classic')
+        setCashierTone(normalizeTone(prof.cashier_tone))
+        setCustomerTone(normalizeTone(prof.customer_tone))
       }
       setCategories(cats ?? [])
       setPaymentAccounts(accounts ?? [])
@@ -675,24 +681,22 @@ export default function SettingsPage() {
             <div>
               <label htmlFor="store-currency" className="mb-1 block text-sm font-medium text-gray-700">
                 {<LocalizedText text={"\r\n                Mata uang baru\r\n              "} />}</label>
-              <div className="relative">
-                <select
-                  id="store-currency"
-                  value={selectedCurrency}
-                  onChange={event => {
-                    if (isCurrencyCode(event.target.value)) setNextCurrency(event.target.value)
-                    setCurrencyError('')
-                    setCurrencySaved(false)
-                  }}
-                  className={`${inputClass} appearance-none pr-9`}
-                  disabled={currencySaving || !!profileCurrencyError}
-                >
-                  {CURRENCY_OPTIONS.map(option => (
-                    <option key={option.code} value={option.code}><LocalizedText text={option.label} /></option>
-                  ))}
-                </select>
-                <ChevronDown size={16} aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500" />
-              </div>
+              <CustomSelect
+                id="store-currency"
+                ariaLabel={translateText('Mata uang baru', localizedLanguage)}
+                value={selectedCurrency}
+                onValueChange={value => {
+                  if (isCurrencyCode(value)) setNextCurrency(value)
+                  setCurrencyError('')
+                  setCurrencySaved(false)
+                }}
+                options={CURRENCY_OPTIONS.map(option => ({
+                  value: option.code,
+                  label: <LocalizedText text={option.label} />,
+                }))}
+                className={`${inputClass} pr-9 text-left`}
+                disabled={currencySaving || !!profileCurrencyError}
+              />
             </div>
 
             <button
@@ -934,19 +938,18 @@ export default function SettingsPage() {
                 )}
               </div>
               <div className="w-full max-w-xs">
-                <label className="block text-xs font-medium text-gray-600 mb-1">{<LocalizedText text={"Variasi nada default"} />}</label>
-                <div className="relative">
-                  <select
-                    value={cashierTone}
-                    onChange={e => void handleToneChange('cashier', e.target.value)}
-                    className={`${inputClass} appearance-none pr-9`}
-                  >
-                    {toneOptions.map(option => (
-                      <option key={option.value} value={option.value}><LocalizedText text={option.label} /></option>
-                    ))}
-                  </select>
-                  <ChevronDown size={16} aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500" />
-                </div>
+                <label htmlFor="cashier-tone" className="block text-xs font-medium text-gray-600 mb-1">{<LocalizedText text={"Variasi nada default"} />}</label>
+                <CustomSelect
+                  id="cashier-tone"
+                  ariaLabel={translateText('Variasi nada default kasir', localizedLanguage)}
+                  value={cashierTone}
+                  onValueChange={value => void handleToneChange('cashier', value)}
+                  options={toneOptions.map(option => ({
+                    value: option.value,
+                    label: <LocalizedText text={option.label} />,
+                  }))}
+                  className={`${inputClass} pr-9 text-left`}
+                />
               </div>
             </div>
           </div>
@@ -975,19 +978,18 @@ export default function SettingsPage() {
                 )}
               </div>
               <div className="w-full max-w-xs">
-                <label className="block text-xs font-medium text-gray-600 mb-1">{<LocalizedText text={"Variasi nada default"} />}</label>
-                <div className="relative">
-                  <select
-                    value={customerTone}
-                    onChange={e => void handleToneChange('customer', e.target.value)}
-                    className={`${inputClass} appearance-none pr-9`}
-                  >
-                    {toneOptions.map(option => (
-                      <option key={option.value} value={option.value}><LocalizedText text={option.label} /></option>
-                    ))}
-                  </select>
-                  <ChevronDown size={16} aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500" />
-                </div>
+                <label htmlFor="customer-tone" className="block text-xs font-medium text-gray-600 mb-1">{<LocalizedText text={"Variasi nada default"} />}</label>
+                <CustomSelect
+                  id="customer-tone"
+                  ariaLabel={translateText('Variasi nada default pelanggan', localizedLanguage)}
+                  value={customerTone}
+                  onValueChange={value => void handleToneChange('customer', value)}
+                  options={toneOptions.map(option => ({
+                    value: option.value,
+                    label: <LocalizedText text={option.label} />,
+                  }))}
+                  className={`${inputClass} pr-9 text-left`}
+                />
               </div>
             </div>
           </div>
