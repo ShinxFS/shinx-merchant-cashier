@@ -5,8 +5,10 @@ import { LocalizedText, translateText, useLanguage } from '@/lib/language'
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useCurrency } from '@/lib/currency'
-import { Receipt, Search, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, TrendingUp, Trash2 } from 'lucide-react'
+import { Receipt, Search, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, TrendingUp, Trash2, Printer } from 'lucide-react'
 import CustomSelect from '@/components/ui/CustomSelect'
+import ReceiptModal from '@/components/cashier/ReceiptModal'
+import type { ReceiptData } from '@/components/cashier/ReceiptModal'
 
 const PAGE_SIZE = 20
 
@@ -22,6 +24,8 @@ interface TransactionItem {
 
 interface Transaction {
   id: string
+  user_id: string
+  created_by: string | null
   invoice_number: string
   total: number
   subtotal: number
@@ -48,6 +52,13 @@ interface TransactionScope {
   isStaff: boolean
 }
 
+const getTransactionTableNumber = (transaction: Transaction) => {
+  if (transaction.table_number != null) return transaction.table_number
+
+  const match = transaction.notes?.match(/\b(?:pesanan\s+meja|order\s+via\s+qr\s+meja)\s+(\d+)\b/i)
+  return match ? Number(match[1]) : null
+}
+
 export default function TransactionsPage() {
   const localizedLanguage = useLanguage().language
 
@@ -69,6 +80,9 @@ export default function TransactionsPage() {
   const [todayTotal, setTodayTotal] = useState(0)
   const [todayLabaBersih, setTodayLabaBersih] = useState(0)
   const [error, setError] = useState('')
+  const [receiptData, setReceiptData] = useState<ReceiptData | null>(null)
+  const [receiptLoadingId, setReceiptLoadingId] = useState<string | null>(null)
+  const [receiptError, setReceiptError] = useState<{ transactionId: string; message: string } | null>(null)
 
   useEffect(() => {
     let active = true
@@ -248,6 +262,77 @@ export default function TransactionsPage() {
     if (transactions.length === 1 && page > 0) setPage(prev => prev - 1)
   }
 
+  const handleReprint = async (transaction: Transaction) => {
+    setReceiptError(null)
+    setReceiptLoadingId(transaction.id)
+    const tableNumber = getTransactionTableNumber(transaction)
+
+    const { data: storeProfile, error: profileError } = await supabase
+      .from('profiles')
+      .select('business_name, owner_name, address, phone')
+      .eq('id', transaction.user_id)
+      .single()
+
+    if (profileError || !storeProfile) {
+      setReceiptLoadingId(null)
+      setReceiptError({
+        transactionId: transaction.id,
+        message: `${translateText('Gagal memuat data toko untuk struk:', localizedLanguage)} ${profileError?.message ?? translateText('Coba lagi.', localizedLanguage)}`,
+      })
+      return
+    }
+
+    let cashierName = storeProfile.owner_name?.trim() ?? ''
+    if (transaction.created_by && transaction.created_by !== transaction.user_id) {
+      const { data: cashierProfile, error: cashierProfileError } = await supabase
+        .from('profiles')
+        .select('owner_name')
+        .eq('id', transaction.created_by)
+        .maybeSingle()
+
+      if (cashierProfileError) {
+        setReceiptLoadingId(null)
+        setReceiptError({
+          transactionId: transaction.id,
+          message: `${translateText('Gagal memuat nama kasir untuk struk:', localizedLanguage)} ${cashierProfileError.message}`,
+        })
+        return
+      }
+
+      cashierName = cashierProfile?.owner_name?.trim() ?? ''
+    }
+
+    setReceiptLoadingId(null)
+    setReceiptData({
+      invoice_number: transaction.invoice_number,
+      created_at: transaction.created_at,
+      items: (transaction.transaction_items ?? []).map(item => ({
+        product_name: item.product_name,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        subtotal: item.subtotal,
+        note: item.note,
+      })),
+      subtotal: transaction.subtotal,
+      discount: transaction.discount,
+      tax: transaction.tax,
+      total: transaction.total,
+      payment_method: transaction.payment_method,
+      payment_account: transaction.payment_account,
+      payment_details: transaction.payment_details ?? [],
+      amount_paid: transaction.amount_paid,
+      change_amount: transaction.change_amount,
+      business_name: storeProfile.business_name || translateText('Toko', localizedLanguage),
+      cashier_name: cashierName,
+      address: storeProfile.address ?? '',
+      phone: storeProfile.phone ?? '',
+      table_number: tableNumber,
+      table_label: tableNumber == null
+        ? translateText('Bawa Pulang', localizedLanguage)
+        : String(tableNumber),
+    })
+  }
+
   const recentMonths = Array.from({ length: 12 }, (_, index) => {
     const date = new Date(2000, index, 1)
     const value = String(index + 1).padStart(2, '0')
@@ -370,14 +455,7 @@ export default function TransactionsPage() {
                     className="flex-1 flex items-center gap-4 text-left"
                   >
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-semibold text-gray-800">{tx.invoice_number}</p>
-                        {tx.table_number != null && (
-                          <span className="text-[10px] font-medium bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded">
-                            {<LocalizedText text={"\r\n                            Meja "} />}{tx.table_number}
-                          </span>
-                        )}
-                      </div>
+                      <p className="text-sm font-semibold text-gray-800">{tx.invoice_number}</p>
                       <p className="text-xs text-gray-400 mt-0.5">{formatDate(tx.created_at)}</p>
                     </div>
                     <div className="hidden sm:block text-xs text-gray-500">
@@ -531,6 +609,24 @@ export default function TransactionsPage() {
                         </div>
                       )}
                     </div>
+                    <div className="mt-4 flex flex-col items-end gap-2">
+                      {receiptError?.transactionId === tx.id && (
+                        <p role="alert" className="text-right text-xs text-red-600">
+                          {receiptError.message}
+                        </p>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => void handleReprint(tx)}
+                        disabled={receiptLoadingId === tx.id}
+                        className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:cursor-wait disabled:opacity-60"
+                      >
+                        <Printer size={15} />
+                        {receiptLoadingId === tx.id
+                          ? <LocalizedText text="Menyiapkan..." />
+                          : <LocalizedText text="Cetak Ulang Struk" />}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -563,6 +659,12 @@ export default function TransactionsPage() {
             </button>
           </div>
         </div>
+      )}
+      {receiptData && (
+        <ReceiptModal
+          data={receiptData}
+          onClose={() => setReceiptData(null)}
+        />
       )}
     </div>
   )

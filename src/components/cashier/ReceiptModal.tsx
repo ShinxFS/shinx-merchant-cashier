@@ -15,7 +15,7 @@ interface ReceiptItem {
   note?: string | null
 }
 
-interface ReceiptData {
+export interface ReceiptData {
   invoice_number: string
   created_at: string
   items: ReceiptItem[]
@@ -33,6 +33,7 @@ interface ReceiptData {
   amount_paid: number
   change_amount: number
   business_name: string
+  cashier_name?: string
   address?: string
   phone?: string
   table_number?: number | null
@@ -182,9 +183,17 @@ export default function ReceiptModal({
               <p className="text-center text-gray-300">{'- '.repeat(16)}</p>
               <p className="text-gray-600">{<LocalizedText text={"No: "} />}{data.invoice_number}</p>
               <p className="text-gray-600">{<LocalizedText text={"Tgl: "} />}{formatDate(data.created_at)}</p>
-              {(data.table_label || data.table_number != null) && (
+              {((data.table_label || data.table_number != null) || data.cashier_name) && (
                 <p className="text-gray-600">
-                  {<LocalizedText text={"\r\n                  Meja: "} />}{data.table_label ?? data.table_number}
+                  {data.cashier_name && (
+                    <>
+                      <LocalizedText text="Kasir" />: {data.cashier_name}
+                    </>
+                  )}
+                  {data.cashier_name && (data.table_label || data.table_number != null) ? ' | ' : ''}
+                  {data.table_number != null ? (
+                    <><LocalizedText text="Meja: " />{data.table_number}</>
+                  ) : data.table_label}
                 </p>
               )}
               <p className="text-gray-300">{'- '.repeat(16)}</p>
@@ -258,7 +267,7 @@ export default function ReceiptModal({
               )}
               {(data.payment_method === 'cash' || data.payment_method === 'mixed') && (
                 <div className="flex justify-between text-green-600 font-medium">
-                  <span>{<LocalizedText text={"Kembali"} />}</span><span>{formatCurrency(data.change_amount)}</span>
+                  <span>{<LocalizedText text={"Kembalian"} />}</span><span>{formatCurrency(data.change_amount)}</span>
                 </div>
               )}
               <p className="text-center text-gray-400 pt-2">{<LocalizedText text={"— Terima kasih! —"} />}</p>

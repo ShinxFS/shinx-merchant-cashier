@@ -69,6 +69,7 @@ interface ReceiptData {
   amount_paid: number
   change_amount: number
   business_name: string
+  cashier_name: string
   address: string
   phone: string
   table_number: number | null
@@ -119,6 +120,7 @@ export default function CashierPage() {
     address: '',
     phone: '',
   })
+  const [cashierName, setCashierName] = useState('')
   const tablesRef = useRef<number[]>(tables)
 
   const audioContextRef = useRef<AudioContext | null>(null)
@@ -266,10 +268,11 @@ export default function CashierPage() {
 
       const { data: profile } = await supabase
         .from('profiles')
-        .select('role, owner_id')
+        .select('role, owner_id, owner_name')
         .eq('id', user.id)
         .single()
 
+      setCashierName(profile?.owner_name?.trim() ?? '')
       const isStaff = profile?.role === 'staff'
       const targetUserId = isStaff ? (profile?.owner_id ?? user.id) : user.id
       setEffectiveUserId(targetUserId)
@@ -915,6 +918,7 @@ export default function CashierPage() {
       })),
       amount_paid: amountPaid,
       change_amount: change,
+      notes: tableNumber == null ? null : `Pesanan meja ${tableNumber}`,
     }
 
     let { data: tx, error } = await supabase
@@ -1015,6 +1019,7 @@ export default function CashierPage() {
       amount_paid: amountPaid,
       change_amount: change,
       business_name: businessProfile.business_name,
+      cashier_name: cashierName,
       address: businessProfile.address,
       phone: businessProfile.phone,
       table_number: tableNumber,

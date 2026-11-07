@@ -75,6 +75,15 @@ drop policy if exists "profiles_staff_select_owner" on public.profiles;
 create policy "profiles_staff_select_owner" on public.profiles
   for select using (id = public.current_user_owner_id());
 
+-- Owner bisa melihat nama profil staff miliknya untuk riwayat dan cetak ulang struk.
+drop policy if exists "profiles_owner_select_staff" on public.profiles;
+create policy "profiles_owner_select_staff" on public.profiles
+  for select using (
+    role = 'staff'
+    and owner_id = auth.uid()
+    and public.current_user_is_owner()
+  );
+
 -- Owner bisa insert staff profile (via RPC/manual)
 drop policy if exists "profiles_owner_insert_staff" on public.profiles;
 create policy "profiles_owner_insert_staff" on public.profiles
@@ -360,6 +369,7 @@ create table if not exists public.transactions (
   amount_paid numeric not null default 0,
   change_amount numeric not null default 0,
   table_number integer,
+  notes text,
   status text not null default 'completed',
   created_at timestamptz not null default now()
 );
