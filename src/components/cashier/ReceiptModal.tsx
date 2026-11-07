@@ -192,7 +192,7 @@ export default function ReceiptModal({
                   )}
                   {data.cashier_name && (data.table_label || data.table_number != null) ? ' | ' : ''}
                   {data.table_number != null ? (
-                    <><LocalizedText text="Meja: " />{data.table_number}</>
+                    <><LocalizedText text="Meja" /> {data.table_number}</>
                   ) : data.table_label}
                 </p>
               )}
